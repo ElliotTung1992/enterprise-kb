@@ -1,5 +1,6 @@
-package com.enterprise.kb.auth.service;
+package com.enterprise.kb.auth.service.impl;
 
+import com.enterprise.kb.auth.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;

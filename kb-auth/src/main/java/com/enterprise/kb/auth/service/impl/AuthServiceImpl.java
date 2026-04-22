@@ -1,8 +1,10 @@
-package com.enterprise.kb.auth.service;
+package com.enterprise.kb.auth.service.impl;
 
 import com.enterprise.kb.auth.dto.*;
 import com.enterprise.kb.auth.mapper.RefreshTokenMapper;
 import com.enterprise.kb.auth.model.RefreshToken;
+import com.enterprise.kb.auth.service.AuthService;
+import com.enterprise.kb.auth.service.JwtService;
 import com.enterprise.kb.common.exception.KbException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

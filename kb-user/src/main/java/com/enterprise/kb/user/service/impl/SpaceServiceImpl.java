@@ -1,7 +1,8 @@
-package com.enterprise.kb.user.service;
+package com.enterprise.kb.user.service.impl;
 
 import com.enterprise.kb.common.constants.RoleType;
 import com.enterprise.kb.common.exception.InvalidRequestException;
+import com.enterprise.kb.user.service.SpaceService;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.common.util.SlugUtils;
 import com.enterprise.kb.user.dto.CreateSpaceRequest;

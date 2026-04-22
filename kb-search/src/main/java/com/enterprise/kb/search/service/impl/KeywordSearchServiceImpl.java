@@ -1,5 +1,6 @@
-package com.enterprise.kb.search.service;
+package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.search.service.KeywordSearchService;
 import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
 import com.enterprise.kb.search.dto.SearchResponse;

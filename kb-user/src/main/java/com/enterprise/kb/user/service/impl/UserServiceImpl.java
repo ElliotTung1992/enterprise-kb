@@ -1,7 +1,8 @@
-package com.enterprise.kb.user.service;
+package com.enterprise.kb.user.service.impl;
 
 import com.enterprise.kb.auth.dto.RegisterRequest;
 import com.enterprise.kb.common.exception.InvalidRequestException;
+import com.enterprise.kb.user.service.UserService;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.user.dto.CreateUserRequest;
 import com.enterprise.kb.user.dto.UserDto;

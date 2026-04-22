@@ -1,5 +1,8 @@
-package com.enterprise.kb.document.service;
+package com.enterprise.kb.document.service.impl;
 
+import com.enterprise.kb.document.service.ChunkMetadataService;
+import com.enterprise.kb.document.service.DocumentService;
+import com.enterprise.kb.document.service.VectorStoreService;
 import com.enterprise.kb.common.constants.DocumentStatus;
 import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;

@@ -1,5 +1,6 @@
-package com.enterprise.kb.document.service;
+package com.enterprise.kb.document.service.impl;
 
+import com.enterprise.kb.document.service.ChunkMetadataService;
 import com.enterprise.kb.document.mapper.DocumentChunkMapper;
 import com.enterprise.kb.document.model.DocumentChunk;
 import lombok.RequiredArgsConstructor;

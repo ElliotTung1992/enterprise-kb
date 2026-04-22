@@ -1,5 +1,6 @@
-package com.enterprise.kb.document.service;
+package com.enterprise.kb.document.service.impl;
 
+import com.enterprise.kb.document.service.DocumentParserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.ExtractedTextFormatter;

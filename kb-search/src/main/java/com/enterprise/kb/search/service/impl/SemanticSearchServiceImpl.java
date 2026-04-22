@@ -1,5 +1,6 @@
-package com.enterprise.kb.search.service;
+package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.search.service.SemanticSearchService;
 import com.enterprise.kb.document.mapper.DocumentMapper;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.SearchHit;

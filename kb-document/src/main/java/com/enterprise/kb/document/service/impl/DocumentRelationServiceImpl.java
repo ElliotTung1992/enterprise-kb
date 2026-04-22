@@ -1,5 +1,6 @@
-package com.enterprise.kb.document.service;
+package com.enterprise.kb.document.service.impl;
 
+import com.enterprise.kb.document.service.DocumentRelationService;
 import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.document.dto.AddRelationRequest;
 import com.enterprise.kb.document.dto.DocumentRelationDto;

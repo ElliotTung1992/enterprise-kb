@@ -1,5 +1,6 @@
-package com.enterprise.kb.graph.service;
+package com.enterprise.kb.graph.service.impl;
 
+import com.enterprise.kb.graph.service.AutoTaggingService;
 import com.enterprise.kb.graph.mapper.DocumentTagMapper;
 import com.enterprise.kb.graph.mapper.TagMapper;
 import com.enterprise.kb.graph.model.DocumentTag;

@@ -1,5 +1,6 @@
-package com.enterprise.kb.graph.service;
+package com.enterprise.kb.graph.service.impl;
 
+import com.enterprise.kb.graph.service.TagService;
 import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.common.util.SlugUtils;

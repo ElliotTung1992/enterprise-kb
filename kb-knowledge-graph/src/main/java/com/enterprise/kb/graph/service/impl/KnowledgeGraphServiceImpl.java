@@ -1,5 +1,6 @@
-package com.enterprise.kb.graph.service;
+package com.enterprise.kb.graph.service.impl;
 
+import com.enterprise.kb.graph.service.KnowledgeGraphService;
 import com.enterprise.kb.common.constants.DocumentStatus;
 import com.enterprise.kb.document.mapper.DocumentMapper;
 import com.enterprise.kb.document.mapper.DocumentRelationMapper;

@@ -1,9 +1,9 @@
 package com.enterprise.kb;
 
 import com.enterprise.kb.auth.service.AuthService;
-import com.enterprise.kb.auth.service.AuthServiceImpl;
+import com.enterprise.kb.auth.service.impl.AuthServiceImpl;
 import com.enterprise.kb.auth.service.JwtService;
-import com.enterprise.kb.auth.service.JwtServiceImpl;
+import com.enterprise.kb.auth.service.impl.JwtServiceImpl;
 import com.enterprise.kb.user.security.SpacePermissionEvaluator;
 import com.enterprise.kb.user.service.UserService;
 import org.springframework.context.annotation.Bean;
