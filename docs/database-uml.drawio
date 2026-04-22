@@ -1,0 +1,260 @@
+<mxfile host="app.diagrams.net" modified="2026-04-22T00:00:00.000Z" agent="Claude" version="24.0.0">
+  <diagram name="数据库ER图" id="er-diagram">
+    <mxGraphModel dx="1800" dy="1200" grid="1" gridSize="20" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2800" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- ==================== Row 1: 认证层 ==================== -->
+
+        <!-- users 表 (核心表，居中偏左) -->
+        <mxCell id="users_table" value="users&#xa;━━━&#xa;• id (UUID, PK)&#xa;• username (VARCHAR, UNIQUE)&#xa;• email (VARCHAR, UNIQUE)&#xa;• password_hash (VARCHAR)&#xa;• full_name (VARCHAR)&#xa;• is_active (BOOLEAN)&#xa;• created_at / updated_at&#xa;• deleted_at (软删除)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="280" y="160" width="220" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- roles 表 -->
+        <mxCell id="roles_table" value="roles&#xa;━━━&#xa;• id (UUID, PK)&#xa;• name (VARCHAR, UNIQUE)&#xa;• description (TEXT)&#xa;• created_at (TIMESTAMPTZ)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="160" width="180" height="110" as="geometry"/>
+        </mxCell>
+
+        <!-- refresh_tokens 表 -->
+        <mxCell id="refresh_tokens_table" value="refresh_tokens&#xa;━━━━━━━━&#xa;• id (UUID, PK)&#xa;• user_id (UUID, FK→users)&#xa;• token_hash (VARCHAR)&#xa;• expires_at (TIMESTAMPTZ)&#xa;• revoked_at (TIMESTAMPTZ)&#xa;• created_at (TIMESTAMPTZ)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="300" width="220" height="130" as="geometry"/>
+        </mxCell>
+
+        <!-- audit_logs 表 -->
+        <mxCell id="audit_logs_table" value="audit_logs&#xa;━━━━━━━━&#xa;• id (UUID, PK)&#xa;• user_id (UUID, FK→users)&#xa;• space_id (UUID, FK→spaces)&#xa;• action (VARCHAR)&#xa;• resource_type / resource_id&#xa;• ip_address (INET)&#xa;• user_agent (TEXT)&#xa;• payload (JSONB)&#xa;• created_at (TIMESTAMPTZ)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="60" y="480" width="220" height="170" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== Row 2: 空间层 ==================== -->
+
+        <!-- spaces 表 -->
+        <mxCell id="spaces_table" value="spaces&#xa;━━━━&#xa;• id (UUID, PK)&#xa;• name (VARCHAR)&#xa;• slug (VARCHAR, UNIQUE)&#xa;• description (TEXT)&#xa;• owner_id (UUID, FK→users)&#xa;• preferred_model_provider&#xa;• is_active (BOOLEAN)&#xa;• created_at / updated_at&#xa;• deleted_at (软删除)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="160" width="220" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- user_space_roles 表 -->
+        <mxCell id="user_space_roles_table" value="user_space_roles&#xa;━━━━━━━━━━━━&#xa;• id (UUID, PK)&#xa;• user_id (UUID, FK→users)&#xa;• space_id (UUID, FK→spaces)&#xa;• role_type (VARCHAR)&#xa;• granted_at (TIMESTAMPTZ)&#xa;• granted_by (UUID, FK→users)&#xa;&#xa;UNIQUE(user, space, role)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="560" y="400" width="220" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== Row 3: 文档层 ==================== -->
+
+        <!-- documents 表 -->
+        <mxCell id="documents_table" value="documents&#xa;━━━━━━━━&#xa;• id (UUID, PK)&#xa;• space_id (UUID, FK→spaces)&#xa;• uploaded_by (UUID, FK→users)&#xa;• title (VARCHAR)&#xa;• original_filename (VARCHAR)&#xa;• file_path / file_size_bytes&#xa;• mime_type (VARCHAR)&#xa;• source_url (TEXT)&#xa;• status (VARCHAR)&#xa;• chunk_count / language&#xa;• metadata (JSONB)&#xa;• created_at / updated_at&#xa;• deleted_at (软删除)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="920" y="160" width="240" height="250" as="geometry"/>
+        </mxCell>
+
+        <!-- tags 表 -->
+        <mxCell id="tags_table" value="tags&#xa;━━━━&#xa;• id (UUID, PK)&#xa;• space_id (UUID, FK→spaces)&#xa;• name / slug (VARCHAR)&#xa;• color (VARCHAR)&#xa;• parent_id (UUID, FK→tags)&#xa;• tag_type (VARCHAR)&#xa;• description (TEXT)&#xa;• sort_order (INTEGER)&#xa;• created_at / updated_at&#xa;• deleted_at (软删除)&#xa;&#xa;UNIQUE(space_id, slug)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="920" y="480" width="240" height="200" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== Row 4: 关联层 ==================== -->
+
+        <!-- document_chunks 表 -->
+        <mxCell id="document_chunks_table" value="document_chunks&#xa;━━━━━━━━━━━━&#xa;• id (UUID, PK)&#xa;• document_id (UUID, FK)&#xa;• chunk_index (INTEGER)&#xa;• content (TEXT)&#xa;• token_count (INTEGER)&#xa;• milvus_id (VARCHAR)&#xa;• embedding_model (VARCHAR)&#xa;• page_number&#xa;• char_start / char_end&#xa;• created_at (TIMESTAMPTZ)&#xa;&#xa;UNIQUE(doc, chunk_index)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="160" width="220" height="210" as="geometry"/>
+        </mxCell>
+
+        <!-- document_relations 表 -->
+        <mxCell id="document_relations_table" value="document_relations&#xa;━━━━━━━━━━━━━━&#xa;• id (UUID, PK)&#xa;• source_doc_id (UUID, FK)&#xa;• target_doc_id (UUID, FK)&#xa;• relation_type (VARCHAR)&#xa;• weight (NUMERIC)&#xa;• auto_detected (BOOLEAN)&#xa;• created_by (UUID, FK→users)&#xa;• created_at (TIMESTAMPTZ)&#xa;&#xa;UNIQUE(source, target, type)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="420" width="220" height="180" as="geometry"/>
+        </mxCell>
+
+        <!-- document_tags 表 -->
+        <mxCell id="document_tags_table" value="document_tags&#xa;━━━━━━━━━━&#xa;• id (UUID, PK)&#xa;• document_id (UUID, FK)&#xa;• tag_id (UUID, FK→tags)&#xa;• tagged_by (UUID, FK→users)&#xa;• auto_tagged (BOOLEAN)&#xa;• confidence (NUMERIC)&#xa;• created_at (TIMESTAMPTZ)&#xa;&#xa;UNIQUE(document_id, tag_id)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontFamily=Courier New;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;collapsible=0;" vertex="1" parent="1">
+          <mxGeometry x="1280" y="650" width="220" height="150" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== 图例 ==================== -->
+        <mxCell id="legend_box" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#cccccc;strokeWidth=1;fontFamily=Arial;fontSize=10;align=left;spacingLeft=10;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="1600" y="160" width="200" height="300" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend_title" value="图例" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#333333;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1610" y="170" width="180" height="25" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_1" value="■ 用户/空间/角色" style="text;html=1;strokeColor=none;fillColor=#dae8fc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="1610" y="205" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_2" value="■ 文档/分块/关系" style="text;html=1;strokeColor=none;fillColor=#d5e8d4;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="1610" y="232" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_3" value="■ 标签相关" style="text;html=1;strokeColor=none;fillColor=#e1d5e7;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#9673a6" vertex="1" parent="1">
+          <mxGeometry x="1610" y="259" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_4" value="■ 认证令牌" style="text;html=1;strokeColor=none;fillColor=#f8cecc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#b85450" vertex="1" parent="1">
+          <mxGeometry x="1610" y="286" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_5" value="■ 审计日志" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="1610" y="313" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_6" value="■ 用户空间角色" style="text;html=1;strokeColor=none;fillColor=#fff2cc;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="1610" y="340" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_7" value="" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="1610" y="367" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_8" value="基数说明:" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#333333;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1610" y="395" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_9" value="1:N — 一对多" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#333333" vertex="1" parent="1">
+          <mxGeometry x="1610" y="422" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="leg_10" value="N:M — 多对多" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#333333" vertex="1" parent="1">
+          <mxGeometry x="1610" y="449" width="180" height="22" as="geometry"/>
+        </mxCell>
+
+        <!-- ==================== 外键关系线 (从左到右，避免穿越) ==================== -->
+
+        <!-- roles → users (N:M) -->
+        <mxCell id="fk_roles_users" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="roles_table" target="users_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_1" value="N:M" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="220" y="140" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- users → refresh_tokens (1:N) -->
+        <mxCell id="fk_users_rt" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#b85450;strokeWidth=2;endArrow=classic;endFill=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.35;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="users_table" target="refresh_tokens_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_2" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#b85450;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="240" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- users → audit_logs (1:N) -->
+        <mxCell id="fk_users_audit" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;endFill=1;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=1;entryY=0.2;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="users_table" target="audit_logs_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_3" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="200" y="380" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- users → spaces (owner_id, 1:N) -->
+        <mxCell id="fk_users_spaces" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="users_table" target="spaces_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_4" value="1:N&#xa;owner" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="480" y="170" width="50" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- users → user_space_roles (1:N) -->
+        <mxCell id="fk_users_usr" style="edgeStyle=elbowEdgeStyle;elbow=vertical;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6b656;strokeWidth=2;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="users_table" target="user_space_roles_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_5" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="480" y="360" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- spaces → user_space_roles (1:N) -->
+        <mxCell id="fk_spaces_usr" style="edgeStyle=elbowEdgeStyle;elbow=vertical;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#d6b656;strokeWidth=2;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.15;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="spaces_table" target="user_space_roles_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_6" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="680" y="360" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- spaces → audit_logs (1:N) -->
+        <mxCell id="fk_spaces_audit" style="edgeStyle=elbowEdgeStyle;elbow=vertical;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#666666;strokeWidth=2;endArrow=classic;endFill=1;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="spaces_table" target="audit_logs_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_7" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#666666;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="380" y="500" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- spaces → documents (1:N) -->
+        <mxCell id="fk_spaces_docs" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.4;exitDx=0;exitDy=0;entryX=0;entryY=0.1;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="spaces_table" target="documents_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_8" value="1:N&#xa;space" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="830" y="180" width="50" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- users → documents (uploaded_by, 1:N) -->
+        <mxCell id="fk_users_docs" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.2;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="users_table" target="documents_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_9" value="1:N&#xa;upload" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="830" y="230" width="50" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- spaces → tags (1:N) -->
+        <mxCell id="fk_spaces_tags" style="edgeStyle=elbowEdgeStyle;elbow=vertical;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="spaces_table" target="tags_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_10" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="680" y="460" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- documents → document_chunks (1:N) -->
+        <mxCell id="fk_docs_chunks" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="documents_table" target="document_chunks_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_11" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1190" y="180" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- documents → document_relations (source, 1:N) -->
+        <mxCell id="fk_docs_rel_src" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.15;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="documents_table" target="document_relations_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_12" value="1:N&#xa;source" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1190" y="420" width="50" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- documents → document_relations (target, 1:N) -->
+        <mxCell id="fk_docs_rel_tgt" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#82b366;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.45;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="documents_table" target="document_relations_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_13" value="1:N&#xa;target" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1190" y="500" width="50" height="30" as="geometry"/>
+        </mxCell>
+
+        <!-- documents → document_tags (1:N) -->
+        <mxCell id="fk_docs_tags" style="edgeStyle=elbowEdgeStyle;elbow=vertical;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;endFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="documents_table" target="document_tags_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_14" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1070" y="630" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- tags → document_tags (1:N) -->
+        <mxCell id="fk_tags_doctags" style="edgeStyle=elbowEdgeStyle;elbow=horizontal;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="tags_table" target="document_tags_table">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="fk_rl_15" value="1:N" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1520" y="700" width="40" height="20" as="geometry"/>
+        </mxCell>
+
+        <!-- tags → tags (parent_id 自关联) -->
+        <mxCell id="fk_tags_parent" style="edgeStyle=elbowEdgeStyle;elbow=vertical;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9673a6;strokeWidth=2;endArrow=classic;endFill=1;exitX=0;exitY=0.9;exitDx=0;exitDy=0;entryX=1;entryY=0.9;entryDx=0;entryDy=0;dashed=1;endSize=8;exitPerimeter=0;entryPerimeter=0;" edge="1" parent="1" source="tags_table" target="tags_table">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="900" y="700" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="900" y="700"/>
+              <mxPoint x="880" y="700"/>
+              <mxPoint x="880" y="500"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="fk_rl_16" value="1:N&#xa;(自关联)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="850" y="620" width="60" height="30" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
