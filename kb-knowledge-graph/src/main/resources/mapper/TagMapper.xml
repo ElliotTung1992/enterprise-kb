@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.graph.mapper.TagMapper">
+
+    <resultMap id="TagResultMap" type="com.enterprise.kb.graph.model.Tag">
+        <id property="id" column="id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="name" column="name"/>
+        <result property="slug" column="slug"/>
+        <result property="color" column="color"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="tagType" column="tag_type"/>
+        <result property="description" column="description"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <select id="findByIdAndDeletedAtIsNull" resultMap="TagResultMap">
+        SELECT * FROM tags WHERE id = #{id,jdbcType=OTHER} AND deleted_at IS NULL LIMIT 1
+    </select>
+
+    <select id="existsBySpaceIdAndSlugAndDeletedAtIsNull" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM tags
+        WHERE space_id = #{spaceId,jdbcType=OTHER} AND slug = #{slug} AND deleted_at IS NULL
+    </select>
+
+    <select id="findBySpaceIdAndDeletedAtIsNullOrderBySortOrderAscNameAsc" resultMap="TagResultMap">
+        SELECT * FROM tags
+        WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+        ORDER BY sort_order ASC, name ASC
+    </select>
+
+    <select id="findTagTree" resultMap="TagResultMap">
+        WITH RECURSIVE tag_tree AS (
+            SELECT *, 0 AS depth FROM tags
+            WHERE space_id = #{spaceId,jdbcType=OTHER} AND parent_id IS NULL AND deleted_at IS NULL
+            UNION ALL
+            SELECT t.*, tt.depth + 1 FROM tags t
+            JOIN tag_tree tt ON t.parent_id = tt.id
+            WHERE t.deleted_at IS NULL
+        )
+        SELECT * FROM tag_tree ORDER BY depth, sort_order, name
+    </select>
+
+    <select id="findAll" resultMap="TagResultMap">
+        SELECT * FROM tags WHERE deleted_at IS NULL
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO tags (
+            id, space_id, name, slug, color, parent_id, tag_type, description,
+            sort_order, created_at, updated_at, deleted_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{spaceId,jdbcType=OTHER},
+            #{name},
+            #{slug},
+            #{color},
+            #{parentId,jdbcType=OTHER},
+            #{tagType},
+            #{description},
+            #{sortOrder},
+            #{createdAt},
+            #{updatedAt},
+            #{deletedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE tags SET
+            name = #{name},
+            slug = #{slug},
+            color = #{color},
+            parent_id = #{parentId,jdbcType=OTHER},
+            tag_type = #{tagType},
+            description = #{description},
+            sort_order = #{sortOrder},
+            updated_at = #{updatedAt},
+            deleted_at = #{deletedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+</mapper>

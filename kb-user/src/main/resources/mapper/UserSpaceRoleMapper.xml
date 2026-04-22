@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.user.mapper.UserSpaceRoleMapper">
+
+    <resultMap id="UserSpaceRoleResultMap" type="com.enterprise.kb.user.model.UserSpaceRole">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="roleType" column="role_type"/>
+        <result property="grantedAt" column="granted_at"/>
+        <result property="grantedBy" column="granted_by"/>
+    </resultMap>
+
+    <select id="findBySpaceId" resultMap="UserSpaceRoleResultMap">
+        SELECT * FROM user_space_roles WHERE space_id = #{spaceId,jdbcType=OTHER}
+    </select>
+
+    <select id="findByUserId" resultMap="UserSpaceRoleResultMap">
+        SELECT * FROM user_space_roles WHERE user_id = #{userId,jdbcType=OTHER}
+    </select>
+
+    <select id="findByUserIdAndSpaceId" resultMap="UserSpaceRoleResultMap">
+        SELECT * FROM user_space_roles
+        WHERE user_id = #{userId,jdbcType=OTHER} AND space_id = #{spaceId,jdbcType=OTHER}
+        LIMIT 1
+    </select>
+
+    <select id="existsByUserIdAndSpaceIdAndRoleType" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM user_space_roles
+        WHERE user_id = #{userId,jdbcType=OTHER}
+          AND space_id = #{spaceId,jdbcType=OTHER}
+          AND role_type = #{roleType}
+    </select>
+
+    <select id="existsByUserIdAndSpaceId" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM user_space_roles
+        WHERE user_id = #{userId,jdbcType=OTHER} AND space_id = #{spaceId,jdbcType=OTHER}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO user_space_roles (id, user_id, space_id, role_type, granted_at, granted_by)
+        VALUES (
+            #{id,jdbcType=OTHER},
+            #{userId,jdbcType=OTHER},
+            #{spaceId,jdbcType=OTHER},
+            #{roleType},
+            #{grantedAt},
+            #{grantedBy,jdbcType=OTHER}
+        )
+    </insert>
+
+    <delete id="deleteByUserIdAndSpaceId">
+        DELETE FROM user_space_roles
+        WHERE user_id = #{userId,jdbcType=OTHER} AND space_id = #{spaceId,jdbcType=OTHER}
+    </delete>
+
+</mapper>

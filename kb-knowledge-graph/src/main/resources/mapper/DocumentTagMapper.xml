@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.graph.mapper.DocumentTagMapper">
+
+    <resultMap id="DocumentTagResultMap" type="com.enterprise.kb.graph.model.DocumentTag">
+        <id property="id" column="id"/>
+        <result property="documentId" column="document_id"/>
+        <result property="tagId" column="tag_id"/>
+        <result property="taggedBy" column="tagged_by"/>
+        <result property="autoTagged" column="auto_tagged"/>
+        <result property="confidence" column="confidence"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findByDocumentId" resultMap="DocumentTagResultMap">
+        SELECT * FROM document_tags WHERE document_id = #{documentId,jdbcType=OTHER}
+    </select>
+
+    <select id="findByTagId" resultMap="DocumentTagResultMap">
+        SELECT * FROM document_tags WHERE tag_id = #{tagId,jdbcType=OTHER}
+    </select>
+
+    <select id="existsByDocumentIdAndTagId" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM document_tags
+        WHERE document_id = #{documentId,jdbcType=OTHER} AND tag_id = #{tagId,jdbcType=OTHER}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO document_tags (id, document_id, tag_id, tagged_by, auto_tagged, confidence, created_at)
+        VALUES (
+            #{id,jdbcType=OTHER},
+            #{documentId,jdbcType=OTHER},
+            #{tagId,jdbcType=OTHER},
+            #{taggedBy,jdbcType=OTHER},
+            #{autoTagged},
+            #{confidence},
+            #{createdAt}
+        )
+    </insert>
+
+    <delete id="deleteByDocumentIdAndTagId">
+        DELETE FROM document_tags
+        WHERE document_id = #{documentId,jdbcType=OTHER} AND tag_id = #{tagId,jdbcType=OTHER}
+    </delete>
+
+    <update id="mergeTags">
+        UPDATE document_tags SET tag_id = #{targetTagId,jdbcType=OTHER}
+        WHERE tag_id = #{sourceTagId,jdbcType=OTHER}
+    </update>
+
+</mapper>

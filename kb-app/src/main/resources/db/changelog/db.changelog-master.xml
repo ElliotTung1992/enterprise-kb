@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.26.xsd">
+
+    <include file="db/changelog/001-create-roles.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/002-create-users.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/003-create-spaces.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/004-create-user-space-roles.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/005-create-documents.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/006-create-document-chunks.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/007-create-tags.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/008-create-document-tags.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/009-create-document-relations.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/010-create-refresh-tokens.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/011-create-audit-logs.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/012-insert-default-data.sql" relativeToChangelogFile="false"/>
+</databaseChangeLog>

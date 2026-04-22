@@ -1,0 +1,48 @@
+package com.enterprise.kb.search.service;
+
+import com.enterprise.kb.search.dto.SearchHit;
+import com.enterprise.kb.search.dto.SearchRequest;
+import com.enterprise.kb.search.dto.SearchResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class KeywordSearchServiceImpl implements KeywordSearchService {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    @Override
+    @Transactional(readOnly = true)
+    public SearchResponse search(UUID spaceId, SearchRequest req) {
+        long start = System.currentTimeMillis();
+        String sql = """
+                SELECT dc.id::text AS chunk_id, dc.document_id::text AS document_id,
+                       d.title AS document_title, dc.content AS excerpt, dc.page_number,
+                       ts_rank(to_tsvector('simple', dc.content), plainto_tsquery('simple', ?)) AS score
+                FROM document_chunks dc
+                JOIN documents d ON d.id = dc.document_id
+                WHERE d.space_id = ?::uuid AND d.deleted_at IS NULL
+                  AND to_tsvector('simple', dc.content) @@ plainto_tsquery('simple', ?)
+                ORDER BY score DESC LIMIT ?""";
+
+        List<SearchHit> hits = jdbcTemplate.query(sql,
+                (rs, rowNum) -> new SearchHit(
+                        rs.getString("chunk_id"), UUID.fromString(rs.getString("document_id")),
+                        rs.getString("document_title"), truncate(rs.getString("excerpt"), 300),
+                        rs.getObject("page_number", Integer.class), rs.getDouble("score"), null),
+                req.query(), spaceId.toString(), req.query(), req.topK());
+        return new SearchResponse(hits, hits.size(), "KEYWORD", System.currentTimeMillis() - start);
+    }
+
+    private String truncate(String text, int maxLen) {
+        return text == null ? "" : (text.length() <= maxLen ? text : text.substring(0, maxLen) + "…");
+    }
+}

@@ -1,0 +1,134 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  tomcat:
+    max-swallow-size: -1
+
+spring:
+  application:
+    name: enterprise-kb
+
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
+      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
+      - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/enterprise_kb}
+    username: ${SPRING_DATASOURCE_USERNAME:kb_user}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 100MB
+      max-request-size: 200MB
+
+  ai:
+    minimax:
+      api-key: ${MINIMAX_API_KEY:}
+      chat:
+        options:
+          model: abab6.5s-chat
+      embedding:
+        options:
+          model: embo-01
+
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: gpt-4o
+      embedding:
+        options:
+          model: text-embedding-3-small
+
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+      chat:
+        options:
+          model: claude-sonnet-4-5
+
+    vectorstore:
+      milvus:
+        client:
+          host: ${MILVUS_HOST:localhost}
+          port: ${MILVUS_PORT:19530}
+        database-name: default
+        collection-name: kb_chunks
+        embedding-dimension: 1536
+        index-type: IVF_FLAT
+        metric-type: COSINE
+        initialize-schema: true
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+    jdbc-type-for-null: NULL
+  type-handlers-package: com.enterprise.kb.document.typehandler
+  type-aliases-package: >
+    com.enterprise.kb.user.model,
+    com.enterprise.kb.auth.model,
+    com.enterprise.kb.document.model,
+    com.enterprise.kb.graph.model
+
+pagehelper:
+  helper-dialect: postgresql
+  reasonable: true
+  support-methods-arguments: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+enterprise:
+  kb:
+    jwt:
+      secret: ${JWT_SECRET:please-change-this-to-a-256-bit-secret-key-in-production}
+      access-token-expiry-minutes: 60
+      refresh-token-expiry-days: 30
+    ai:
+      default-provider: MINIMAX
+      default-embedding-provider: MINIMAX
+    storage:
+      base-path: ${FILE_STORAGE_PATH:./uploads}
+    document:
+      allowed-mime-types:
+        - application/pdf
+        - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        - application/msword
+        - text/markdown
+        - text/x-markdown
+        - text/plain
+        - text/html
+      max-file-size-mb: 100
+    chunking:
+      chunk-size: 512
+      overlap-size: 64
+
+logging:
+  level:
+    com.enterprise.kb: INFO
+    org.springframework.ai: INFO
+    org.springframework.security: WARN

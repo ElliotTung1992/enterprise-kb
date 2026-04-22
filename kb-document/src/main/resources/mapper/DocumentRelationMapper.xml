@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.document.mapper.DocumentRelationMapper">
+
+    <resultMap id="DocumentRelationResultMap" type="com.enterprise.kb.document.model.DocumentRelation">
+        <id property="id" column="id"/>
+        <result property="sourceDocId" column="source_doc_id"/>
+        <result property="targetDocId" column="target_doc_id"/>
+        <result property="relationType" column="relation_type"/>
+        <result property="weight" column="weight"/>
+        <result property="autoDetected" column="auto_detected"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findByDocumentId" resultMap="DocumentRelationResultMap">
+        SELECT * FROM document_relations
+        WHERE source_doc_id = #{docId,jdbcType=OTHER} OR target_doc_id = #{docId,jdbcType=OTHER}
+    </select>
+
+    <select id="existsBySourceDocIdAndTargetDocIdAndRelationType" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM document_relations
+        WHERE source_doc_id = #{sourceDocId,jdbcType=OTHER}
+          AND target_doc_id = #{targetDocId,jdbcType=OTHER}
+          AND relation_type = #{relationType}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO document_relations (
+            id, source_doc_id, target_doc_id, relation_type, weight, auto_detected, created_by, created_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{sourceDocId,jdbcType=OTHER},
+            #{targetDocId,jdbcType=OTHER},
+            #{relationType},
+            #{weight},
+            #{autoDetected},
+            #{createdBy,jdbcType=OTHER},
+            #{createdAt}
+        )
+    </insert>
+
+    <delete id="deleteById">
+        DELETE FROM document_relations WHERE id = #{id,jdbcType=OTHER}
+    </delete>
+
+</mapper>
