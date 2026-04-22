@@ -83,6 +83,7 @@ kb-common → kb-auth → kb-user → kb-document / kb-search / kb-knowledge-gra
 - 注释语言统一使用**中文**
 - 核心业务逻辑、复杂算法必须添加行内注释说明意图
 - 禁止无意义注释，如 `// 获取用户` 后紧跟 `getUser()`
+- 配置类需要写详细的注释
 
 ---
 
