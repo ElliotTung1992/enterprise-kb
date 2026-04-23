@@ -126,6 +126,7 @@ services:
       MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       # JWT
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       # Storage

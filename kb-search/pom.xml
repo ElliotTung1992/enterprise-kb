@@ -44,5 +44,10 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-minimax</artifactId>
         </dependency>
+        <!-- DashScope via OpenAI-compatible API -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
     </dependencies>
 </project>

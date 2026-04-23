@@ -30,9 +30,13 @@ public class ModelProviderResolver {
     private String defaultEmbeddingProvider;
 
     public ModelProviderResolver(
+            @Nullable @Qualifier("dashscopeChatClient") ChatClient dashscope,
+            @Nullable @Qualifier("dashscopeEmbeddingModel") EmbeddingModel dashscopeEmbedding,
             @Nullable @Qualifier("minimaxChatClient") ChatClient minimax,
             @Nullable @Qualifier("minimaxEmbeddingModel") EmbeddingModel minimaxEmbedding) {
 
+        if (dashscope != null) chatClients.put("DASHSCOPE", dashscope);
+        if (dashscopeEmbedding != null) embeddingModels.put("DASHSCOPE", dashscopeEmbedding);
         if (minimax != null) chatClients.put("MINIMAX", minimax);
         if (minimaxEmbedding != null) embeddingModels.put("MINIMAX", minimaxEmbedding);
     }

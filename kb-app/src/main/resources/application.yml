@@ -11,8 +11,6 @@ spring:
 
   autoconfigure:
     exclude:
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration
-      - org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration
       - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
 
   threads:
@@ -49,13 +47,14 @@ spring:
           model: embo-01
 
     openai:
-      api-key: ${OPENAI_API_KEY:}
+      api-key: ${DASHSCOPE_API_KEY:}
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
       chat:
         options:
-          model: gpt-4o
+          model: qwen-plus
       embedding:
         options:
-          model: text-embedding-3-small
+          model: text-embedding-v2
 
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
@@ -109,8 +108,8 @@ enterprise:
       access-token-expiry-minutes: 60
       refresh-token-expiry-days: 30
     ai:
-      default-provider: MINIMAX
-      default-embedding-provider: MINIMAX
+      default-provider: DASHSCOPE
+      default-embedding-provider: DASHSCOPE
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
     document:

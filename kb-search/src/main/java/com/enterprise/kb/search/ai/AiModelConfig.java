@@ -36,19 +36,53 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class AiModelConfig {
 
-    // ---- MiniMax（默认提供商） ----
+    // ---- DashScope（默认提供商，通过 OpenAI 兼容接口） ----
+
+    /**
+     * 创建 DashScope 的 {@link ChatClient}（通义千问），用于问答生成。
+     *
+     * <p>仅当配置文件中存在 {@code spring.ai.openai.api-key} 时生效。
+     * 标注 {@link Primary} 使其成为未指定提供商时的默认 ChatClient。
+     *
+     * @param openAiChatModel Spring AI 自动装配的 OpenAI-compatible ChatModel
+     * @return 封装了 DashScope 模型的 {@link ChatClient}
+     */
+    @Bean("dashscopeChatClient")
+    @Primary
+    @ConditionalOnProperty("spring.ai.openai.api-key")
+    public ChatClient dashscopeChatClient(
+            @Qualifier("openAiChatModel") ChatModel openAiChatModel) {
+        return ChatClient.builder(openAiChatModel).build();
+    }
+
+    /**
+     * 创建 DashScope 的 {@link EmbeddingModel}（text-embedding-v2，1536 维），用于文档向量化和查询向量化。
+     *
+     * <p>仅当配置文件中存在 {@code spring.ai.openai.api-key} 时生效。
+     * 标注 {@link Primary} 使其成为未指定提供商时的默认嵌入模型。
+     *
+     * @param openAiEmbeddingModel Spring AI 自动装配的 OpenAI-compatible EmbeddingModel
+     * @return DashScope EmbeddingModel 实例
+     */
+    @Bean("dashscopeEmbeddingModel")
+    @Primary
+    @ConditionalOnProperty("spring.ai.openai.api-key")
+    public EmbeddingModel dashscopeEmbeddingModel(
+            @Qualifier("openAiEmbeddingModel") EmbeddingModel openAiEmbeddingModel) {
+        return openAiEmbeddingModel;
+    }
+
+    // ---- MiniMax ----
 
     /**
      * 创建 MiniMax 的 {@link ChatClient}，用于问答生成。
      *
      * <p>仅当配置文件中存在 {@code spring.ai.minimax.api-key} 时生效。
-     * 标注 {@link Primary} 使其成为未指定提供商时的默认 ChatClient。
      *
      * @param miniMaxChatModel Spring AI 自动装配的 MiniMax ChatModel
      * @return 封装了 MiniMax 模型的 {@link ChatClient}
      */
     @Bean("minimaxChatClient")
-    @Primary
     @ConditionalOnProperty("spring.ai.minimax.api-key")
     public ChatClient minimaxChatClient(
             @Qualifier("miniMaxChatModel") ChatModel miniMaxChatModel) {
@@ -59,13 +93,11 @@ public class AiModelConfig {
      * 创建 MiniMax 的 {@link EmbeddingModel}（embo-01），用于文档向量化和查询向量化。
      *
      * <p>仅当配置文件中存在 {@code spring.ai.minimax.api-key} 时生效。
-     * 标注 {@link Primary} 使其成为未指定提供商时的默认嵌入模型。
      *
      * @param miniMaxEmbeddingModel Spring AI 自动装配的 MiniMax EmbeddingModel
      * @return MiniMax EmbeddingModel 实例
      */
     @Bean("minimaxEmbeddingModel")
-    @Primary
     @ConditionalOnProperty("spring.ai.minimax.api-key")
     public EmbeddingModel minimaxEmbeddingModel(
             @Qualifier("miniMaxEmbeddingModel") EmbeddingModel miniMaxEmbeddingModel) {
