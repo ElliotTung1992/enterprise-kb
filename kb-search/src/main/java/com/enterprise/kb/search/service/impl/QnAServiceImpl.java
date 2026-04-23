@@ -22,6 +22,11 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 问答服务实现，RAG 模式：先向量检索相关文档块，再调用 LLM 生成答案。
+ * <p>支持同步阻塞和流式（SSE）两种响应模式。答案附带 citations 引用来源。
+ * 使用 QuestionAnswerAdvisor 自动拼接检索上下文到 prompt。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,13 @@ public class QnAServiceImpl implements QnAService {
     private final VectorStore vectorStore;
     private final DocumentMapper documentMapper;
 
+    /**
+     * 同步 RAG 问答。
+     *
+     * @param spaceId 空间 UUID
+     * @param req     问答请求
+     * @return 问答响应
+     */
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
@@ -53,6 +65,13 @@ public class QnAServiceImpl implements QnAService {
         return new QnAResponse(answer, sessionId, extractCitations(chatResponse), modelUsed, tokensUsed);
     }
 
+    /**
+     * 流式 RAG 问答。
+     *
+     * @param spaceId 空间 UUID
+     * @param req     问答请求
+     * @return token 字符串流
+     */
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());

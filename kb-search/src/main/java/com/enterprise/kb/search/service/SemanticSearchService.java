@@ -6,7 +6,7 @@ import com.enterprise.kb.search.dto.SearchResponse;
 import java.util.UUID;
 
 /**
- * Semantic search service using a vector store and embedding models.
+ * 语义搜索服务接口，通过向量相似度在 Milvus 中检索相关文档块。
  */
 public interface SemanticSearchService {
 

@@ -12,10 +12,23 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * 文档解析服务实现，支持 PDF 和通用文件（通过 Tika）两种解析方式。
+ * <p>PDF 优先使用 PagePdfDocumentReader，解析失败时 fallback 到 Tika。
+ * 解析结果为 Spring AI Document 列表，可直接用于分块和向量化。</p>
+ */
 @Slf4j
 @Service
 public class DocumentParserServiceImpl implements DocumentParserService {
 
+    /**
+     * 解析文件为 Spring AI Document 列表。
+     * <p>PDF 使用 PagePdfDocumentReader，解析失败时 fallback 到 Tika。</p>
+     *
+     * @param filePath 文件路径
+     * @param mimeType MIME 类型
+     * @return 解析后的文档列表
+     */
     @Override
     public List<Document> parse(String filePath, String mimeType) {
         log.debug("Parsing file {} with mimeType {}", filePath, mimeType);

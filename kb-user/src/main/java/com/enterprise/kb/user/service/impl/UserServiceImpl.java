@@ -19,6 +19,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 用户服务实现，提供用户的创建、查询、列表与删除功能。
+ * <p>支持软删除（设置 deleted_at），密码使用 BCrypt 加密存储。
+ * 仅返回未软删除的有效用户。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -26,6 +31,13 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * 从注册流程创建用户（内部回调）。
+     *
+     * @param username     用户名
+     * @param requestObj   注册请求对象
+     * @return 新建用户 UUID
+     */
     @Override
     @Transactional
     public UUID createFromRegister(String username, Object requestObj) {
@@ -44,6 +56,12 @@ public class UserServiceImpl implements UserService {
         return user.getId();
     }
 
+    /**
+     * 管理员创建用户。
+     *
+     * @param req 创建用户请求
+     * @return 用户 DTO
+     */
     @Override
     @Transactional
     public UserDto createUser(CreateUserRequest req) {
@@ -61,12 +79,24 @@ public class UserServiceImpl implements UserService {
         return toDto(user);
     }
 
+    /**
+     * 根据 UUID 获取用户信息。
+     *
+     * @param id 用户 UUID
+     * @return 用户 DTO
+     */
     @Override
     @Transactional(readOnly = true)
     public UserDto getUserById(UUID id) {
         return toDto(findActive(id));
     }
 
+    /**
+     * 根据用户名查询 UUID。
+     *
+     * @param username 用户名
+     * @return 用户 UUID
+     */
     @Override
     @Transactional(readOnly = true)
     public UUID getUserIdByUsername(String username) {
@@ -74,6 +104,14 @@ public class UserServiceImpl implements UserService {
                 .map(User::getId).orElseThrow(() -> new ResourceNotFoundException("User", username));
     }
 
+    /**
+     * 分页查询用户列表。
+     *
+     * @param keyword 关键字（匹配用户名、邮箱、全名）
+     * @param page    页码（从 0 开始）
+     * @param size    每页大小
+     * @return 分页用户列表
+     */
     @Override
     @Transactional(readOnly = true)
     public PageInfo<UserDto> listUsers(String keyword, int page, int size) {
@@ -89,6 +127,11 @@ public class UserServiceImpl implements UserService {
         return result;
     }
 
+    /**
+     * 软删除用户。
+     *
+     * @param id 用户 UUID
+     */
     @Override
     @Transactional
     public void deleteUser(UUID id) {
@@ -99,6 +142,12 @@ public class UserServiceImpl implements UserService {
         userMapper.update(user);
     }
 
+    /**
+     * 更新用户密码哈希（内部回调，由认证层在验证旧密码后调用）。
+     *
+     * @param id              用户 UUID
+     * @param newPasswordHash 新密码的 BCrypt 哈希
+     */
     @Override
     @Transactional
     public void updatePasswordHash(UUID id, String newPasswordHash) {

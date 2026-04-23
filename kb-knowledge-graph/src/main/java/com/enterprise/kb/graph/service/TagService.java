@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Tag management service for creating, listing, and managing document tags.
+ * 标签管理服务接口，提供标签的创建、列表、层级树、删除与合并功能。
  */
 public interface TagService {
 

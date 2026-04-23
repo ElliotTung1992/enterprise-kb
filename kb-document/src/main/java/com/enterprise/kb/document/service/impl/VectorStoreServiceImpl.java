@@ -11,6 +11,10 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 向量存储服务实现，负责将文档块 upsert 到 Milvus 并支持按 documentId 删除。
+ * <p>批量写入以 100 条为单元，避免单次请求过大。删除使用 FilterExpression 匹配 documentId。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -19,6 +23,11 @@ public class VectorStoreServiceImpl implements VectorStoreService {
     private final VectorStore vectorStore;
     private static final int BATCH_SIZE = 100;
 
+    /**
+     * 批量 upsert 文档块到向量库。
+     *
+     * @param documents 文档块列表
+     */
     @Override
     public void upsert(List<Document> documents) {
         for (int i = 0; i < documents.size(); i += BATCH_SIZE) {
@@ -29,6 +38,11 @@ public class VectorStoreServiceImpl implements VectorStoreService {
         }
     }
 
+    /**
+     * 删除文档关联的所有向量。
+     *
+     * @param documentId 文档 UUID
+     */
     @Override
     public void deleteByDocumentId(UUID documentId) {
         FilterExpressionBuilder b = new FilterExpressionBuilder();

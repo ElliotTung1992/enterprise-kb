@@ -3,7 +3,7 @@ package com.enterprise.kb.graph.service;
 import java.util.UUID;
 
 /**
- * Auto-tagging service that uses AI to suggest and apply tags to documents.
+ * 自动打标服务接口，使用 LLM 分析文档内容并推荐相关标签。
  */
 public interface AutoTaggingService {
 

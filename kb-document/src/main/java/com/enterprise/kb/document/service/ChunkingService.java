@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Document chunking service that splits documents into smaller pieces.
+ * 文档分块服务接口，将文档拆分为更小的块并注入元数据。
  */
 public interface ChunkingService {
 

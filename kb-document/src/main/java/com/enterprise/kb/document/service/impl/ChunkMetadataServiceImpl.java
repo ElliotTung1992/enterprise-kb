@@ -13,6 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Chunk 元数据持久化服务实现，负责将文档分块信息存入数据库。
+ * <p>每次保存时会先清除该文档的旧 chunk 记录，再批量插入新 chunk。
+ * 记录包含内容、嵌入模型、Milvus ID 和页码等辅助信息。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -20,6 +25,14 @@ public class ChunkMetadataServiceImpl implements ChunkMetadataService {
 
     private final DocumentChunkMapper chunkMapper;
 
+    /**
+     * 保存文档 chunks。
+     * <p>先删除旧 chunk 记录，再批量插入新 chunk。</p>
+     *
+     * @param documentId    文档 UUID
+     * @param chunks        chunk 列表
+     * @param embeddingModel 嵌入模型名称
+     */
     @Override
     @Transactional
     public void saveChunks(UUID documentId, List<Document> chunks, String embeddingModel) {
@@ -43,6 +56,11 @@ public class ChunkMetadataServiceImpl implements ChunkMetadataService {
         log.debug("Saved {} chunks for documentId={}", entities.size(), documentId);
     }
 
+    /**
+     * 删除文档的所有 chunk 记录。
+     *
+     * @param documentId 文档 UUID
+     */
     @Override
     @Transactional
     public void deleteByDocumentId(UUID documentId) {

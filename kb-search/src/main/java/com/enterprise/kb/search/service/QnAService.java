@@ -7,7 +7,7 @@ import reactor.core.publisher.Flux;
 import java.util.UUID;
 
 /**
- * Question and Answer service using a chat model with vector store retrieval.
+ * 问答服务接口，RAG 模式：向量检索 + LLM 生成，支持同步和流式两种响应模式。
  */
 public interface QnAService {
 

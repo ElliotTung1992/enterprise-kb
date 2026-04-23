@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Document relation service for managing relationships between documents.
+ * 文档关系服务接口，管理文档之间的关联关系。
  */
 public interface DocumentRelationService {
 

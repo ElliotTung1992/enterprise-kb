@@ -8,7 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
 
 /**
- * Document service interface providing document CRUD and ingestion operations.
+ * 文档服务接口，提供文档的创建、查询、删除与重新处理功能。
  */
 public interface DocumentService {
 

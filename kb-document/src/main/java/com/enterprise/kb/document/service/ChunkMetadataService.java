@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Chunk metadata persistence service for storing and managing document chunk data.
+ * Chunk 元数据持久化服务接口，负责文档分块数据的存储与管理。
  */
 public interface ChunkMetadataService {
 

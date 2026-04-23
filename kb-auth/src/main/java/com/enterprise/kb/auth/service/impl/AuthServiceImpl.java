@@ -29,6 +29,11 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+/**
+ * 认证服务实现，提供登录、注册、Token 刷新与登出功能。
+ * <p>支持 access token + refresh token 旋转策略，refresh token 以 SHA-256 哈希形式存储。
+ * 所有写操作均在事务内执行。</p>
+ */
 @Slf4j
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -45,6 +50,13 @@ public class AuthServiceImpl implements AuthService {
     @Value("${enterprise.kb.jwt.refresh-token-expiry-days:30}")
     private long refreshTokenExpiryDays;
 
+    /**
+     * 用户登录。
+     * <p>通过 AuthenticationManager 验证用户名密码后构建认证响应。</p>
+     *
+     * @param request 登录请求
+     * @return 认证响应
+     */
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
@@ -55,6 +67,13 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(userDetails, userId);
     }
 
+    /**
+     * 用户注册。
+     * <p>调用回调函数创建用户，再构建认证响应（自动颁发 token，无需二次登录）。</p>
+     *
+     * @param request 注册请求
+     * @return 认证响应
+     */
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -63,6 +82,13 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(userDetails, userId);
     }
 
+    /**
+     * 刷新 Access Token。
+     * <p>校验 refresh token 有效性后将其标记为已撤销（旋转策略），再颁发新的 access token。</p>
+     *
+     * @param rawRefreshToken 原始 refresh token
+     * @return 新的认证响应
+     */
     @Override
     @Transactional
     public AuthResponse refresh(String rawRefreshToken) {
@@ -77,6 +103,11 @@ public class AuthServiceImpl implements AuthService {
         return buildAuthResponse(userDetails, stored.getUserId());
     }
 
+    /**
+     * 登出使 refresh token 失效。
+     *
+     * @param rawRefreshToken 原始 refresh token
+     */
     @Override
     @Transactional
     public void logout(String rawRefreshToken) {
@@ -87,6 +118,14 @@ public class AuthServiceImpl implements AuthService {
         });
     }
 
+    /**
+     * 修改当前用户密码。
+     * <p>验证旧密码后才更新为新密码的 BCrypt 哈希。</p>
+     *
+     * @param username        当前用户名
+     * @param currentPassword 旧密码（明文）
+     * @param newPassword     新密码（明文）
+     */
     @Override
     public void changePassword(String username, String currentPassword, String newPassword) {
         UserDetails userDetails = userDetailsService.loadUserByUsername(username);

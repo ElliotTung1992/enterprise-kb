@@ -16,6 +16,11 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 语义搜索服务实现，通过向量相似度在 Milvus 中检索相关文档块。
+ * <p>使用 spaceId 过滤结果，按 cosine 相似度降序返回。
+ * 需要从数据库补充文档标题（Milvus 仅存储 ID）。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -25,6 +30,13 @@ public class SemanticSearchServiceImpl implements SemanticSearchService {
     private final ModelProviderResolver modelProviderResolver;
     private final DocumentMapper documentMapper;
 
+    /**
+     * 语义搜索。
+     *
+     * @param spaceId 空间 UUID
+     * @param req     搜索请求
+     * @return 搜索响应
+     */
     @Override
     public SearchResponse search(UUID spaceId, SearchRequest req) {
         long start = System.currentTimeMillis();

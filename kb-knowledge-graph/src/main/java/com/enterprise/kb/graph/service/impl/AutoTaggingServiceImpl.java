@@ -18,6 +18,11 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 自动打标服务实现，使用 LLM 分析文档内容并推荐相关标签。
+ * <p>仅推荐空间中已存在的标签（slug 匹配），置信度低于 0.6 的建议忽略。
+ * 运行在异步线程池中，不阻塞主事务。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,6 +34,15 @@ public class AutoTaggingServiceImpl implements AutoTaggingService {
 
     public record TagSuggestion(String slug, double confidence) {}
 
+    /**
+     * 异步推荐并应用标签。
+     * <p>仅推荐置信度 ≥0.6 的标签，不重复添加已关联的标签。</p>
+     *
+     * @param documentId    文档 UUID
+     * @param spaceId       空间 UUID
+     * @param documentTitle 文档标题
+     * @param excerpt       内容摘要
+     */
     @Override
     @Async("ingestionExecutor")
     @Transactional

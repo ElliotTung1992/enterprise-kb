@@ -13,6 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 关键词搜索服务实现，使用 PostgreSQL 全文检索（ts_rank）对文档块内容进行匹配。
+ * <p>使用 simple 分词器，适合技术文档和代码内容。
+ * 结果按 BM25 相关度排序，可用于精确术语匹配场景。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -20,6 +25,13 @@ public class KeywordSearchServiceImpl implements KeywordSearchService {
 
     private final JdbcTemplate jdbcTemplate;
 
+    /**
+     * 关键词搜索。
+     *
+     * @param spaceId 空间 UUID
+     * @param req     搜索请求
+     * @return 搜索响应
+     */
     @Override
     @Transactional(readOnly = true)
     public SearchResponse search(UUID spaceId, SearchRequest req) {

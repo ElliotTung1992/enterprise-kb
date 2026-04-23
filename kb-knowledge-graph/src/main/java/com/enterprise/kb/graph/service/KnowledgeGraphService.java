@@ -5,7 +5,7 @@ import com.enterprise.kb.graph.dto.GraphDto;
 import java.util.UUID;
 
 /**
- * Knowledge graph service for building document relationship graphs.
+ * 知识图谱服务接口，构建空间内文档的关系图谱视图。
  */
 public interface KnowledgeGraphService {
 

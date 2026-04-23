@@ -6,7 +6,7 @@ import com.enterprise.kb.search.dto.SearchResponse;
 import java.util.UUID;
 
 /**
- * Keyword-based search service using PostgreSQL full-text search.
+ * 关键词搜索服务接口，使用 PostgreSQL 全文检索对文档块内容进行匹配。
  */
 public interface KeywordSearchService {
 

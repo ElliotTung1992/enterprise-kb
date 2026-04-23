@@ -5,7 +5,7 @@ import org.springframework.ai.document.Document;
 import java.util.List;
 
 /**
- * Document parsing service that converts files into Spring AI Document objects.
+ * 文档解析服务接口，将文件内容解析为 Spring AI Document 对象列表。
  */
 public interface DocumentParserService {
 

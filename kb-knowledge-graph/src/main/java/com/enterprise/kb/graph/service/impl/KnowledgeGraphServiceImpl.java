@@ -17,6 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * 知识图谱服务实现，负责构建空间内文档的关系图。
+ * <p>节点为文档，边分为显式关系（REFERENCES/RELATED_TO）和隐式关系（共享 ≥2 个标签）。
+ * 隐式边权重固定为 0.5，用于表示文档间的语义关联度。</p>
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,6 +32,13 @@ public class KnowledgeGraphServiceImpl implements KnowledgeGraphService {
     private final DocumentTagMapper documentTagMapper;
     private final TagMapper tagMapper;
 
+    /**
+     * 构建知识图谱视图。
+     * <p>包含文档节点、显式关系边（REFERENCES/RELATED_TO）和隐式边（共享 ≥2 标签）。</p>
+     *
+     * @param spaceId 空间 UUID
+     * @return 图谱 DTO
+     */
     @Override
     @Transactional(readOnly = true)
     public GraphDto buildGraphView(UUID spaceId) {

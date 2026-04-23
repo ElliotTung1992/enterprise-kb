@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Vector store service for upserting and deleting document vectors.
+ * 向量存储服务接口，负责文档块向量的写入与删除。
  */
 public interface VectorStoreService {
 
