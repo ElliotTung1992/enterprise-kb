@@ -896,6 +896,11 @@ docker compose down
 
 # 停止并删除所有数据（谨慎！不可恢复）
 docker compose down -v
+
+# 一步到位
+docker compose build app        # 只重建 app 镜像                                          
+docker compose up -d            # 启动所有服务（app 用新镜像，其他服务不重建）
+mvn clean package -DskipTests && docker compose --env-file .env up -d --build app
 ```
 
 ### 10.4 数据库迁移
