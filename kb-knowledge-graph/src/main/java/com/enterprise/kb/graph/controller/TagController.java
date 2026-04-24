@@ -1,6 +1,7 @@
 package com.enterprise.kb.graph.controller;
 
 import com.enterprise.kb.common.dto.ApiResponse;
+import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.graph.dto.*;
 import com.enterprise.kb.graph.service.KnowledgeGraphService;
 import com.enterprise.kb.graph.service.TagService;
@@ -68,6 +69,23 @@ public class TagController {
     }
 
     /**
+     * 更新标签基本信息
+     *
+     * @param spaceId 空间 ID
+     * @param tagId   标签 ID
+     * @param req     更新请求体
+     * @return 更新后的标签 DTO
+     */
+    @PutMapping("/{tagId}")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'EDITOR')")
+    public ResponseEntity<ApiResponse<TagDto>> updateTag(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID tagId,
+            @Valid @RequestBody UpdateTagRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(tagService.updateTag(tagId, req)));
+    }
+
+    /**
      * 删除标签
      * <p>删除指定标签，同时解除与文档的关联（document_tags 记录）。</p>
      *
@@ -81,6 +99,56 @@ public class TagController {
             @PathVariable UUID spaceId, @PathVariable UUID tagId) {
         tagService.deleteTag(tagId);
         return ResponseEntity.ok(ApiResponse.ok(null, "Tag deleted"));
+    }
+
+    /**
+     * 查询标签关联的文档列表
+     *
+     * @param spaceId 空间 ID
+     * @param tagId   标签 ID
+     * @return 文档摘要 DTO 列表
+     */
+    @GetMapping("/{tagId}/documents")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    public ResponseEntity<ApiResponse<List<TagDocumentDto>>> getTagDocuments(
+            @PathVariable UUID spaceId, @PathVariable UUID tagId) {
+        return ResponseEntity.ok(ApiResponse.ok(tagService.getTagDocuments(tagId)));
+    }
+
+    /**
+     * 添加文档到标签
+     *
+     * @param spaceId    空间 ID
+     * @param tagId      标签 ID
+     * @param documentId 文档 ID
+     * @return 关联成功提示
+     */
+    @PostMapping("/{tagId}/documents/{documentId}")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'EDITOR')")
+    public ResponseEntity<ApiResponse<Void>> addDocumentToTag(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID tagId,
+            @PathVariable UUID documentId) {
+        tagService.addDocumentToTag(tagId, documentId, SecurityUtils.getCurrentUserId());
+        return ResponseEntity.status(201).body(ApiResponse.ok(null, "Document added to tag"));
+    }
+
+    /**
+     * 从标签移除文档
+     *
+     * @param spaceId    空间 ID
+     * @param tagId      标签 ID
+     * @param documentId 文档 ID
+     * @return 移除成功提示
+     */
+    @DeleteMapping("/{tagId}/documents/{documentId}")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'EDITOR')")
+    public ResponseEntity<ApiResponse<Void>> removeDocumentFromTag(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID tagId,
+            @PathVariable UUID documentId) {
+        tagService.removeDocumentFromTag(tagId, documentId);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Document removed from tag"));
     }
 
     /**

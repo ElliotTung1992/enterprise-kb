@@ -133,6 +133,28 @@
   </div>
 </div>
 
+<!-- Delete Space Confirm Modal -->
+<div class="modal fade" id="delete-space-modal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>删除空间</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="mb-1">确认删除空间 <strong id="delete-space-name" class="text-danger"></strong>？</p>
+        <p class="text-muted small mb-0">空间内所有文档及向量数据将被永久删除，此操作不可恢复。</p>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-delete-space">
+          <i class="bi bi-trash3 me-1"></i>确认删除
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Docs List Modal -->
 <div class="modal fade" id="docs-modal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -211,25 +233,70 @@ function openSpacesList() {
     const currentId = document.getElementById('space-select').value;
     // 用索引传参，完全规避 HTML 属性内字符串转义问题
     body.innerHTML = allSpaces.map((s, i) => `
-      <a href="#" class="list-group-item list-group-item-action d-flex align-items-center gap-3 px-4 py-3"
-         onclick="switchToSpace(${i});return false;">
-        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0
-                    bg-info bg-opacity-10 text-info" style="width:40px;height:40px;font-size:1.1rem">
-          <i class="bi bi-collection"></i>
-        </div>
-        <div class="flex-grow-1 overflow-hidden">
-          <div class="fw-semibold text-truncate">${escHtml(s.name)}
-            ${s.id === currentId ? '<span class="badge bg-info ms-1" style="font-size:.7rem">当前</span>' : ''}
+      <div class="list-group-item d-flex align-items-center gap-3 px-4 py-3">
+        <a href="#" class="d-flex align-items-center gap-3 flex-grow-1 overflow-hidden text-decoration-none text-dark"
+           onclick="switchToSpace(${i});return false;">
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0
+                      bg-info bg-opacity-10 text-info" style="width:40px;height:40px;font-size:1.1rem">
+            <i class="bi bi-collection"></i>
           </div>
-          ${s.description ? `<small class="text-muted text-truncate d-block">${escHtml(s.description)}</small>` : ''}
-        </div>
-        <span class="text-muted small d-flex align-items-center gap-1 flex-shrink-0">
-          <i class="bi bi-files"></i>查看文档
-        </span>
-      </a>`).join('');
+          <div class="flex-grow-1 overflow-hidden">
+            <div class="fw-semibold text-truncate">${escHtml(s.name)}
+              ${s.id === currentId ? '<span class="badge bg-info ms-1" style="font-size:.7rem">当前</span>' : ''}
+            </div>
+            ${s.description ? `<small class="text-muted text-truncate d-block">${escHtml(s.description)}</small>` : ''}
+          </div>
+          <span class="text-muted small d-flex align-items-center gap-1 flex-shrink-0">
+            <i class="bi bi-files"></i>查看文档
+          </span>
+        </a>
+        <button class="btn btn-sm btn-outline-danger flex-shrink-0" title="删除空间"
+                onclick="confirmDeleteSpace(${i});return false;">
+          <i class="bi bi-trash3"></i>
+        </button>
+      </div>`).join('');
   }
   new bootstrap.Modal(document.getElementById('spaces-list-modal')).show();
 }
+
+let pendingDeleteIdx = null;
+
+function confirmDeleteSpace(idx) {
+  pendingDeleteIdx = idx;
+  document.getElementById('delete-space-name').textContent = `「${allSpaces[idx].name}」`;
+  new bootstrap.Modal(document.getElementById('delete-space-modal')).show();
+}
+
+document.getElementById('btn-confirm-delete-space').addEventListener('click', async () => {
+  if (pendingDeleteIdx === null) return;
+  const space = allSpaces[pendingDeleteIdx];
+  const confirmModal = bootstrap.Modal.getInstance(document.getElementById('delete-space-modal'));
+  try {
+    await apiFetch(`/spaces/${space.id}`, { method: 'DELETE' });
+    confirmModal?.hide();
+
+    allSpaces.splice(pendingDeleteIdx, 1);
+    pendingDeleteIdx = null;
+
+    const sel = document.getElementById('space-select');
+    const opt = sel.querySelector(`option[value="${space.id}"]`);
+    if (opt) opt.remove();
+    document.getElementById('stat-spaces').textContent = allSpaces.length;
+
+    if (sel.value === space.id) {
+      sel.value = allSpaces[0]?.id || '';
+      if (sel.value) loadDashboard(sel.value);
+      else document.getElementById('recent-docs').innerHTML = '<div class="text-center text-muted py-4">请先选择一个空间</div>';
+    }
+
+    showToast('空间已删除');
+
+    const spacesListEl = document.getElementById('spaces-list-modal');
+    if (bootstrap.Modal.getInstance(spacesListEl)) openSpacesList();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
 
 function switchToSpace(idx) {
   const s = allSpaces[idx];

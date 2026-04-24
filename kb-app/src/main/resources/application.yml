@@ -37,6 +37,10 @@ spring:
     change-log: classpath:db/changelog/db.changelog-master.xml
     enabled: true
 
+  web:
+    resources:
+      static-locations: file:kb-app/src/main/resources/static/,classpath:/static/
+
   servlet:
     multipart:
       enabled: true

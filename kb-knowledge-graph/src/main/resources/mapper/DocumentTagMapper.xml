@@ -21,6 +21,34 @@
         SELECT * FROM document_tags WHERE tag_id = #{tagId,jdbcType=OTHER}
     </select>
 
+    <resultMap id="TagDocumentDtoResultMap" type="com.enterprise.kb.graph.dto.TagDocumentDto">
+        <result property="documentId"       column="document_id"/>
+        <result property="title"            column="title"/>
+        <result property="originalFilename" column="original_filename"/>
+        <result property="mimeType"         column="mime_type"/>
+        <result property="status"           column="status"/>
+        <result property="fileSizeBytes"    column="file_size_bytes"/>
+        <result property="createdAt"        column="created_at"/>
+        <result property="autoTagged"       column="auto_tagged"/>
+        <result property="confidence"       column="confidence"/>
+    </resultMap>
+
+    <select id="findDocumentsByTagId" resultMap="TagDocumentDtoResultMap">
+        SELECT d.id            AS document_id,
+               d.title,
+               d.original_filename,
+               d.mime_type,
+               d.status,
+               d.file_size_bytes,
+               d.created_at,
+               dt.auto_tagged,
+               dt.confidence
+        FROM document_tags dt
+        JOIN documents d ON d.id = dt.document_id AND d.deleted_at IS NULL
+        WHERE dt.tag_id = #{tagId,jdbcType=OTHER}
+        ORDER BY d.created_at DESC
+    </select>
+
     <select id="existsByDocumentIdAndTagId" resultType="boolean">
         SELECT COUNT(*) > 0 FROM document_tags
         WHERE document_id = #{documentId,jdbcType=OTHER} AND tag_id = #{tagId,jdbcType=OTHER}

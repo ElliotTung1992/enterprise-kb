@@ -7,8 +7,11 @@ import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.common.util.SlugUtils;
 import com.enterprise.kb.graph.dto.CreateTagRequest;
+import com.enterprise.kb.graph.dto.TagDocumentDto;
 import com.enterprise.kb.graph.dto.TagDto;
 import com.enterprise.kb.graph.dto.TagTreeNode;
+import com.enterprise.kb.graph.dto.UpdateTagRequest;
+import com.enterprise.kb.graph.model.DocumentTag;
 import com.enterprise.kb.graph.mapper.DocumentTagMapper;
 import com.enterprise.kb.graph.mapper.TagMapper;
 import com.enterprise.kb.graph.model.Tag;
@@ -86,6 +89,29 @@ public class TagServiceImpl implements TagService {
     }
 
     /**
+     * 更新标签基本信息。
+     *
+     * @param tagId 标签 UUID
+     * @param req   更新请求
+     * @return 更新后的标签 DTO
+     */
+    @Override
+    @Transactional
+    public TagDto updateTag(UUID tagId, UpdateTagRequest req) {
+        Tag tag = tagMapper.findByIdAndDeletedAtIsNull(tagId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tag", tagId));
+        tag.setName(req.name());
+        tag.setColor(req.color());
+        tag.setParentId(req.parentId());
+        if (req.tagType() != null) tag.setTagType(req.tagType());
+        tag.setDescription(req.description());
+        if (req.sortOrder() != null) tag.setSortOrder(req.sortOrder());
+        tag.setUpdatedAt(Instant.now());
+        tagMapper.update(tag);
+        return toDto(tag);
+    }
+
+    /**
      * 软删除标签，并清理所有文档与该标签的关联。
      *
      * @param tagId 标签 UUID
@@ -99,6 +125,56 @@ public class TagServiceImpl implements TagService {
         tag.setDeletedAt(Instant.now());
         tag.setUpdatedAt(Instant.now());
         tagMapper.update(tag);
+    }
+
+    /**
+     * 查询标签关联的文档列表。
+     *
+     * @param tagId 标签 UUID
+     * @return 文档摘要 DTO 列表
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<TagDocumentDto> getTagDocuments(UUID tagId) {
+        tagMapper.findByIdAndDeletedAtIsNull(tagId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tag", tagId));
+        return documentTagMapper.findDocumentsByTagId(tagId);
+    }
+
+    /**
+     * 手动添加文档标签关联。
+     *
+     * @param tagId      标签 UUID
+     * @param documentId 文档 UUID
+     * @param userId     操作用户 UUID
+     */
+    @Override
+    @Transactional
+    public void addDocumentToTag(UUID tagId, UUID documentId, UUID userId) {
+        tagMapper.findByIdAndDeletedAtIsNull(tagId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tag", tagId));
+        if (documentTagMapper.existsByDocumentIdAndTagId(documentId, tagId)) {
+            throw new InvalidRequestException("Document is already associated with this tag");
+        }
+        DocumentTag dt = new DocumentTag();
+        dt.setId(UUID.randomUUID());
+        dt.setDocumentId(documentId);
+        dt.setTagId(tagId);
+        dt.setTaggedBy(userId);
+        dt.setAutoTagged(false);
+        documentTagMapper.insert(dt);
+    }
+
+    /**
+     * 删除文档标签关联。
+     *
+     * @param tagId      标签 UUID
+     * @param documentId 文档 UUID
+     */
+    @Override
+    @Transactional
+    public void removeDocumentFromTag(UUID tagId, UUID documentId) {
+        documentTagMapper.deleteByDocumentIdAndTagId(documentId, tagId);
     }
 
     /**

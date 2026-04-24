@@ -7,7 +7,24 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <link href="/assets/css/app.css" rel="stylesheet">
-<style>body{visibility:hidden}.tag-item{border-radius:.4rem;transition:background .1s}.tag-item:hover{background:#f1f5ff}.tag-item.selected{background:#e0e7ff}</style>
+<style>
+body { visibility: hidden; }
+.tag-item { border-radius: .4rem; transition: background .12s; cursor: pointer; }
+.tag-item:hover { background: #f1f5ff; }
+.tag-item.selected { background: #e0e7ff; }
+.tag-chip { display: inline-flex; align-items: center; gap: .35rem; padding: .18rem .55rem; border-radius: 99px; font-size: .78rem; font-weight: 500; }
+.doc-row { border-bottom: 1px solid #f1f5f9; transition: background .1s; }
+.doc-row:last-child { border-bottom: none; }
+.doc-row:hover { background: #f8fafc; }
+.doc-row .remove-btn { opacity: 0; transition: opacity .15s; }
+.doc-row:hover .remove-btn { opacity: 1; }
+#add-doc-results .doc-search-item { cursor: pointer; padding: .4rem .75rem; border-radius: .4rem; transition: background .1s; }
+#add-doc-results .doc-search-item:hover { background: #eef2ff; }
+.merge-tag-option { cursor: pointer; padding: .4rem .75rem; border-radius: .4rem; transition: background .1s; }
+.merge-tag-option:hover { background: #fff7ed; }
+.merge-tag-option.selected-merge { background: #fef3c7; border: 1px solid #fbbf24; }
+.tab-content-custom { min-height: 280px; }
+</style>
 </head>
 <body>
 
@@ -34,110 +51,220 @@
 
   <div class="p-4">
     <div class="row g-4">
-      <!-- Tag tree -->
-      <div class="col-lg-5">
-        <div class="kb-card">
+
+      <!-- ── Tag tree ──────────────────────────────────────────────────── -->
+      <div class="col-lg-4">
+        <div class="kb-card h-100">
           <div class="d-flex align-items-center justify-content-between mb-3">
-            <h6 class="fw-bold mb-0">标签树</h6>
+            <h6 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-1 text-primary"></i>标签树</h6>
             <button class="btn btn-sm btn-primary" onclick="openCreateModal()">
               <i class="bi bi-plus me-1"></i>新建标签
             </button>
           </div>
-          <div id="tag-tree" style="max-height:520px;overflow-y:auto">
+          <div class="mb-2">
+            <input class="form-control form-control-sm" id="tree-search" placeholder="搜索标签名称…" oninput="filterTree()">
+          </div>
+          <div id="tag-tree" style="max-height:560px;overflow-y:auto">
             <div class="text-muted text-center py-4">请选择空间</div>
           </div>
+          <div class="mt-2 pt-2 border-top text-muted" style="font-size:.78rem" id="tag-count-bar"></div>
         </div>
       </div>
 
-      <!-- Tag detail / edit -->
-      <div class="col-lg-7">
-        <div class="kb-card" id="tag-detail-panel">
+      <!-- ── Tag detail ─────────────────────────────────────────────────── -->
+      <div class="col-lg-8">
+        <div class="kb-card">
+
+          <!-- Empty state -->
           <div class="text-muted text-center py-5" id="tag-detail-empty">
             <i class="bi bi-tag fs-1 opacity-25 d-block mb-2"></i>
             从左侧点击标签查看详情
           </div>
-          <div id="tag-detail-form" class="d-none">
-            <div class="d-flex align-items-center gap-2 mb-4">
+
+          <!-- Detail panel -->
+          <div id="tag-detail-panel" class="d-none">
+            <!-- Header -->
+            <div class="d-flex align-items-center gap-2 mb-3 pb-3 border-bottom">
               <span class="rounded-circle flex-shrink-0" id="detail-color-dot" style="width:14px;height:14px;display:inline-block"></span>
-              <h6 class="fw-bold mb-0" id="detail-title"></h6>
-              <span class="badge bg-light text-secondary ms-1" id="detail-type-badge"></span>
+              <h6 class="fw-bold mb-0 flex-grow-1 text-truncate" id="detail-title"></h6>
+              <span class="badge bg-light text-secondary border" id="detail-type-badge" style="font-size:.75rem"></span>
+              <span class="text-muted small" id="detail-doc-count"></span>
             </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">标签名称</label>
-              <input type="text" class="form-control" id="detail-name">
-            </div>
-            <div class="row g-2 mb-3">
-              <div class="col-6">
-                <label class="form-label fw-semibold">类型</label>
-                <select class="form-select" id="detail-type">
-                  <option value="TAG">标签 (TAG)</option>
-                  <option value="CATEGORY">分类 (CATEGORY)</option>
-                  <option value="ENTITY">实体 (ENTITY)</option>
-                  <option value="TOPIC">主题 (TOPIC)</option>
-                </select>
+
+            <!-- Tabs -->
+            <ul class="nav nav-tabs mb-3" id="detail-tabs">
+              <li class="nav-item">
+                <a class="nav-link active" href="#" data-tab="info" onclick="switchTab('info');return false;">
+                  <i class="bi bi-pencil me-1"></i>基本信息
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="docs" onclick="switchTab('docs');return false;">
+                  <i class="bi bi-file-earmark me-1"></i>关联文档
+                  <span class="badge rounded-pill bg-primary ms-1" id="docs-tab-badge" style="font-size:.7rem"></span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" href="#" data-tab="merge" onclick="switchTab('merge');return false;">
+                  <i class="bi bi-arrow-left-right me-1"></i>合并标签
+                </a>
+              </li>
+            </ul>
+
+            <!-- Tab: 基本信息 -->
+            <div id="tab-info" class="tab-content-custom">
+              <div class="mb-3">
+                <label class="form-label fw-semibold">标签名称 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="detail-name">
               </div>
-              <div class="col-6">
-                <label class="form-label fw-semibold">颜色</label>
-                <input type="color" class="form-control form-control-color w-100" id="detail-color">
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label fw-semibold">类型</label>
+                  <select class="form-select" id="detail-type">
+                    <option value="TAG">标签 (TAG)</option>
+                    <option value="CATEGORY">分类 (CATEGORY)</option>
+                    <option value="ENTITY">实体 (ENTITY)</option>
+                    <option value="TOPIC">主题 (TOPIC)</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label fw-semibold">颜色</label>
+                  <input type="color" class="form-control form-control-color w-100" id="detail-color">
+                </div>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">排序权重</label>
+                <input type="number" class="form-control" id="detail-sort" min="0" step="1">
+              </div>
+              <div class="mb-4">
+                <label class="form-label fw-semibold">描述</label>
+                <textarea class="form-control" id="detail-desc" rows="2" placeholder="标签描述（可选）"></textarea>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary" id="btn-update-tag">
+                  <i class="bi bi-check me-1"></i>保存修改
+                </button>
+                <button class="btn btn-outline-danger ms-auto" id="btn-delete-tag">
+                  <i class="bi bi-trash3 me-1"></i>删除标签
+                </button>
               </div>
             </div>
-            <div class="mb-4">
-              <label class="form-label fw-semibold">描述</label>
-              <textarea class="form-control" id="detail-desc" rows="2" placeholder="标签描述（可选）"></textarea>
+
+            <!-- Tab: 关联文档 -->
+            <div id="tab-docs" class="tab-content-custom d-none">
+              <!-- Add document search -->
+              <div class="d-flex gap-2 mb-3">
+                <input type="text" class="form-control form-control-sm" id="doc-search-input" placeholder="搜索文档名称后添加关联…">
+                <button class="btn btn-sm btn-outline-primary flex-shrink-0" id="btn-doc-search">
+                  <i class="bi bi-search me-1"></i>搜索
+                </button>
+              </div>
+              <div id="add-doc-results" class="border rounded p-1 mb-3 d-none" style="max-height:160px;overflow-y:auto"></div>
+
+              <!-- Associated documents list -->
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="fw-semibold small text-muted">已关联文档</span>
+                <button class="btn btn-xs btn-outline-secondary" onclick="loadTagDocuments()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>刷新
+                </button>
+              </div>
+              <div id="tag-doc-list">
+                <div class="text-muted text-center py-3 small">加载中…</div>
+              </div>
             </div>
-            <div class="d-flex gap-2">
-              <button class="btn btn-primary" id="btn-update-tag"><i class="bi bi-check me-1"></i>保存修改</button>
-              <button class="btn btn-outline-danger" id="btn-delete-tag"><i class="bi bi-trash3 me-1"></i>删除标签</button>
+
+            <!-- Tab: 合并标签 -->
+            <div id="tab-merge" class="tab-content-custom d-none">
+              <div class="alert alert-warning d-flex gap-2 align-items-start mb-3" style="font-size:.85rem">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 mt-1"></i>
+                <span>合并后，当前标签的所有文档关联将迁移到目标标签，<strong>当前标签将被删除</strong>。操作不可撤销。</span>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">合并到目标标签</label>
+                <input type="text" class="form-control form-control-sm mb-2" id="merge-search" placeholder="搜索目标标签名称…" oninput="filterMergeList()">
+                <div id="merge-tag-list" style="max-height:220px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:.4rem;padding:.25rem"></div>
+              </div>
+              <div class="d-flex align-items-center gap-3">
+                <span class="text-muted small" id="merge-target-label">未选择目标标签</span>
+                <button class="btn btn-warning ms-auto" id="btn-merge-tag" disabled>
+                  <i class="bi bi-arrow-left-right me-1"></i>执行合并
+                </button>
+              </div>
             </div>
+
+          </div><!-- /detail-panel -->
+        </div>
+      </div>
+
+    </div><!-- /row -->
+  </div>
+</div>
+
+<!-- Create tag modal -->
+<div class="modal fade" id="tag-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-tag me-2"></i>新建标签</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">标签名称 <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="tag-name" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Slug（留空自动生成）</label>
+          <input type="text" class="form-control" id="tag-slug" placeholder="留空自动生成">
+        </div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <label class="form-label fw-semibold">类型</label>
+            <select class="form-select" id="tag-type">
+              <option value="TAG">标签 (TAG)</option>
+              <option value="CATEGORY">分类 (CATEGORY)</option>
+              <option value="ENTITY">实体 (ENTITY)</option>
+              <option value="TOPIC">主题 (TOPIC)</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-semibold">颜色</label>
+            <input type="color" class="form-control form-control-color" id="tag-color" value="#4f46e5">
           </div>
         </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">父标签（可选）</label>
+          <select class="form-select" id="tag-parent">
+            <option value="">无（顶层标签）</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">描述</label>
+          <textarea class="form-control" id="tag-desc" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-save-tag"><i class="bi bi-check me-1"></i>创建</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Tag create/edit modal -->
-<div class="modal fade" id="tag-modal" tabindex="-1">
-  <div class="modal-dialog">
+<!-- Delete confirm modal -->
+<div class="modal fade" id="delete-tag-modal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-sm">
     <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">新建标签</h5>
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-1"></i>确认删除</h6>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        <form id="tag-form">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">标签名称 <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="tag-name" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Slug（留空自动生成）</label>
-            <input type="text" class="form-control" id="tag-slug" placeholder="留空自动生成">
-          </div>
-          <div class="row g-2 mb-3">
-            <div class="col-6">
-              <label class="form-label fw-semibold">类型</label>
-              <select class="form-select" id="tag-type">
-                <option value="TAG">标签 (TAG)</option>
-                <option value="CATEGORY">分类 (CATEGORY)</option>
-                <option value="ENTITY">实体 (ENTITY)</option>
-                <option value="TOPIC">主题 (TOPIC)</option>
-              </select>
-            </div>
-            <div class="col-6">
-              <label class="form-label fw-semibold">颜色</label>
-              <input type="color" class="form-control form-control-color" id="tag-color" value="#4f46e5">
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">描述</label>
-            <textarea class="form-control" id="tag-desc" rows="2"></textarea>
-          </div>
-        </form>
+      <div class="modal-body pt-2">
+        删除标签 <strong id="delete-tag-name"></strong>？关联关系将一并清除，操作不可撤销。
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" id="btn-save-tag">创建</button>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btn-confirm-delete-tag">删除</button>
       </div>
     </div>
   </div>
@@ -150,8 +277,12 @@
 requireAuth();
 document.getElementById('sidebar-username').textContent = localStorage.getItem('username') || '';
 
-let tagTree = [];
+let tagTree = [];      // raw tree from API
+let flatTags = [];     // flat list for merge/parent selects
 let selectedTagId = null;
+let mergeTargetId = null;
+let pendingDeleteId = null;
+let currentTab = 'info';
 
 // ── Spaces ────────────────────────────────────────────────────────────────
 
@@ -176,61 +307,83 @@ async function loadSpaces() {
 async function loadTagTree(spaceId) {
   const res = await apiFetch(`/spaces/${spaceId}/tags/tree`);
   tagTree = res.data || [];
-  const container = document.getElementById('tag-tree');
-  container.innerHTML = '';
-  if (!tagTree.length) {
-    container.innerHTML = '<div class="text-muted text-center py-3">暂无标签，点击右上角新建</div>';
-    return;
-  }
-  renderTree(tagTree, container, 0);
+  flatTags = flattenTree(tagTree);
+  document.getElementById('tag-count-bar').textContent = `共 ${flatTags.length} 个标签`;
+  renderTagTree();
+  populateParentSelect();
+  if (currentTab === 'merge' && selectedTagId) renderMergeList();
 }
 
-function renderTree(nodes, container, depth) {
-  nodes.forEach(node => {
-    const item = document.createElement('div');
-    item.style.paddingLeft = depth * 1.2 + 'rem';
-    item.className = 'py-1 px-2 tag-item' + (node.id === selectedTagId ? ' selected' : '');
-    item.dataset.tagId = node.id;
-    item.innerHTML = `
-      <div class="d-flex align-items-center justify-content-between">
-        <div class="d-flex align-items-center gap-2 flex-grow-1 overflow-hidden" style="cursor:pointer" onclick="selectTag('${node.id}')">
-          <span class="rounded-circle flex-shrink-0" style="width:10px;height:10px;background:${node.color||'#a5b4fc'}"></span>
-          <span class="fw-semibold text-truncate">${escHtml(node.name)}</span>
-          <span class="badge bg-light text-secondary flex-shrink-0" style="font-size:.7rem">${node.tagType}</span>
-        </div>
-        <button class="btn btn-xs btn-outline-danger ms-1 flex-shrink-0" title="删除" onclick="deleteTag('${node.id}',event)">
-          <i class="bi bi-trash3" style="font-size:.7rem"></i>
-        </button>
-      </div>`;
-    container.appendChild(item);
-    if (node.children && node.children.length) {
-      const sub = document.createElement('div');
-      container.appendChild(sub);
-      renderTree(node.children, sub, depth + 1);
-    }
+function flattenTree(nodes, result = []) {
+  nodes.forEach(n => { result.push(n); if (n.children) flattenTree(n.children, result); });
+  return result;
+}
+
+function renderTagTree() {
+  const keyword = document.getElementById('tree-search').value.toLowerCase();
+  const container = document.getElementById('tag-tree');
+  container.innerHTML = '';
+  const visible = keyword ? flatTags.filter(t => t.name.toLowerCase().includes(keyword)) : null;
+  if (!tagTree.length) {
+    container.innerHTML = '<div class="text-muted text-center py-3 small">暂无标签，点击右上角新建</div>';
+    return;
+  }
+  if (visible) {
+    if (!visible.length) { container.innerHTML = '<div class="text-muted text-center py-3 small">无匹配标签</div>'; return; }
+    visible.forEach(n => renderTreeItem(n, container, 0));
+  } else {
+    renderTreeNodes(tagTree, container, 0);
+  }
+}
+
+function renderTreeNodes(nodes, container, depth) {
+  nodes.forEach(n => {
+    renderTreeItem(n, container, depth);
+    if (n.children && n.children.length) renderTreeNodes(n.children, container, depth + 1);
   });
 }
+
+function renderTreeItem(node, container, depth) {
+  const item = document.createElement('div');
+  item.style.paddingLeft = (depth * 1.2 + .25) + 'rem';
+  item.className = 'py-1 px-2 tag-item' + (node.id === selectedTagId ? ' selected' : '');
+  item.dataset.tagId = node.id;
+  const colorDot = node.color || '#a5b4fc';
+  item.innerHTML = `
+    <div class="d-flex align-items-center gap-2">
+      <div class="d-flex align-items-center gap-2 flex-grow-1 overflow-hidden" onclick="selectTag('${node.id}')">
+        <span class="rounded-circle flex-shrink-0" style="width:9px;height:9px;background:${colorDot}"></span>
+        <span class="fw-semibold small text-truncate">${escHtml(node.name)}</span>
+        <span class="badge bg-light text-secondary flex-shrink-0 border" style="font-size:.65rem">${node.tagType}</span>
+      </div>
+      <button class="btn btn-xs btn-outline-danger flex-shrink-0" title="删除" onclick="openDeleteModal('${node.id}','${escAttr(node.name)}',event)">
+        <i class="bi bi-trash3" style="font-size:.65rem"></i>
+      </button>
+    </div>`;
+  container.appendChild(item);
+}
+
+function filterTree() { renderTagTree(); }
 
 // ── Tag detail ────────────────────────────────────────────────────────────
 
 function findTagById(nodes, id) {
   for (const n of nodes) {
     if (n.id === id) return n;
-    if (n.children) { const found = findTagById(n.children, id); if (found) return found; }
+    if (n.children) { const f = findTagById(n.children, id); if (f) return f; }
   }
   return null;
 }
 
 function selectTag(tagId) {
   selectedTagId = tagId;
-  // Highlight selected
   document.querySelectorAll('.tag-item').forEach(el => el.classList.toggle('selected', el.dataset.tagId === tagId));
 
   const tag = findTagById(tagTree, tagId);
   if (!tag) return;
 
   document.getElementById('tag-detail-empty').classList.add('d-none');
-  document.getElementById('tag-detail-form').classList.remove('d-none');
+  document.getElementById('tag-detail-panel').classList.remove('d-none');
 
   document.getElementById('detail-title').textContent = tag.name;
   document.getElementById('detail-color-dot').style.background = tag.color || '#a5b4fc';
@@ -238,64 +391,248 @@ function selectTag(tagId) {
   document.getElementById('detail-name').value = tag.name;
   document.getElementById('detail-type').value = tag.tagType;
   document.getElementById('detail-color').value = tag.color || '#4f46e5';
+  document.getElementById('detail-sort').value = tag.sortOrder ?? 0;
   document.getElementById('detail-desc').value = tag.description || '';
+
+  // Reset doc search
+  document.getElementById('doc-search-input').value = '';
+  document.getElementById('add-doc-results').classList.add('d-none');
+
+  // Reset merge
+  mergeTargetId = null;
+  document.getElementById('merge-search').value = '';
+  document.getElementById('merge-target-label').textContent = '未选择目标标签';
+  document.getElementById('btn-merge-tag').disabled = true;
+
+  if (currentTab === 'docs') loadTagDocuments();
+  if (currentTab === 'merge') renderMergeList();
 }
 
 function showEmptyDetail() {
   document.getElementById('tag-detail-empty').classList.remove('d-none');
-  document.getElementById('tag-detail-form').classList.add('d-none');
+  document.getElementById('tag-detail-panel').classList.add('d-none');
 }
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('#detail-tabs .nav-link').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
+  document.getElementById('tab-info').classList.toggle('d-none', tab !== 'info');
+  document.getElementById('tab-docs').classList.toggle('d-none', tab !== 'docs');
+  document.getElementById('tab-merge').classList.toggle('d-none', tab !== 'merge');
+  if (tab === 'docs' && selectedTagId) loadTagDocuments();
+  if (tab === 'merge' && selectedTagId) renderMergeList();
+}
+
+// ── Basic info save ───────────────────────────────────────────────────────
 
 document.getElementById('btn-update-tag').addEventListener('click', async () => {
   if (!selectedTagId) return;
   const spaceId = document.getElementById('space-select').value;
   const name = document.getElementById('detail-name').value.trim();
-  if (!name) { showToast('标签名称不能为空', 'error'); return; }
+  if (!name) { showToast('标签名称不能为空', 'error'); return;  }
   try {
-    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}`, {
+    const updated = await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}`, {
       method: 'PUT',
       body: JSON.stringify({
         name,
         tagType: document.getElementById('detail-type').value,
         color: document.getElementById('detail-color').value,
-        description: document.getElementById('detail-desc').value.trim() || null
+        description: document.getElementById('detail-desc').value.trim() || null,
+        sortOrder: parseInt(document.getElementById('detail-sort').value) || 0
       })
     });
     showToast('标签已更新');
+    await loadTagTree(spaceId);
+    // Re-highlight
+    document.querySelectorAll('.tag-item').forEach(el => el.classList.toggle('selected', el.dataset.tagId === selectedTagId));
+    if (updated.data) {
+      document.getElementById('detail-title').textContent = updated.data.name;
+      document.getElementById('detail-color-dot').style.background = updated.data.color || '#a5b4fc';
+      document.getElementById('detail-type-badge').textContent = updated.data.tagType;
+    }
+  } catch (err) { showToast(err.message, 'error'); }
+});
+
+// ── Delete ────────────────────────────────────────────────────────────────
+
+function openDeleteModal(tagId, tagName, event) {
+  if (event) event.stopPropagation();
+  pendingDeleteId = tagId;
+  document.getElementById('delete-tag-name').textContent = `「${tagName}」`;
+  new bootstrap.Modal(document.getElementById('delete-tag-modal')).show();
+}
+
+document.getElementById('btn-delete-tag').addEventListener('click', () => {
+  if (!selectedTagId) return;
+  const tag = findTagById(tagTree, selectedTagId);
+  openDeleteModal(selectedTagId, tag ? tag.name : '此标签', null);
+});
+
+document.getElementById('btn-confirm-delete-tag').addEventListener('click', async () => {
+  if (!pendingDeleteId) return;
+  const spaceId = document.getElementById('space-select').value;
+  bootstrap.Modal.getInstance(document.getElementById('delete-tag-modal'))?.hide();
+  try {
+    await apiFetch(`/spaces/${spaceId}/tags/${pendingDeleteId}`, { method: 'DELETE' });
+    showToast('标签已删除');
+    if (selectedTagId === pendingDeleteId) { selectedTagId = null; showEmptyDetail(); }
+    pendingDeleteId = null;
     loadTagTree(spaceId);
   } catch (err) { showToast(err.message, 'error'); }
 });
 
-document.getElementById('btn-delete-tag').addEventListener('click', async () => {
+// ── Associated documents ──────────────────────────────────────────────────
+
+async function loadTagDocuments() {
   if (!selectedTagId) return;
-  if (!confirm('确认删除此标签？')) return;
+  const spaceId = document.getElementById('space-select').value;
+  const list = document.getElementById('tag-doc-list');
+  list.innerHTML = '<div class="text-muted text-center py-2 small">加载中…</div>';
+  try {
+    const res = await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}/documents`);
+    const docs = res.data || [];
+    document.getElementById('docs-tab-badge').textContent = docs.length || '';
+    document.getElementById('detail-doc-count').textContent = docs.length ? `${docs.length} 篇文档` : '';
+    if (!docs.length) {
+      list.innerHTML = '<div class="text-muted text-center py-3 small">暂无关联文档</div>';
+      return;
+    }
+    list.innerHTML = docs.map(d => `
+      <div class="doc-row d-flex align-items-center gap-2 py-2 px-1">
+        <i class="${mimeIcon(d.mimeType)} text-muted flex-shrink-0"></i>
+        <div class="flex-grow-1 overflow-hidden">
+          <div class="small fw-semibold text-truncate">${escHtml(d.title || d.originalFilename)}</div>
+          <div class="text-muted" style="font-size:.72rem">${escHtml(d.mimeType||'')} · ${formatBytes(d.fileSizeBytes)} · ${d.autoTagged ? '<span class="text-secondary">自动打标</span>' : '手动关联'}</div>
+        </div>
+        <button class="btn btn-xs btn-outline-danger remove-btn flex-shrink-0" title="移除关联"
+          onclick="removeDocFromTag('${d.documentId}','${escAttr(d.title||d.originalFilename)}')">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>`).join('');
+  } catch (err) {
+    list.innerHTML = `<div class="text-danger small text-center py-2">${escHtml(err.message)}</div>`;
+  }
+}
+
+async function removeDocFromTag(documentId, docTitle) {
+  if (!confirm(`确认移除文档「${docTitle}」与此标签的关联？`)) return;
   const spaceId = document.getElementById('space-select').value;
   try {
-    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}`, { method: 'DELETE' });
-    showToast('标签已删除');
+    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}/documents/${documentId}`, { method: 'DELETE' });
+    showToast('已移除关联');
+    loadTagDocuments();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+// Document search + add
+let docSearchDebounce = null;
+document.getElementById('btn-doc-search').addEventListener('click', doDocSearch);
+document.getElementById('doc-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doDocSearch(); });
+document.getElementById('doc-search-input').addEventListener('input', () => {
+  clearTimeout(docSearchDebounce);
+  docSearchDebounce = setTimeout(doDocSearch, 400);
+});
+
+async function doDocSearch() {
+  const keyword = document.getElementById('doc-search-input').value.trim();
+  const spaceId = document.getElementById('space-select').value;
+  const box = document.getElementById('add-doc-results');
+  if (!keyword) { box.classList.add('d-none'); return; }
+  box.classList.remove('d-none');
+  box.innerHTML = '<div class="text-muted small text-center py-1">搜索中…</div>';
+  try {
+    const res = await apiFetch(`/spaces/${spaceId}/documents?keyword=${encodeURIComponent(keyword)}&status=READY&size=10`);
+    const docs = res.data?.items || res.data?.content || [];
+    if (!docs.length) { box.innerHTML = '<div class="text-muted small text-center py-1">未找到文档</div>'; return; }
+    box.innerHTML = docs.map(d => `
+      <div class="doc-search-item d-flex align-items-center gap-2" onclick="addDocToTag('${d.id}','${escAttr(d.title||d.originalFilename)}')">
+        <i class="${mimeIcon(d.mimeType)} text-muted flex-shrink-0" style="font-size:.85rem"></i>
+        <span class="small text-truncate flex-grow-1">${escHtml(d.title || d.originalFilename)}</span>
+        <i class="bi bi-plus-circle text-primary flex-shrink-0"></i>
+      </div>`).join('');
+  } catch (err) { box.innerHTML = `<div class="text-danger small py-1 px-2">${escHtml(err.message)}</div>`; }
+}
+
+async function addDocToTag(documentId, docTitle) {
+  const spaceId = document.getElementById('space-select').value;
+  try {
+    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}/documents/${documentId}`, { method: 'POST' });
+    showToast(`已关联「${docTitle}」`);
+    document.getElementById('doc-search-input').value = '';
+    document.getElementById('add-doc-results').classList.add('d-none');
+    loadTagDocuments();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+// ── Merge tag ─────────────────────────────────────────────────────────────
+
+function renderMergeList() {
+  const keyword = document.getElementById('merge-search').value.toLowerCase();
+  const list = document.getElementById('merge-tag-list');
+  const candidates = flatTags.filter(t => t.id !== selectedTagId && (!keyword || t.name.toLowerCase().includes(keyword)));
+  if (!candidates.length) {
+    list.innerHTML = '<div class="text-muted small text-center py-2">无可用目标标签</div>';
+    return;
+  }
+  list.innerHTML = candidates.map(t => `
+    <div class="merge-tag-option d-flex align-items-center gap-2 ${t.id === mergeTargetId ? 'selected-merge' : ''}"
+         onclick="selectMergeTarget('${t.id}','${escAttr(t.name)}')">
+      <span class="rounded-circle flex-shrink-0" style="width:9px;height:9px;background:${t.color||'#a5b4fc'}"></span>
+      <span class="small flex-grow-1 text-truncate">${escHtml(t.name)}</span>
+      <span class="badge bg-light text-secondary border" style="font-size:.65rem">${t.tagType}</span>
+      ${t.id === mergeTargetId ? '<i class="bi bi-check-circle-fill text-warning flex-shrink-0"></i>' : ''}
+    </div>`).join('');
+}
+
+function filterMergeList() { renderMergeList(); }
+
+function selectMergeTarget(tagId, tagName) {
+  mergeTargetId = tagId;
+  document.getElementById('merge-target-label').textContent = `目标：${tagName}`;
+  document.getElementById('btn-merge-tag').disabled = false;
+  renderMergeList();
+}
+
+document.getElementById('btn-merge-tag').addEventListener('click', async () => {
+  if (!selectedTagId || !mergeTargetId) return;
+  const sourceName = findTagById(tagTree, selectedTagId)?.name || '';
+  const targetName = findTagById(tagTree, mergeTargetId)?.name || '';
+  if (!confirm(`确认将标签「${sourceName}」合并到「${targetName}」？当前标签将被删除，操作不可撤销。`)) return;
+  const spaceId = document.getElementById('space-select').value;
+  try {
+    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}/merge/${mergeTargetId}`, { method: 'POST' });
+    showToast(`已合并到「${targetName}」`);
     selectedTagId = null;
+    mergeTargetId = null;
     showEmptyDetail();
     loadTagTree(spaceId);
   } catch (err) { showToast(err.message, 'error'); }
 });
 
-// ── Create ────────────────────────────────────────────────────────────────
+// ── Create modal ──────────────────────────────────────────────────────────
 
-async function deleteTag(tagId, event) {
-  event.stopPropagation();
-  if (!confirm('确认删除此标签？')) return;
-  const spaceId = document.getElementById('space-select').value;
-  try {
-    await apiFetch(`/spaces/${spaceId}/tags/${tagId}`, { method: 'DELETE' });
-    showToast('标签已删除');
-    if (selectedTagId === tagId) { selectedTagId = null; showEmptyDetail(); }
-    loadTagTree(spaceId);
-  } catch (err) { showToast(err.message, 'error'); }
+function populateParentSelect() {
+  const sel = document.getElementById('tag-parent');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">无（顶层标签）</option>';
+  flatTags.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.id;
+    o.textContent = t.name;
+    sel.appendChild(o);
+  });
+  if (prev && flatTags.find(t => t.id === prev)) sel.value = prev;
 }
 
 function openCreateModal() {
-  document.getElementById('tag-form').reset();
+  document.getElementById('tag-name').value = '';
+  document.getElementById('tag-slug').value = '';
+  document.getElementById('tag-type').value = 'TAG';
   document.getElementById('tag-color').value = '#4f46e5';
+  document.getElementById('tag-desc').value = '';
+  document.getElementById('tag-parent').value = selectedTagId || '';
   new bootstrap.Modal(document.getElementById('tag-modal')).show();
 }
 
@@ -312,7 +649,8 @@ document.getElementById('btn-save-tag').addEventListener('click', async () => {
         slug: document.getElementById('tag-slug').value.trim() || null,
         tagType: document.getElementById('tag-type').value,
         color: document.getElementById('tag-color').value,
-        description: document.getElementById('tag-desc').value.trim() || null
+        description: document.getElementById('tag-desc').value.trim() || null,
+        parentId: document.getElementById('tag-parent').value || null
       })
     });
     bootstrap.Modal.getInstance(document.getElementById('tag-modal'))?.hide();
@@ -321,7 +659,27 @@ document.getElementById('btn-save-tag').addEventListener('click', async () => {
   } catch (err) { showToast(err.message, 'error'); }
 });
 
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function mimeIcon(mime) {
+  if (!mime) return 'bi bi-file-earmark';
+  if (mime.includes('pdf')) return 'bi bi-file-earmark-pdf text-danger';
+  if (mime.includes('word') || mime.includes('docx')) return 'bi bi-file-earmark-word text-primary';
+  if (mime.includes('markdown') || mime.includes('x-markdown')) return 'bi bi-file-earmark-code text-success';
+  if (mime.includes('html')) return 'bi bi-file-earmark-code text-warning';
+  return 'bi bi-file-earmark-text';
+}
+
+function formatBytes(bytes) {
+  if (!bytes) return '—';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return (s||'').replace(/'/g,'\\\''); }
+
 loadSpaces();
 </script>
 </body>

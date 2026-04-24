@@ -1,5 +1,6 @@
 package com.enterprise.kb.graph.mapper;
 
+import com.enterprise.kb.graph.dto.TagDocumentDto;
 import com.enterprise.kb.graph.model.DocumentTag;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -28,6 +29,14 @@ public interface DocumentTagMapper {
      * @return 文档标签关联列表
      */
     List<DocumentTag> findByTagId(@Param("tagId") UUID tagId);
+
+    /**
+     * 查询标签关联的文档详情列表（JOIN documents 表）
+     *
+     * @param tagId 标签 ID
+     * @return 文档摘要 DTO 列表
+     */
+    List<TagDocumentDto> findDocumentsByTagId(@Param("tagId") UUID tagId);
 
     /**
      * 判断文档与标签的关联是否已存在

@@ -1,8 +1,10 @@
 package com.enterprise.kb.graph.service;
 
 import com.enterprise.kb.graph.dto.CreateTagRequest;
+import com.enterprise.kb.graph.dto.TagDocumentDto;
 import com.enterprise.kb.graph.dto.TagDto;
 import com.enterprise.kb.graph.dto.TagTreeNode;
+import com.enterprise.kb.graph.dto.UpdateTagRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -38,11 +40,45 @@ public interface TagService {
     List<TagTreeNode> getTagTree(UUID spaceId);
 
     /**
+     * Update an existing tag's metadata.
+     *
+     * @param tagId the tag ID to update
+     * @param req   the update request
+     * @return the updated tag DTO
+     */
+    TagDto updateTag(UUID tagId, UpdateTagRequest req);
+
+    /**
      * Soft-delete a tag.
      *
      * @param tagId the tag ID to delete
      */
     void deleteTag(UUID tagId);
+
+    /**
+     * List documents associated with a tag.
+     *
+     * @param tagId the tag ID
+     * @return list of document summary DTOs
+     */
+    List<TagDocumentDto> getTagDocuments(UUID tagId);
+
+    /**
+     * Add a document-tag association.
+     *
+     * @param tagId      the tag ID
+     * @param documentId the document ID
+     * @param userId     the user performing the association
+     */
+    void addDocumentToTag(UUID tagId, UUID documentId, UUID userId);
+
+    /**
+     * Remove a document-tag association.
+     *
+     * @param tagId      the tag ID
+     * @param documentId the document ID
+     */
+    void removeDocumentFromTag(UUID tagId, UUID documentId);
 
     /**
      * Merge a source tag into a target tag, updating all document associations.
