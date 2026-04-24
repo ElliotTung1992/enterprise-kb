@@ -119,6 +119,21 @@ public class DocumentController {
     }
 
     /**
+     * 获取文档全文内容
+     * <p>将文档所有分块按顺序拼接返回，超过 10000 字时截断并附提示。主要供 MCP 工具调用。</p>
+     *
+     * @param spaceId 空间 ID
+     * @param docId   文档 ID
+     * @return 文档全文文本
+     */
+    @GetMapping("/{docId}/content")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    public ResponseEntity<ApiResponse<String>> getDocumentContent(
+            @PathVariable UUID spaceId, @PathVariable UUID docId) {
+        return ResponseEntity.ok(ApiResponse.ok(documentService.getDocumentContent(spaceId, docId)));
+    }
+
+    /**
      * 软删除文档
      * <p>设置 deleted_at 时间戳，同时从 Milvus 向量库中删除对应 chunk 向量。</p>
      *

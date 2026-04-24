@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8081
   servlet:
     context-path: /
   tomcat:
@@ -20,7 +20,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/enterprise_kb}
     username: ${SPRING_DATASOURCE_USERNAME:kb_user}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    password: ${SPRING_DATASOURCE_PASSWORD:dge2026}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -38,7 +38,7 @@ spring:
 
   ai:
     minimax:
-      api-key: ${MINIMAX_API_KEY:}
+      api-key: ${MINIMAX_API_KEY:sk-cp-aDkY31-Ku2XhenfhqDUVWWhtHaUyVVxx9k2aIrJ_tUyrFuO1DNlNHtp88fknYEIPZUWhnsFz99Qe5-h_JPkEdyb56oI9RpuzdHByb7Ii4fteJO6RudmAocg}
       chat:
         options:
           model: abab6.5s-chat
@@ -47,7 +47,7 @@ spring:
           model: embo-01
 
     openai:
-      api-key: ${DASHSCOPE_API_KEY:}
+      api-key: ${DASHSCOPE_API_KEY:sk-361580ba837c439c81c9e93caf43abb1}
       base-url: https://dashscope.aliyuncs.com/compatible-mode
       chat:
         options:
@@ -104,7 +104,7 @@ management:
 enterprise:
   kb:
     jwt:
-      secret: ${JWT_SECRET:please-change-this-to-a-256-bit-secret-key-in-production}
+      secret: ${JWT_SECRET:e25007bd691e02e014a1809d87fcda0fa1e9800f0accd3d2a5be68298b96833f}
       access-token-expiry-minutes: 60
       refresh-token-expiry-days: 30
     ai:

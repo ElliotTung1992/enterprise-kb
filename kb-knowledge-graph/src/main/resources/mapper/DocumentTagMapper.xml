@@ -49,4 +49,18 @@
         WHERE tag_id = #{sourceTagId,jdbcType=OTHER}
     </update>
 
+    <delete id="deleteByDocumentId">
+        DELETE FROM document_tags WHERE document_id = #{documentId,jdbcType=OTHER}
+    </delete>
+
+    <delete id="deleteByTagId">
+        DELETE FROM document_tags WHERE tag_id = #{tagId,jdbcType=OTHER}
+    </delete>
+
+    <delete id="deleteBySpaceId">
+        DELETE FROM document_tags
+        WHERE document_id IN (SELECT id FROM documents WHERE space_id = #{spaceId,jdbcType=OTHER})
+           OR tag_id IN (SELECT id FROM tags WHERE space_id = #{spaceId,jdbcType=OTHER})
+    </delete>
+
 </mapper>

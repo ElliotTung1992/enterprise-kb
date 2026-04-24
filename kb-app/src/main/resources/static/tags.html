@@ -7,7 +7,7 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <link href="/assets/css/app.css" rel="stylesheet">
-<style>body{visibility:hidden}</style>
+<style>body{visibility:hidden}.tag-item{border-radius:.4rem;transition:background .1s}.tag-item:hover{background:#f1f5ff}.tag-item.selected{background:#e0e7ff}</style>
 </head>
 <body>
 
@@ -39,11 +39,11 @@
         <div class="kb-card">
           <div class="d-flex align-items-center justify-content-between mb-3">
             <h6 class="fw-bold mb-0">标签树</h6>
-            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#tag-modal" onclick="openCreateModal()">
+            <button class="btn btn-sm btn-primary" onclick="openCreateModal()">
               <i class="bi bi-plus me-1"></i>新建标签
             </button>
           </div>
-          <div id="tag-tree" style="max-height:500px;overflow-y:auto">
+          <div id="tag-tree" style="max-height:520px;overflow-y:auto">
             <div class="text-muted text-center py-4">请选择空间</div>
           </div>
         </div>
@@ -52,9 +52,43 @@
       <!-- Tag detail / edit -->
       <div class="col-lg-7">
         <div class="kb-card" id="tag-detail-panel">
-          <div class="text-muted text-center py-5">
+          <div class="text-muted text-center py-5" id="tag-detail-empty">
             <i class="bi bi-tag fs-1 opacity-25 d-block mb-2"></i>
-            从左侧选择标签查看详情
+            从左侧点击标签查看详情
+          </div>
+          <div id="tag-detail-form" class="d-none">
+            <div class="d-flex align-items-center gap-2 mb-4">
+              <span class="rounded-circle flex-shrink-0" id="detail-color-dot" style="width:14px;height:14px;display:inline-block"></span>
+              <h6 class="fw-bold mb-0" id="detail-title"></h6>
+              <span class="badge bg-light text-secondary ms-1" id="detail-type-badge"></span>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">标签名称</label>
+              <input type="text" class="form-control" id="detail-name">
+            </div>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-semibold">类型</label>
+                <select class="form-select" id="detail-type">
+                  <option value="TAG">标签 (TAG)</option>
+                  <option value="CATEGORY">分类 (CATEGORY)</option>
+                  <option value="ENTITY">实体 (ENTITY)</option>
+                  <option value="TOPIC">主题 (TOPIC)</option>
+                </select>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold">颜色</label>
+                <input type="color" class="form-control form-control-color w-100" id="detail-color">
+              </div>
+            </div>
+            <div class="mb-4">
+              <label class="form-label fw-semibold">描述</label>
+              <textarea class="form-control" id="detail-desc" rows="2" placeholder="标签描述（可选）"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" id="btn-update-tag"><i class="bi bi-check me-1"></i>保存修改</button>
+              <button class="btn btn-outline-danger" id="btn-delete-tag"><i class="bi bi-trash3 me-1"></i>删除标签</button>
+            </div>
           </div>
         </div>
       </div>
@@ -62,12 +96,12 @@
   </div>
 </div>
 
-<!-- Tag modal -->
+<!-- Tag create/edit modal -->
 <div class="modal fade" id="tag-modal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="modal-title">新建标签</h5>
+        <h5 class="modal-title">新建标签</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
@@ -77,7 +111,7 @@
             <input type="text" class="form-control" id="tag-name" required>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">Slug（自动生成）</label>
+            <label class="form-label fw-semibold">Slug（留空自动生成）</label>
             <input type="text" class="form-control" id="tag-slug" placeholder="留空自动生成">
           </div>
           <div class="row g-2 mb-3">
@@ -103,7 +137,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-        <button type="button" class="btn btn-primary" id="btn-save-tag">保存</button>
+        <button type="button" class="btn btn-primary" id="btn-save-tag">创建</button>
       </div>
     </div>
   </div>
@@ -117,6 +151,9 @@ requireAuth();
 document.getElementById('sidebar-username').textContent = localStorage.getItem('username') || '';
 
 let tagTree = [];
+let selectedTagId = null;
+
+// ── Spaces ────────────────────────────────────────────────────────────────
 
 async function loadSpaces() {
   const res = await apiFetch('/spaces');
@@ -127,36 +164,44 @@ async function loadSpaces() {
   if (saved && spaces.find(s => s.id === saved)) sel.value = saved;
   else if (spaces.length) sel.value = spaces[0].id;
   if (sel.value) loadTagTree(sel.value);
-  sel.addEventListener('change', () => loadTagTree(sel.value));
+  sel.addEventListener('change', () => {
+    selectedTagId = null;
+    showEmptyDetail();
+    loadTagTree(sel.value);
+  });
 }
+
+// ── Tag tree ──────────────────────────────────────────────────────────────
 
 async function loadTagTree(spaceId) {
   const res = await apiFetch(`/spaces/${spaceId}/tags/tree`);
   tagTree = res.data || [];
-  renderTree(tagTree, document.getElementById('tag-tree'), 0);
+  const container = document.getElementById('tag-tree');
+  container.innerHTML = '';
+  if (!tagTree.length) {
+    container.innerHTML = '<div class="text-muted text-center py-3">暂无标签，点击右上角新建</div>';
+    return;
+  }
+  renderTree(tagTree, container, 0);
 }
 
 function renderTree(nodes, container, depth) {
-  if (!nodes.length) { container.innerHTML = '<div class="text-muted text-center py-3">暂无标签</div>'; return; }
-  container.innerHTML = '';
   nodes.forEach(node => {
     const item = document.createElement('div');
-    item.style.paddingLeft = depth * 1.5 + 'rem';
-    item.className = 'py-1 px-2 rounded cursor-pointer tag-item';
+    item.style.paddingLeft = depth * 1.2 + 'rem';
+    item.className = 'py-1 px-2 tag-item' + (node.id === selectedTagId ? ' selected' : '');
+    item.dataset.tagId = node.id;
     item.innerHTML = `
       <div class="d-flex align-items-center justify-content-between">
-        <div class="d-flex align-items-center gap-2">
-          <span class="rounded-circle d-inline-block" style="width:10px;height:10px;background:${node.color||'#a5b4fc'}"></span>
-          <span class="fw-semibold">${escHtml(node.name)}</span>
-          <span class="badge bg-light text-secondary" style="font-size:.7rem">${node.tagType}</span>
+        <div class="d-flex align-items-center gap-2 flex-grow-1 overflow-hidden" style="cursor:pointer" onclick="selectTag('${node.id}')">
+          <span class="rounded-circle flex-shrink-0" style="width:10px;height:10px;background:${node.color||'#a5b4fc'}"></span>
+          <span class="fw-semibold text-truncate">${escHtml(node.name)}</span>
+          <span class="badge bg-light text-secondary flex-shrink-0" style="font-size:.7rem">${node.tagType}</span>
         </div>
-        <div class="d-flex gap-1">
-          <button class="btn btn-xs btn-outline-danger" title="删除" onclick="deleteTag('${node.id}', event)">
-            <i class="bi bi-trash3" style="font-size:.7rem"></i>
-          </button>
-        </div>
+        <button class="btn btn-xs btn-outline-danger ms-1 flex-shrink-0" title="删除" onclick="deleteTag('${node.id}',event)">
+          <i class="bi bi-trash3" style="font-size:.7rem"></i>
+        </button>
       </div>`;
-    item.style.cursor = 'pointer';
     container.appendChild(item);
     if (node.children && node.children.length) {
       const sub = document.createElement('div');
@@ -166,6 +211,76 @@ function renderTree(nodes, container, depth) {
   });
 }
 
+// ── Tag detail ────────────────────────────────────────────────────────────
+
+function findTagById(nodes, id) {
+  for (const n of nodes) {
+    if (n.id === id) return n;
+    if (n.children) { const found = findTagById(n.children, id); if (found) return found; }
+  }
+  return null;
+}
+
+function selectTag(tagId) {
+  selectedTagId = tagId;
+  // Highlight selected
+  document.querySelectorAll('.tag-item').forEach(el => el.classList.toggle('selected', el.dataset.tagId === tagId));
+
+  const tag = findTagById(tagTree, tagId);
+  if (!tag) return;
+
+  document.getElementById('tag-detail-empty').classList.add('d-none');
+  document.getElementById('tag-detail-form').classList.remove('d-none');
+
+  document.getElementById('detail-title').textContent = tag.name;
+  document.getElementById('detail-color-dot').style.background = tag.color || '#a5b4fc';
+  document.getElementById('detail-type-badge').textContent = tag.tagType;
+  document.getElementById('detail-name').value = tag.name;
+  document.getElementById('detail-type').value = tag.tagType;
+  document.getElementById('detail-color').value = tag.color || '#4f46e5';
+  document.getElementById('detail-desc').value = tag.description || '';
+}
+
+function showEmptyDetail() {
+  document.getElementById('tag-detail-empty').classList.remove('d-none');
+  document.getElementById('tag-detail-form').classList.add('d-none');
+}
+
+document.getElementById('btn-update-tag').addEventListener('click', async () => {
+  if (!selectedTagId) return;
+  const spaceId = document.getElementById('space-select').value;
+  const name = document.getElementById('detail-name').value.trim();
+  if (!name) { showToast('标签名称不能为空', 'error'); return; }
+  try {
+    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name,
+        tagType: document.getElementById('detail-type').value,
+        color: document.getElementById('detail-color').value,
+        description: document.getElementById('detail-desc').value.trim() || null
+      })
+    });
+    showToast('标签已更新');
+    loadTagTree(spaceId);
+  } catch (err) { showToast(err.message, 'error'); }
+});
+
+document.getElementById('btn-delete-tag').addEventListener('click', async () => {
+  if (!selectedTagId) return;
+  if (!confirm('确认删除此标签？')) return;
+  const spaceId = document.getElementById('space-select').value;
+  try {
+    await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}`, { method: 'DELETE' });
+    showToast('标签已删除');
+    selectedTagId = null;
+    showEmptyDetail();
+    loadTagTree(spaceId);
+  } catch (err) { showToast(err.message, 'error'); }
+});
+
+// ── Create ────────────────────────────────────────────────────────────────
+
 async function deleteTag(tagId, event) {
   event.stopPropagation();
   if (!confirm('确认删除此标签？')) return;
@@ -173,13 +288,15 @@ async function deleteTag(tagId, event) {
   try {
     await apiFetch(`/spaces/${spaceId}/tags/${tagId}`, { method: 'DELETE' });
     showToast('标签已删除');
+    if (selectedTagId === tagId) { selectedTagId = null; showEmptyDetail(); }
     loadTagTree(spaceId);
   } catch (err) { showToast(err.message, 'error'); }
 }
 
 function openCreateModal() {
-  document.getElementById('modal-title').textContent = '新建标签';
   document.getElementById('tag-form').reset();
+  document.getElementById('tag-color').value = '#4f46e5';
+  new bootstrap.Modal(document.getElementById('tag-modal')).show();
 }
 
 document.getElementById('btn-save-tag').addEventListener('click', async () => {

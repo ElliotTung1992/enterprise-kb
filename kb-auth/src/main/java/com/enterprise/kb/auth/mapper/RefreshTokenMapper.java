@@ -50,4 +50,11 @@ public interface RefreshTokenMapper {
      * @param cutoff 截止时间
      */
     void deleteExpired(@Param("cutoff") Instant cutoff);
+
+    /**
+     * 删除用户的所有令牌
+     *
+     * @param userId 用户 ID
+     */
+    void deleteByUserId(@Param("userId") UUID userId);
 }

@@ -1,5 +1,6 @@
 package com.enterprise.kb.auth.service;
 
+import com.enterprise.kb.auth.dto.ApiKeyExchangeResponse;
 import com.enterprise.kb.auth.dto.AuthResponse;
 import com.enterprise.kb.auth.dto.LoginRequest;
 import com.enterprise.kb.auth.dto.RegisterRequest;
@@ -48,4 +49,12 @@ public interface AuthService {
      * @param newPassword     新密码（明文）
      */
     void changePassword(String username, String currentPassword, String newPassword);
+
+    /**
+     * 用 API Key 换取短期 JWT，供 kb-mcp 调用。
+     *
+     * @param rawApiKey 原始 API Key 明文
+     * @return 短期访问令牌响应
+     */
+    ApiKeyExchangeResponse exchangeApiKey(String rawApiKey);
 }

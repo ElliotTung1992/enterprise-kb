@@ -56,4 +56,13 @@ public interface DocumentService {
      * @return the updated document DTO
      */
     DocumentDto reprocessDocument(UUID docId);
+
+    /**
+     * 获取文档全文内容（所有分块按顺序拼接）。
+     *
+     * @param spaceId 空间 ID（用于权限校验）
+     * @param docId   文档 ID
+     * @return 拼接后的文本内容，超过 {@code maxChars} 时截断并附提示
+     */
+    String getDocumentContent(UUID spaceId, UUID docId);
 }

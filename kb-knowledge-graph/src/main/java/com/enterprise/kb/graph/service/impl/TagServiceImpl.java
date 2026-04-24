@@ -1,5 +1,7 @@
 package com.enterprise.kb.graph.service.impl;
 
+import com.enterprise.kb.common.event.DocumentDeletedEvent;
+import com.enterprise.kb.common.event.SpaceDeletedEvent;
 import com.enterprise.kb.graph.service.TagService;
 import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
@@ -12,6 +14,7 @@ import com.enterprise.kb.graph.mapper.TagMapper;
 import com.enterprise.kb.graph.model.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,7 +86,7 @@ public class TagServiceImpl implements TagService {
     }
 
     /**
-     * 软删除标签。
+     * 软删除标签，并清理所有文档与该标签的关联。
      *
      * @param tagId 标签 UUID
      */
@@ -92,9 +95,33 @@ public class TagServiceImpl implements TagService {
     public void deleteTag(UUID tagId) {
         Tag tag = tagMapper.findByIdAndDeletedAtIsNull(tagId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tag", tagId));
+        documentTagMapper.deleteByTagId(tagId);
         tag.setDeletedAt(Instant.now());
         tag.setUpdatedAt(Instant.now());
         tagMapper.update(tag);
+    }
+
+    /**
+     * 监听文档删除事件，清理该文档与所有标签的关联。
+     *
+     * @param event 文档删除事件
+     */
+    @EventListener
+    @Transactional
+    public void handleDocumentDeleted(DocumentDeletedEvent event) {
+        documentTagMapper.deleteByDocumentId(event.documentId());
+    }
+
+    /**
+     * 监听空间删除事件，级联清理该空间内所有标签及文档标签关联。
+     *
+     * @param event 空间删除事件
+     */
+    @EventListener
+    @Transactional
+    public void handleSpaceDeleted(SpaceDeletedEvent event) {
+        documentTagMapper.deleteBySpaceId(event.spaceId());
+        tagMapper.softDeleteBySpaceId(event.spaceId());
     }
 
     /**

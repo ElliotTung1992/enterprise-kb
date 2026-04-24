@@ -49,4 +49,11 @@ public interface DocumentChunkMapper {
      * @param documentId 文档 ID
      */
     void deleteByDocumentId(@Param("documentId") UUID documentId);
+
+    /**
+     * 删除空间内所有文档的分块
+     *
+     * @param spaceId 空间 ID
+     */
+    void deleteBySpaceId(@Param("spaceId") UUID spaceId);
 }

@@ -45,4 +45,15 @@
         DELETE FROM document_relations WHERE id = #{id,jdbcType=OTHER}
     </delete>
 
+    <delete id="deleteByDocumentId">
+        DELETE FROM document_relations
+        WHERE source_doc_id = #{docId,jdbcType=OTHER} OR target_doc_id = #{docId,jdbcType=OTHER}
+    </delete>
+
+    <delete id="deleteBySpaceId">
+        DELETE FROM document_relations
+        WHERE source_doc_id IN (SELECT id FROM documents WHERE space_id = #{spaceId,jdbcType=OTHER})
+           OR target_doc_id IN (SELECT id FROM documents WHERE space_id = #{spaceId,jdbcType=OTHER})
+    </delete>
+
 </mapper>

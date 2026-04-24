@@ -68,4 +68,11 @@ public interface TagMapper {
      * @param tag 标签实体
      */
     void update(Tag tag);
+
+    /**
+     * 批量软删除空间内所有标签
+     *
+     * @param spaceId 空间 ID
+     */
+    void softDeleteBySpaceId(@Param("spaceId") UUID spaceId);
 }

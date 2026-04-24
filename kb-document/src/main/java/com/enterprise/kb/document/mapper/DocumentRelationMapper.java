@@ -48,4 +48,18 @@ public interface DocumentRelationMapper {
      * @param id 关系 ID
      */
     void deleteById(@Param("id") UUID id);
+
+    /**
+     * 删除文档相关的所有关系（作为源或目标）
+     *
+     * @param docId 文档 ID
+     */
+    void deleteByDocumentId(@Param("docId") UUID docId);
+
+    /**
+     * 删除空间内所有文档的关系
+     *
+     * @param spaceId 空间 ID
+     */
+    void deleteBySpaceId(@Param("spaceId") UUID spaceId);
 }

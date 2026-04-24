@@ -53,7 +53,8 @@ public class AppConfig {
             org.springframework.security.authentication.AuthenticationManager authenticationManager,
             org.springframework.security.core.userdetails.UserDetailsService userDetailsService,
             org.springframework.security.crypto.password.PasswordEncoder passwordEncoder,
-            UserService userService) {
+            UserService userService,
+            com.enterprise.kb.user.mapper.McpApiKeyMapper mcpApiKeyMapper) {
         return new AuthServiceImpl(
                 jwtService(),
                 refreshTokenMapper,
@@ -62,7 +63,9 @@ public class AppConfig {
                 passwordEncoder,
                 userService::createFromRegister,
                 userService::getUserIdByUsername,
-                userService::updatePasswordHash
+                userService::updatePasswordHash,
+                keyHash -> mcpApiKeyMapper.findUserIdByKeyHash(keyHash),
+                userId -> userService.getUserById(userId).username()
         );
     }
 

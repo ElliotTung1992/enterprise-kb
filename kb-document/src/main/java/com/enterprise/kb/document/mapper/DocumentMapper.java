@@ -48,4 +48,19 @@ public interface DocumentMapper {
      * @param document 文档实体
      */
     void update(Document document);
+
+    /**
+     * 查询空间内所有未删除文档的 ID
+     *
+     * @param spaceId 空间 ID
+     * @return 文档 ID 列表
+     */
+    List<UUID> findIdsBySpaceId(@Param("spaceId") UUID spaceId);
+
+    /**
+     * 批量软删除空间内所有文档
+     *
+     * @param spaceId 空间 ID
+     */
+    void softDeleteBySpaceId(@Param("spaceId") UUID spaceId);
 }

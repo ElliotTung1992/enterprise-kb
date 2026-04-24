@@ -17,4 +17,6 @@
     <include file="db/changelog/010-create-refresh-tokens.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/011-create-audit-logs.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/012-insert-default-data.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/013-create-mcp-api-keys.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/014-drop-foreign-keys.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

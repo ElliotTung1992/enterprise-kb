@@ -1,6 +1,7 @@
 package com.enterprise.kb.user.service.impl;
 
 import com.enterprise.kb.common.constants.RoleType;
+import com.enterprise.kb.common.event.SpaceDeletedEvent;
 import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.user.service.SpaceService;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
@@ -15,6 +16,7 @@ import com.enterprise.kb.user.model.Space;
 import com.enterprise.kb.user.model.User;
 import com.enterprise.kb.user.model.UserSpaceRole;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,7 @@ public class SpaceServiceImpl implements SpaceService {
     private final SpaceMapper spaceMapper;
     private final UserMapper userMapper;
     private final UserSpaceRoleMapper userSpaceRoleMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 创建知识空间，并将创建者设为 ADMIN。
@@ -85,7 +88,7 @@ public class SpaceServiceImpl implements SpaceService {
     }
 
     /**
-     * 软删除空间。
+     * 软删除空间，并清理成员角色，通过事件通知各模块级联清理文档与标签。
      *
      * @param spaceId 空间 UUID
      */
@@ -93,10 +96,12 @@ public class SpaceServiceImpl implements SpaceService {
     @Transactional
     public void deleteSpace(UUID spaceId) {
         Space space = findActive(spaceId);
+        userSpaceRoleMapper.deleteBySpaceId(spaceId);
         space.setDeletedAt(Instant.now());
         space.setActive(false);
         space.setUpdatedAt(Instant.now());
         spaceMapper.update(space);
+        eventPublisher.publishEvent(new SpaceDeletedEvent(spaceId));
     }
 
     /**

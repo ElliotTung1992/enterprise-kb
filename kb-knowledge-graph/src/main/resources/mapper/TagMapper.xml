@@ -83,4 +83,9 @@
         WHERE id = #{id,jdbcType=OTHER}
     </update>
 
+    <update id="softDeleteBySpaceId">
+        UPDATE tags SET deleted_at = NOW(), updated_at = NOW()
+        WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+    </update>
+
 </mapper>

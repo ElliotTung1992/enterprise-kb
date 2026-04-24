@@ -29,7 +29,10 @@
 <div class="kb-main">
   <div class="kb-topbar">
     <h6 class="mb-0 fw-bold"><i class="bi bi-cloud-upload me-2 text-primary"></i>上传文档</h6>
-    <select class="form-select form-select-sm" id="space-select" style="width:200px"></select>
+    <div class="d-flex align-items-center gap-2">
+      <span class="text-muted small fw-semibold">目标空间：</span>
+      <select class="form-select form-select-sm" id="space-select" style="width:200px"></select>
+    </div>
   </div>
 
   <div class="p-4">
@@ -37,13 +40,22 @@
       <!-- Drop zone -->
       <div class="col-lg-6">
         <div class="kb-card">
-          <h6 class="fw-bold mb-3">拖拽或选择文件</h6>
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="fw-bold mb-0">拖拽或选择文件</h6>
+            <div class="dropdown">
+              <button class="btn btn-sm btn-outline-primary dropdown-toggle" id="space-badge-btn" type="button"
+                      data-bs-toggle="dropdown" aria-expanded="false" style="font-size:.8rem">
+                <i class="bi bi-collection me-1"></i><span id="current-space-name">未选择空间</span>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end" id="space-dropdown-menu"></ul>
+            </div>
+          </div>
           <div class="drop-zone" id="drop-zone">
             <i class="bi bi-cloud-arrow-up d-block mb-2"></i>
             <div class="fw-semibold">拖拽文件至此处</div>
-            <div class="text-muted small mt-1">支持 PDF、Word (.docx/.doc)、Markdown (.md)、TXT</div>
+            <div class="text-muted small mt-1">支持 PDF、Word (.docx/.doc)、Markdown (.md)、TXT、HTML</div>
             <div class="text-muted small">单文件最大 100 MB</div>
-            <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.md,.txt,.html" class="d-none">
+            <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.md,.txt,.html,.htm" class="d-none">
           </div>
           <div class="mt-3 d-flex gap-2">
             <button class="btn btn-primary" id="btn-select"><i class="bi bi-folder2-open me-1"></i>选择文件</button>
@@ -64,7 +76,12 @@
 
     <!-- Upload history -->
     <div class="kb-card mt-4">
-      <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>近期上传</h6>
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>近期上传</h6>
+        <button class="btn btn-sm btn-outline-secondary" id="btn-refresh-history" title="刷新">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
       <div id="upload-history"></div>
     </div>
   </div>
@@ -78,21 +95,67 @@ requireAuth();
 document.getElementById('sidebar-username').textContent = localStorage.getItem('username') || '';
 
 let selectedFiles = [];
-let uploadedDocs = [];
 
-// Space selector
-async function loadSpaces() {
-  const res = await apiFetch('/spaces');
-  const spaces = res.data || [];
-  const sel = document.getElementById('space-select');
-  spaces.forEach(s => { const o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sel.appendChild(o); });
-  const saved = localStorage.getItem('current_space_id');
-  if (saved && spaces.find(s => s.id === saved)) sel.value = saved;
-  else if (spaces.length) sel.value = spaces[0].id;
-  sel.addEventListener('change', () => setCurrentSpace(sel.value, sel.options[sel.selectedIndex].text));
+const statusColors = { PENDING: 'badge-pending', PROCESSING: 'badge-processing', READY: 'badge-ready', FAILED: 'badge-failed' };
+const statusLabels = { PENDING: '待处理', PROCESSING: '处理中', READY: '就绪', FAILED: '失败' };
+
+// ── Spaces ────────────────────────────────────────────────────────────────
+
+let allSpaces = [];
+
+function updateSpaceBadge(name) {
+  document.getElementById('current-space-name').textContent = name || '未选择空间';
 }
 
-// Drop zone
+function buildSpaceDropdown() {
+  const menu = document.getElementById('space-dropdown-menu');
+  const currentId = document.getElementById('space-select').value;
+  menu.innerHTML = allSpaces.map((s, i) => `
+    <li>
+      <a class="dropdown-item d-flex align-items-center gap-2 ${s.id === currentId ? 'active' : ''}"
+         href="#" onclick="selectSpace(${i});return false;">
+        <i class="bi bi-collection"></i>
+        <span>${escHtml(s.name)}</span>
+        ${s.id === currentId ? '<i class="bi bi-check ms-auto"></i>' : ''}
+      </a>
+    </li>`).join('');
+}
+
+function selectSpace(idx) {
+  const s = allSpaces[idx];
+  const sel = document.getElementById('space-select');
+  sel.value = s.id;
+  setCurrentSpace(s.id, s.name);
+  updateSpaceBadge(s.name);
+  buildSpaceDropdown();
+  loadHistory(s.id);
+}
+
+async function loadSpaces() {
+  const res = await apiFetch('/spaces');
+  allSpaces = res.data || [];
+  const sel = document.getElementById('space-select');
+  if (!allSpaces.length) {
+    sel.innerHTML = '<option value="">— 暂无空间 —</option>';
+    updateSpaceBadge('暂无空间');
+    return;
+  }
+  allSpaces.forEach(s => { const o = document.createElement('option'); o.value = s.id; o.textContent = s.name; sel.appendChild(o); });
+  const saved = localStorage.getItem('current_space_id');
+  if (saved && allSpaces.find(s => s.id === saved)) sel.value = saved;
+  else sel.value = allSpaces[0].id;
+  updateSpaceBadge(sel.options[sel.selectedIndex]?.text);
+  buildSpaceDropdown();
+  sel.addEventListener('change', () => {
+    setCurrentSpace(sel.value, sel.options[sel.selectedIndex].text);
+    updateSpaceBadge(sel.options[sel.selectedIndex].text);
+    buildSpaceDropdown();
+    loadHistory(sel.value);
+  });
+}
+
+// ── Drop zone ─────────────────────────────────────────────────────────────
+
 const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 
@@ -129,18 +192,22 @@ function renderFileList() {
 function removeFile(i) { selectedFiles.splice(i, 1); renderFileList(); }
 
 function fileIcon(name) {
+  if (!name) return 'bi-file-earmark-text text-secondary';
   if (name.endsWith('.pdf')) return 'bi-file-earmark-pdf text-danger';
   if (name.endsWith('.docx') || name.endsWith('.doc')) return 'bi-file-earmark-word text-primary';
   if (name.endsWith('.md')) return 'bi-file-earmark-code text-success';
+  if (name.endsWith('.html') || name.endsWith('.htm')) return 'bi-file-earmark-code text-warning';
   return 'bi-file-earmark-text text-secondary';
 }
 
-// Upload
+// ── Upload ────────────────────────────────────────────────────────────────
+
 document.getElementById('btn-upload').addEventListener('click', async () => {
   const spaceId = document.getElementById('space-select').value;
   if (!spaceId) { showToast('请先选择一个空间', 'error'); return; }
 
-  document.getElementById('btn-upload').disabled = true;
+  const btnUpload = document.getElementById('btn-upload');
+  btnUpload.disabled = true;
 
   for (let i = 0; i < selectedFiles.length; i++) {
     const statusEl = document.getElementById(`file-status-${i}`);
@@ -153,13 +220,15 @@ document.getElementById('btn-upload').addEventListener('click', async () => {
     try {
       const res = await apiFetch(`/spaces/${spaceId}/documents/upload`, { method: 'POST', body: form });
       const doc = res.data;
-      uploadedDocs.push(doc);
       statusEl.innerHTML = '<span class="badge badge-processing">处理中</span>';
       pollStatus(spaceId, doc.id, i);
     } catch (err) {
       statusEl.innerHTML = `<span class="badge badge-failed" title="${escHtml(err.message)}">失败</span>`;
     }
   }
+
+  // 上传请求全部发出后恢复按钮，无论成功或失败都可重试
+  btnUpload.disabled = selectedFiles.length === 0;
 });
 
 function pollStatus(spaceId, docId, fileIndex) {
@@ -170,8 +239,6 @@ function pollStatus(spaceId, docId, fileIndex) {
       const statusEl = document.getElementById(`file-status-${fileIndex}`);
       if (!statusEl) { clearInterval(interval); return; }
 
-      const STEPS = ['PENDING', 'PROCESSING', 'READY'];
-      const step = STEPS.indexOf(doc.status);
       if (doc.status === 'READY') {
         statusEl.innerHTML = `<span class="badge badge-ready">就绪 (${doc.chunkCount} 块)</span>`;
         clearInterval(interval);
@@ -180,35 +247,65 @@ function pollStatus(spaceId, docId, fileIndex) {
         statusEl.innerHTML = `<span class="badge badge-failed" title="${escHtml(doc.errorMessage)}">失败</span>`;
         clearInterval(interval);
       } else {
-        const stepBar = `<div class="step-bar" style="width:120px">
-          <div class="step ${step >= 0 ? 'done' : ''}">待处理</div>
-          <div class="step ${step >= 1 ? (step === 1 ? 'active' : 'done') : ''}">解析</div>
-          <div class="step ${step >= 2 ? 'done' : ''}">就绪</div>
+        const step = ['PENDING', 'PROCESSING'].indexOf(doc.status);
+        statusEl.innerHTML = `<div class="step-bar" style="width:120px">
+          <div class="step done">待处理</div>
+          <div class="step ${step >= 1 ? 'active' : ''}">解析</div>
+          <div class="step">就绪</div>
         </div>`;
-        statusEl.innerHTML = stepBar;
       }
     } catch { clearInterval(interval); }
   }, 2000);
 }
 
+// ── History ───────────────────────────────────────────────────────────────
+
 async function loadHistory(spaceId) {
   if (!spaceId) return;
-  const res = await apiFetch(`/spaces/${spaceId}/documents?size=5&sort=createdAt,desc`);
+  const res = await apiFetch(`/spaces/${spaceId}/documents?size=20`);
   const docs = res.data?.content || [];
   const container = document.getElementById('upload-history');
+  if (!docs.length) { container.innerHTML = '<div class="text-muted text-center py-3">暂无记录</div>'; return; }
   container.innerHTML = docs.map(d => `
-    <div class="d-flex align-items-center py-2 border-bottom">
-      <i class="bi ${fileIcon(d.originalFilename || '')} me-2 text-primary"></i>
+    <div class="d-flex align-items-center py-2 border-bottom gap-2">
+      <i class="bi ${fileIcon(d.originalFilename || '')} me-1 text-primary flex-shrink-0"></i>
       <div class="flex-grow-1 overflow-hidden">
         <div class="fw-semibold text-truncate small">${escHtml(d.title)}</div>
-        <small class="text-muted">${new Date(d.createdAt).toLocaleString('zh-CN')}</small>
+        <small class="text-muted">${new Date(d.createdAt).toLocaleString('zh-CN')}${d.chunkCount ? ' · ' + d.chunkCount + ' 块' : ''}</small>
       </div>
-      <span class="badge ${statusColors[d.status]}">${statusLabels[d.status]}</span>
-    </div>`).join('') || '<div class="text-muted text-center py-3">暂无记录</div>';
+      <span class="badge ${statusColors[d.status]} flex-shrink-0">${statusLabels[d.status]}</span>
+      ${d.status === 'FAILED' ? `
+        <button class="btn btn-xs btn-outline-warning" title="重新处理" onclick="reprocessDoc('${d.id}','${spaceId}',this)">
+          <i class="bi bi-arrow-repeat" style="font-size:.75rem"></i>
+        </button>` : ''}
+      <button class="btn btn-xs btn-outline-danger" title="删除" onclick="deleteHistoryDoc('${d.id}','${spaceId}',this)">
+        <i class="bi bi-trash3" style="font-size:.75rem"></i>
+      </button>
+    </div>`).join('');
 }
 
-const statusColors = { PENDING: 'badge-pending', PROCESSING: 'badge-processing', READY: 'badge-ready', FAILED: 'badge-failed' };
-const statusLabels = { PENDING: '待处理', PROCESSING: '处理中', READY: '就绪', FAILED: '失败' };
+async function deleteHistoryDoc(docId, spaceId, btn) {
+  if (!confirm('确认删除此文档？')) return;
+  try {
+    await apiFetch(`/spaces/${spaceId}/documents/${docId}`, { method: 'DELETE' });
+    showToast('文档已删除');
+    btn.closest('.border-bottom').remove();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function reprocessDoc(docId, spaceId, btn) {
+  try {
+    await apiFetch(`/spaces/${spaceId}/documents/${docId}/reprocess`, { method: 'POST' });
+    showToast('已重新提交处理');
+    loadHistory(spaceId);
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+document.getElementById('btn-refresh-history').addEventListener('click', () => {
+  const spaceId = document.getElementById('space-select').value;
+  if (spaceId) loadHistory(spaceId);
+});
+
 function formatSize(b) { if (!b) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(1) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 

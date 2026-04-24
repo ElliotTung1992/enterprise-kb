@@ -75,4 +75,13 @@
         WHERE id = #{id,jdbcType=OTHER}
     </update>
 
+    <select id="findIdsBySpaceId" resultType="java.util.UUID">
+        SELECT id FROM documents WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+    </select>
+
+    <update id="softDeleteBySpaceId">
+        UPDATE documents SET deleted_at = NOW(), updated_at = NOW()
+        WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+    </update>
+
 </mapper>

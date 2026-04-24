@@ -62,4 +62,25 @@ public interface DocumentTagMapper {
      * @param targetTagId 目标标签 ID
      */
     void mergeTags(@Param("sourceTagId") UUID sourceTagId, @Param("targetTagId") UUID targetTagId);
+
+    /**
+     * 删除文档的所有标签关联
+     *
+     * @param documentId 文档 ID
+     */
+    void deleteByDocumentId(@Param("documentId") UUID documentId);
+
+    /**
+     * 删除标签的所有文档关联
+     *
+     * @param tagId 标签 ID
+     */
+    void deleteByTagId(@Param("tagId") UUID tagId);
+
+    /**
+     * 删除空间内所有文档和标签的关联
+     *
+     * @param spaceId 空间 ID
+     */
+    void deleteBySpaceId(@Param("spaceId") UUID spaceId);
 }

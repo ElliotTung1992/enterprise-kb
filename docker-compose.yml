@@ -14,6 +14,8 @@ services:
       - ./docker/init/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
+    networks:
+      - kb-network
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${PG_USER:-kb_user}", "-d", "enterprise_kb"]
       interval: 10s
@@ -37,6 +39,8 @@ services:
       --data-dir=/etcd
     volumes:
       - etcd_data:/etcd
+    networks:
+      - kb-network
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 30s
@@ -57,6 +61,8 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    networks:
+      - kb-network
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
@@ -80,6 +86,8 @@ services:
     ports:
       - "19530:19530"
       - "9091:9091"
+    networks:
+      - kb-network
     depends_on:
       etcd:
         condition: service_healthy
@@ -101,6 +109,8 @@ services:
       MILVUS_URL: milvus:19530
     ports:
       - "3000:3000"
+    networks:
+      - kb-network
     depends_on:
       milvus:
         condition: service_healthy
@@ -113,7 +123,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: kb-app
     ports:
-      - "8081:8080"
+      - "8081:8081"
     environment:
       # Database
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enterprise_kb
@@ -133,6 +143,8 @@ services:
       FILE_STORAGE_PATH: /app/uploads
     volumes:
       - uploads_data:/app/uploads
+    networks:
+      - kb-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,3 +158,8 @@ volumes:
   minio_data:
   milvus_data:
   uploads_data:
+
+networks:
+  kb-network:
+    name: kb-network
+    driver: bridge

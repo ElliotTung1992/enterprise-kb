@@ -76,4 +76,18 @@ public interface UserSpaceRoleMapper {
      * @param spaceId 空间 ID
      */
     void deleteByUserIdAndSpaceId(@Param("userId") UUID userId, @Param("spaceId") UUID spaceId);
+
+    /**
+     * 删除空间的所有成员角色
+     *
+     * @param spaceId 空间 ID
+     */
+    void deleteBySpaceId(@Param("spaceId") UUID spaceId);
+
+    /**
+     * 删除用户在所有空间的角色
+     *
+     * @param userId 用户 ID
+     */
+    void deleteByUserId(@Param("userId") UUID userId);
 }
