@@ -41,3 +41,10 @@ services:
 
   minio:
     restart: always
+
+  redis:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512m

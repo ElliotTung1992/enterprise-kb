@@ -17,6 +17,13 @@ spring:
     virtual:
       enabled: true
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:dge2026}
+      database: 0
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/enterprise_kb}
     username: ${SPRING_DATASOURCE_USERNAME:kb_user}
@@ -46,9 +53,8 @@ spring:
         options:
           model: embo-01
 
-    openai:
+    dashscope:
       api-key: ${DASHSCOPE_API_KEY:sk-361580ba837c439c81c9e93caf43abb1}
-      base-url: https://dashscope.aliyuncs.com/compatible-mode
       chat:
         options:
           model: qwen-plus

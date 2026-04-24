@@ -44,10 +44,15 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-minimax</artifactId>
         </dependency>
-        <!-- DashScope via OpenAI-compatible API -->
+        <!-- DashScope 原生集成 -->
         <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-openai</artifactId>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+        </dependency>
+        <!-- Redis：保存 QnA 会话历史 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
     </dependencies>
 </project>

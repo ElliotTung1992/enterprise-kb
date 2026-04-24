@@ -36,14 +36,16 @@ public class KeywordSearchServiceImpl implements KeywordSearchService {
     @Transactional(readOnly = true)
     public SearchResponse search(UUID spaceId, SearchRequest req) {
         long start = System.currentTimeMillis();
+        // 使用 pg_trgm similarity + ILIKE，支持中英文子串匹配；
+        // 原 to_tsvector/plainto_tsquery('simple') 仅按空格切词，无法处理中文导致基本搜不到数据
         String sql = """
                 SELECT dc.id::text AS chunk_id, dc.document_id::text AS document_id,
                        d.title AS document_title, dc.content AS excerpt, dc.page_number,
-                       ts_rank(to_tsvector('simple', dc.content), plainto_tsquery('simple', ?)) AS score
+                       similarity(?, dc.content) AS score
                 FROM document_chunks dc
                 JOIN documents d ON d.id = dc.document_id
                 WHERE d.space_id = ?::uuid AND d.deleted_at IS NULL
-                  AND to_tsvector('simple', dc.content) @@ plainto_tsquery('simple', ?)
+                  AND dc.content ILIKE '%' || ? || '%'
                 ORDER BY score DESC LIMIT ?""";
 
         List<SearchHit> hits = jdbcTemplate.query(sql,

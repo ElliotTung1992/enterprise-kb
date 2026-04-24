@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 混合搜索服务实现，结合语义搜索与关键词搜索结果。
@@ -53,10 +54,14 @@ public class HybridSearchServiceImpl implements HybridSearchService {
         Map<String, SearchHit> hitMap = new LinkedHashMap<>();
         scoreList(list1, scores, hitMap);
         scoreList(list2, scores, hitMap);
+
+        // RRF 排序后按内容指纹二次去重，兜底存量数据中 Milvus ID 与 PostgreSQL ID 不一致的情况
+        Set<String> contentSeen = new HashSet<>();
         return scores.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
-                .limit(topK)
                 .map(e -> hitMap.get(e.getKey()))
+                .filter(hit -> contentSeen.add(contentKey(hit)))
+                .limit(topK)
                 .toList();
     }
 
@@ -68,5 +73,14 @@ public class HybridSearchServiceImpl implements HybridSearchService {
             scores.merge(key, 1.0 / (RRF_K + rank + 1), Double::sum);
             hitMap.putIfAbsent(key, hit);
         }
+    }
+
+    /**
+     * 内容指纹：documentId + 摘要全文，用于识别 chunkId 不同但内容相同的重复条目。
+     */
+    private String contentKey(SearchHit hit) {
+        String docId = hit.documentId() != null ? hit.documentId().toString() : "";
+        String excerpt = hit.excerpt() != null ? hit.excerpt().strip() : "";
+        return docId + "::" + excerpt;
     }
 }

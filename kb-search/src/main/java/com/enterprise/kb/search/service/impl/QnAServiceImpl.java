@@ -1,26 +1,26 @@
 package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.search.service.QnAService;
-import com.enterprise.kb.document.mapper.DocumentMapper;
+import com.enterprise.kb.search.service.HybridSearchService;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
+import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.Citation;
 import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
+import com.enterprise.kb.search.dto.SearchHit;
+import com.enterprise.kb.search.dto.SearchRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 问答服务实现，RAG 模式：先向量检索相关文档块，再调用 LLM 生成答案。
@@ -33,8 +33,8 @@ import java.util.UUID;
 public class QnAServiceImpl implements QnAService {
 
     private final ModelProviderResolver modelProviderResolver;
-    private final VectorStore vectorStore;
-    private final DocumentMapper documentMapper;
+    private final HybridSearchService hybridSearchService;
+    private final RedisChatMemory redisChatMemory;
 
     /**
      * 同步 RAG 问答。
@@ -46,15 +46,22 @@ public class QnAServiceImpl implements QnAService {
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+
+        // 混合检索（语义 + 关键词 RRF 融合），比纯向量检索召回更全面
+        List<SearchHit> hits = hybridSearchService.search(spaceId,
+                new SearchRequest(req.question(), req.topK(), req.modelProvider(), null)).hits();
+
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        FilterExpressionBuilder b = new FilterExpressionBuilder();
-        SearchRequest searchReq = SearchRequest.builder()
-                .topK(req.topK())
-                .filterExpression(b.eq("spaceId", spaceId.toString()).build()).build();
-        QuestionAnswerAdvisor qaAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
-                .searchRequest(searchReq).build();
-        ChatResponse chatResponse = chatClient.prompt().advisors(qaAdvisor)
-                .user(req.question()).call().chatResponse();
+        // 按 sessionId 加载/保存多轮对话历史；MessageChatMemoryAdvisor 在请求前注入历史，在响应后自动存储
+        MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(redisChatMemory)
+                .conversationId(sessionId.toString()).build();
+
+        ChatResponse chatResponse = chatClient.prompt()
+                .advisors(memoryAdvisor)
+                .system(buildSystemPrompt(hits))
+                .user(req.question())
+                .call().chatResponse();
+
         String answer = chatResponse.getResult().getOutput().getText();
         String modelUsed = req.modelProvider() != null ? req.modelProvider() : "DEFAULT";
         int tokensUsed = 0;
@@ -62,7 +69,12 @@ public class QnAServiceImpl implements QnAService {
             Usage usage = chatResponse.getMetadata().getUsage();
             if (usage != null) tokensUsed = (int) usage.getTotalTokens();
         }
-        return new QnAResponse(answer, sessionId, extractCitations(chatResponse), modelUsed, tokensUsed);
+        // citations 直接从检索结果映射，无需再查数据库
+        List<Citation> citations = hits.stream()
+                .map(h -> new Citation(h.chunkId(), h.documentId(), h.documentTitle(),
+                        h.excerpt(), h.pageNumber(), h.score()))
+                .toList();
+        return new QnAResponse(answer, sessionId, citations, modelUsed, tokensUsed);
     }
 
     /**
@@ -74,44 +86,34 @@ public class QnAServiceImpl implements QnAService {
      */
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
+        List<SearchHit> hits = hybridSearchService.search(spaceId,
+                new SearchRequest(req.question(), req.topK(), req.modelProvider(), null)).hits();
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        FilterExpressionBuilder b = new FilterExpressionBuilder();
-        SearchRequest searchReq = SearchRequest.builder()
-                .topK(req.topK())
-                .filterExpression(b.eq("spaceId", spaceId.toString()).build()).build();
-        QuestionAnswerAdvisor qaAdvisor = QuestionAnswerAdvisor.builder(vectorStore)
-                .searchRequest(searchReq).build();
-        return chatClient.prompt().advisors(qaAdvisor).user(req.question())
+        return chatClient.prompt()
+                .system(buildSystemPrompt(hits))
+                .user(req.question())
                 .stream().content();
     }
 
-    private List<Citation> extractCitations(ChatResponse chatResponse) {
-        try {
-            Object docs = chatResponse.getMetadata().get(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
-            if (docs instanceof List<?> docList) {
-                return docList.stream().filter(d -> d instanceof Document)
-                        .map(d -> (Document) d)
-                        .map(doc -> {
-                            String docIdStr = (String) doc.getMetadata().get("documentId");
-                            UUID documentId = docIdStr != null ? UUID.fromString(docIdStr) : null;
-                            String title = documentId != null
-                                    ? documentMapper.findByIdAndDeletedAtIsNull(documentId)
-                                            .map(com.enterprise.kb.document.model.Document::getTitle)
-                                            .orElse("Unknown") : "Unknown";
-                            Object pageNum = doc.getMetadata().get("page_number");
-                            Integer page = pageNum != null ? Integer.parseInt(pageNum.toString()) : null;
-                            double score = doc.getScore() != null ? doc.getScore() : 0.0;
-                            return new Citation(doc.getId(), documentId, title,
-                                    truncate(doc.getText(), 200), page, score);
-                        }).toList();
-            }
-        } catch (Exception e) {
-            log.debug("Could not extract citations: {}", e.getMessage());
-        }
-        return List.of();
-    }
+    /**
+     * 将混合检索结果拼装成 RAG system prompt，注入知识库上下文。
+     * 检索为空时告知 LLM 无相关文档，避免幻觉。
+     */
+    private String buildSystemPrompt(List<SearchHit> hits) {
+        String context = hits.isEmpty()
+                ? "（未检索到相关文档内容）"
+                : hits.stream()
+                        .map(h -> "来源：%s（第%s页）\n内容：%s".formatted(
+                                h.documentTitle(),
+                                h.pageNumber() != null ? h.pageNumber() : "未知",
+                                h.excerpt()))
+                        .collect(Collectors.joining("\n---\n"));
+        return """
+                你是一个专业的知识库问答助手。请严格根据以下参考文档内容回答用户问题。
+                如果参考文档中没有足够的信息，请明确说明无法从知识库中找到相关答案，不要编造内容。
 
-    private String truncate(String text, int maxLen) {
-        return text == null ? "" : (text.length() <= maxLen ? text : text.substring(0, maxLen) + "…");
+                参考文档：
+                %s
+                """.formatted(context);
     }
 }

@@ -24,9 +24,8 @@ import org.springframework.context.annotation.Primary;
  *
  * <p><b>Bean 命名约定：</b>
  * <ul>
- *   <li>ChatClient：{@code minimaxChatClient}、{@code openaiChatClient}、
- *       {@code anthropicChatClient}</li>
- *   <li>EmbeddingModel：{@code minimaxEmbeddingModel}、{@code openaiEmbeddingModel}</li>
+ *   <li>ChatClient：{@code dashscopeChatClient}、{@code minimaxChatClient}</li>
+ *   <li>EmbeddingModel：{@code dashscopeEmbeddingModel}、{@code minimaxEmbeddingModel}</li>
  * </ul>
  *
  * <p><b>向量维度：</b>当前统一使用 1536 维（兼容 MiniMax embo-01 和 OpenAI
@@ -36,40 +35,23 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class AiModelConfig {
 
-    // ---- DashScope（默认提供商，通过 OpenAI 兼容接口） ----
+    // ---- DashScope（默认提供商，Spring AI Alibaba 原生接口） ----
 
     /**
      * 创建 DashScope 的 {@link ChatClient}（通义千问），用于问答生成。
      *
-     * <p>仅当配置文件中存在 {@code spring.ai.openai.api-key} 时生效。
+     * <p>仅当配置文件中存在 {@code spring.ai.dashscope.api-key} 时生效。
      * 标注 {@link Primary} 使其成为未指定提供商时的默认 ChatClient。
      *
-     * @param openAiChatModel Spring AI 自动装配的 OpenAI-compatible ChatModel
+     * @param dashScopeChatModel Spring AI Alibaba 自动装配的 DashScope ChatModel
      * @return 封装了 DashScope 模型的 {@link ChatClient}
      */
     @Bean("dashscopeChatClient")
     @Primary
-    @ConditionalOnProperty("spring.ai.openai.api-key")
+    @ConditionalOnProperty("spring.ai.dashscope.api-key")
     public ChatClient dashscopeChatClient(
-            @Qualifier("openAiChatModel") ChatModel openAiChatModel) {
-        return ChatClient.builder(openAiChatModel).build();
-    }
-
-    /**
-     * 创建 DashScope 的 {@link EmbeddingModel}（text-embedding-v2，1536 维），用于文档向量化和查询向量化。
-     *
-     * <p>仅当配置文件中存在 {@code spring.ai.openai.api-key} 时生效。
-     * 标注 {@link Primary} 使其成为未指定提供商时的默认嵌入模型。
-     *
-     * @param openAiEmbeddingModel Spring AI 自动装配的 OpenAI-compatible EmbeddingModel
-     * @return DashScope EmbeddingModel 实例
-     */
-    @Bean("dashscopeEmbeddingModel")
-    @Primary
-    @ConditionalOnProperty("spring.ai.openai.api-key")
-    public EmbeddingModel dashscopeEmbeddingModel(
-            @Qualifier("openAiEmbeddingModel") EmbeddingModel openAiEmbeddingModel) {
-        return openAiEmbeddingModel;
+            @Qualifier("dashscopeChatModel") ChatModel dashScopeChatModel) {
+        return ChatClient.builder(dashScopeChatModel).build();
     }
 
     // ---- MiniMax ----

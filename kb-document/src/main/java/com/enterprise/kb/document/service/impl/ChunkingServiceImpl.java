@@ -69,7 +69,9 @@ public class ChunkingServiceImpl implements ChunkingService {
 
                 String chunkText = encoding.decode(window).trim();
                 if (chunkText.length() > MIN_CHUNK_LENGTH) {
-                    Document chunk = new Document(chunkText, new HashMap<>(doc.getMetadata()));
+                    // 显式指定 UUID，使 Milvus ID 与 PostgreSQL document_chunks.id 保持一致，避免混合搜索重复
+                    String chunkId = UUID.randomUUID().toString();
+                    Document chunk = new Document(chunkId, chunkText, new HashMap<>(doc.getMetadata()));
                     chunk.getMetadata().put("documentId", documentId.toString());
                     chunk.getMetadata().put("spaceId", spaceId.toString());
                     chunk.getMetadata().put("chunkIndex", chunkIndex++);

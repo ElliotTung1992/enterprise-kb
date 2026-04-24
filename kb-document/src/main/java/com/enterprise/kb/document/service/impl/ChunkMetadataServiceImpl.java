@@ -41,13 +41,13 @@ public class ChunkMetadataServiceImpl implements ChunkMetadataService {
         for (int i = 0; i < chunks.size(); i++) {
             Document chunk = chunks.get(i);
             DocumentChunk entity = new DocumentChunk();
-            entity.setId(UUID.randomUUID());
+            // 复用 Milvus Document ID，与 PostgreSQL 主键保持一致，确保混合搜索能正确去重
+            entity.setId(UUID.fromString(chunk.getId()));
+            entity.setMilvusId(chunk.getId());
             entity.setDocumentId(documentId);
             entity.setChunkIndex(i);
             entity.setContent(chunk.getText());
             entity.setEmbeddingModel(embeddingModel);
-            Object milvusId = chunk.getMetadata().get("id");
-            if (milvusId != null) entity.setMilvusId(milvusId.toString());
             Object pageNum = chunk.getMetadata().get("page_number");
             if (pageNum != null) entity.setPageNumber(Integer.parseInt(pageNum.toString()));
             entities.add(entity);
