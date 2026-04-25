@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.user.mapper.McpApiKeyMapper">
+
+    <resultMap id="McpApiKeyResultMap" type="com.enterprise.kb.user.model.McpApiKey">
+        <id     property="id"         column="id"/>
+        <result property="userId"     column="user_id"/>
+        <result property="keyHash"    column="key_hash"/>
+        <result property="keyPrefix"  column="key_prefix"/>
+        <result property="name"       column="name"/>
+        <result property="expiresAt"  column="expires_at"/>
+        <result property="createdAt"  column="created_at"/>
+        <result property="deletedAt"  column="deleted_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="McpApiKeyResultMap">
+        SELECT * FROM mcp_api_keys WHERE id = #{id,jdbcType=OTHER}
+    </select>
+
+    <select id="findUserIdByKeyHash" resultType="java.util.UUID">
+        SELECT user_id FROM mcp_api_keys
+        WHERE key_hash = #{keyHash}
+          AND deleted_at IS NULL
+          AND (expires_at IS NULL OR expires_at > NOW())
+        LIMIT 1
+    </select>
+
+    <select id="findActiveByUserId" resultMap="McpApiKeyResultMap">
+        SELECT * FROM mcp_api_keys
+        WHERE user_id = #{userId,jdbcType=OTHER}
+          AND deleted_at IS NULL
+        ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO mcp_api_keys (id, user_id, key_hash, key_prefix, name, expires_at, created_at)
+        VALUES (
+            #{id,jdbcType=OTHER},
+            #{userId,jdbcType=OTHER},
+            #{keyHash},
+            #{keyPrefix},
+            #{name},
+            #{expiresAt},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="softDelete">
+        UPDATE mcp_api_keys
+        SET deleted_at = NOW()
+        WHERE id = #{id,jdbcType=OTHER}
+          AND user_id = #{userId,jdbcType=OTHER}
+          AND deleted_at IS NULL
+    </update>
+
+    <delete id="deleteByUserId">
+        DELETE FROM mcp_api_keys WHERE user_id = #{userId,jdbcType=OTHER}
+    </delete>
+
+</mapper>

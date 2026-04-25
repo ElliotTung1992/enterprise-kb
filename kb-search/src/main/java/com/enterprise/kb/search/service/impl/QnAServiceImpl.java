@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.search.service.QnAService;
 import com.enterprise.kb.search.service.HybridSearchService;
+import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.Citation;
@@ -34,6 +35,7 @@ public class QnAServiceImpl implements QnAService {
 
     private final ModelProviderResolver modelProviderResolver;
     private final HybridSearchService hybridSearchService;
+    private final QueryRewriteService queryRewriteService;
     private final RedisChatMemory redisChatMemory;
 
     /**
@@ -47,9 +49,11 @@ public class QnAServiceImpl implements QnAService {
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
 
+        // Pre-retrieval：改写查询，提升检索召回质量；改写结果仅用于检索，原始问题仍发给 LLM
+        String retrievalQuery = queryRewriteService.rewrite(req.question());
         // 混合检索（语义 + 关键词 RRF 融合），比纯向量检索召回更全面
         List<SearchHit> hits = hybridSearchService.search(spaceId,
-                new SearchRequest(req.question(), req.topK(), req.modelProvider(), null)).hits();
+                new SearchRequest(retrievalQuery, req.topK(), req.modelProvider(), null)).hits();
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         // 按 sessionId 加载/保存多轮对话历史；MessageChatMemoryAdvisor 在请求前注入历史，在响应后自动存储
@@ -86,8 +90,9 @@ public class QnAServiceImpl implements QnAService {
      */
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
+        String retrievalQuery = queryRewriteService.rewrite(req.question());
         List<SearchHit> hits = hybridSearchService.search(spaceId,
-                new SearchRequest(req.question(), req.topK(), req.modelProvider(), null)).hits();
+                new SearchRequest(retrievalQuery, req.topK(), req.modelProvider(), null)).hits();
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         return chatClient.prompt()
                 .system(buildSystemPrompt(hits))
