@@ -18,8 +18,10 @@ body { visibility: hidden; }
 .doc-row:hover { background: #f8fafc; }
 .doc-row .remove-btn { opacity: 0; transition: opacity .15s; }
 .doc-row:hover .remove-btn { opacity: 1; }
-#add-doc-results .doc-search-item { cursor: pointer; padding: .4rem .75rem; border-radius: .4rem; transition: background .1s; }
+#add-doc-results .doc-search-item { cursor: pointer; padding: .45rem .75rem; transition: background .1s; border-bottom: 1px solid #f1f5f9; }
+#add-doc-results .doc-search-item:last-child { border-bottom: none; }
 #add-doc-results .doc-search-item:hover { background: #eef2ff; }
+#add-doc-results .doc-search-item.already-linked { opacity: .45; cursor: not-allowed; pointer-events: none; }
 .merge-tag-option { cursor: pointer; padding: .4rem .75rem; border-radius: .4rem; transition: background .1s; }
 .merge-tag-option:hover { background: #fff7ed; }
 .merge-tag-option.selected-merge { background: #fef3c7; border: 1px solid #fbbf24; }
@@ -152,14 +154,26 @@ body { visibility: hidden; }
 
             <!-- Tab: 关联文档 -->
             <div id="tab-docs" class="tab-content-custom d-none">
-              <!-- Add document search -->
-              <div class="d-flex gap-2 mb-3">
-                <input type="text" class="form-control form-control-sm" id="doc-search-input" placeholder="搜索文档名称后添加关联…">
-                <button class="btn btn-sm btn-outline-primary flex-shrink-0" id="btn-doc-search">
-                  <i class="bi bi-search me-1"></i>搜索
-                </button>
+              <!-- Add document dropdown -->
+              <div class="mb-3">
+                <label class="form-label fw-semibold small">添加文档关联</label>
+                <div class="position-relative" id="doc-picker-wrap">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" class="form-control border-start-0" id="doc-search-input"
+                           placeholder="点击或输入文档名称筛选…"
+                           autocomplete="off">
+                    <span class="input-group-text bg-white text-muted small" id="doc-picker-count" style="min-width:60px;justify-content:center"></span>
+                  </div>
+                  <!-- Dropdown list -->
+                  <div id="add-doc-results"
+                       style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;
+                              max-height:200px;overflow-y:auto;background:#fff;
+                              border:1px solid #c7d2fe;border-top:none;border-radius:0 0 .5rem .5rem;
+                              box-shadow:0 4px 12px rgba(79,70,229,.12)">
+                  </div>
+                </div>
               </div>
-              <div id="add-doc-results" class="border rounded p-1 mb-3 d-none" style="max-height:160px;overflow-y:auto"></div>
 
               <!-- Associated documents list -->
               <div class="d-flex align-items-center justify-content-between mb-2">
@@ -297,6 +311,9 @@ async function loadSpaces() {
   if (sel.value) loadTagTree(sel.value);
   sel.addEventListener('change', () => {
     selectedTagId = null;
+    allSpaceDocs = [];
+    spaceDocsLoaded = '';
+    document.getElementById('doc-picker-count').textContent = '';
     showEmptyDetail();
     loadTagTree(sel.value);
   });
@@ -396,7 +413,7 @@ function selectTag(tagId) {
 
   // Reset doc search
   document.getElementById('doc-search-input').value = '';
-  document.getElementById('add-doc-results').classList.add('d-none');
+  hideDocPicker();
 
   // Reset merge
   mergeTargetId = null;
@@ -485,6 +502,11 @@ document.getElementById('btn-confirm-delete-tag').addEventListener('click', asyn
 
 // ── Associated documents ──────────────────────────────────────────────────
 
+let linkedDocIds = new Set();   // IDs already linked to current tag
+let allSpaceDocs = [];          // all docs loaded for current space (picker cache)
+let spaceDocsLoaded = '';       // spaceId for which allSpaceDocs was loaded
+let docPickerDebounce = null;
+
 async function loadTagDocuments() {
   if (!selectedTagId) return;
   const spaceId = document.getElementById('space-select').value;
@@ -493,6 +515,7 @@ async function loadTagDocuments() {
   try {
     const res = await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}/documents`);
     const docs = res.data || [];
+    linkedDocIds = new Set(docs.map(d => d.documentId));
     document.getElementById('docs-tab-badge').textContent = docs.length || '';
     document.getElementById('detail-doc-count').textContent = docs.length ? `${docs.length} 篇文档` : '';
     if (!docs.length) {
@@ -501,10 +524,14 @@ async function loadTagDocuments() {
     }
     list.innerHTML = docs.map(d => `
       <div class="doc-row d-flex align-items-center gap-2 py-2 px-1">
-        <i class="${mimeIcon(d.mimeType)} text-muted flex-shrink-0"></i>
+        <i class="${mimeIcon(d.mimeType)} flex-shrink-0"></i>
         <div class="flex-grow-1 overflow-hidden">
           <div class="small fw-semibold text-truncate">${escHtml(d.title || d.originalFilename)}</div>
-          <div class="text-muted" style="font-size:.72rem">${escHtml(d.mimeType||'')} · ${formatBytes(d.fileSizeBytes)} · ${d.autoTagged ? '<span class="text-secondary">自动打标</span>' : '手动关联'}</div>
+          <div class="text-muted" style="font-size:.72rem">
+            ${escHtml(d.mimeType||'')} · ${formatBytes(d.fileSizeBytes)}
+            · ${d.autoTagged ? '<span class="badge bg-light text-secondary border" style="font-size:.65rem">自动打标</span>'
+                              : '<span class="badge bg-light text-secondary border" style="font-size:.65rem">手动</span>'}
+          </div>
         </div>
         <button class="btn btn-xs btn-outline-danger remove-btn flex-shrink-0" title="移除关联"
           onclick="removeDocFromTag('${d.documentId}','${escAttr(d.title||d.originalFilename)}')">
@@ -526,43 +553,88 @@ async function removeDocFromTag(documentId, docTitle) {
   } catch (err) { showToast(err.message, 'error'); }
 }
 
-// Document search + add
-let docSearchDebounce = null;
-document.getElementById('btn-doc-search').addEventListener('click', doDocSearch);
-document.getElementById('doc-search-input').addEventListener('keydown', e => { if (e.key === 'Enter') doDocSearch(); });
-document.getElementById('doc-search-input').addEventListener('input', () => {
-  clearTimeout(docSearchDebounce);
-  docSearchDebounce = setTimeout(doDocSearch, 400);
+// ── Document picker (下拉联动) ────────────────────────────────────────────
+
+async function ensureSpaceDocsLoaded() {
+  const spaceId = document.getElementById('space-select').value;
+  if (!spaceId) return;
+  if (spaceDocsLoaded === spaceId && allSpaceDocs.length) return; // cache hit
+  document.getElementById('doc-picker-count').textContent = '加载中…';
+  try {
+    // Load up to 200 docs; no keyword — full list
+    const res = await apiFetch(`/spaces/${spaceId}/documents?size=200&page=0`);
+    allSpaceDocs = res.data?.content || [];
+    spaceDocsLoaded = spaceId;
+    document.getElementById('doc-picker-count').textContent = `共 ${allSpaceDocs.length} 个`;
+  } catch {
+    allSpaceDocs = [];
+    document.getElementById('doc-picker-count').textContent = '';
+  }
+}
+
+function showDocPicker() {
+  renderDocPickerList(document.getElementById('doc-search-input').value.trim());
+  document.getElementById('add-doc-results').style.display = 'block';
+}
+
+function hideDocPicker() {
+  document.getElementById('add-doc-results').style.display = 'none';
+}
+
+function renderDocPickerList(keyword) {
+  const box = document.getElementById('add-doc-results');
+  const lc = keyword.toLowerCase();
+  const filtered = keyword
+    ? allSpaceDocs.filter(d => (d.title || d.originalFilename || '').toLowerCase().includes(lc))
+    : allSpaceDocs;
+  if (!filtered.length) {
+    box.innerHTML = `<div class="text-muted small text-center py-2">${keyword ? '无匹配文档' : '该空间暂无文档'}</div>`;
+    return;
+  }
+  box.innerHTML = filtered.map(d => {
+    const linked = linkedDocIds.has(d.id);
+    return `<div class="doc-search-item d-flex align-items-center gap-2 ${linked ? 'already-linked' : ''}"
+         ${linked ? '' : `onclick="addDocToTag('${d.id}','${escAttr(d.title||d.originalFilename)}')"`}>
+      <i class="${mimeIcon(d.mimeType)} flex-shrink-0" style="font-size:.85rem"></i>
+      <span class="small text-truncate flex-grow-1">${escHtml(d.title || d.originalFilename)}</span>
+      ${linked
+        ? '<i class="bi bi-check-circle-fill text-success flex-shrink-0" title="已关联"></i>'
+        : '<i class="bi bi-plus-circle text-primary flex-shrink-0"></i>'}
+    </div>`;
+  }).join('');
+}
+
+const docInput = document.getElementById('doc-search-input');
+
+docInput.addEventListener('focus', async () => {
+  await ensureSpaceDocsLoaded();
+  showDocPicker();
 });
 
-async function doDocSearch() {
-  const keyword = document.getElementById('doc-search-input').value.trim();
-  const spaceId = document.getElementById('space-select').value;
-  const box = document.getElementById('add-doc-results');
-  if (!keyword) { box.classList.add('d-none'); return; }
-  box.classList.remove('d-none');
-  box.innerHTML = '<div class="text-muted small text-center py-1">搜索中…</div>';
-  try {
-    const res = await apiFetch(`/spaces/${spaceId}/documents?keyword=${encodeURIComponent(keyword)}&status=READY&size=10`);
-    const docs = res.data?.items || res.data?.content || [];
-    if (!docs.length) { box.innerHTML = '<div class="text-muted small text-center py-1">未找到文档</div>'; return; }
-    box.innerHTML = docs.map(d => `
-      <div class="doc-search-item d-flex align-items-center gap-2" onclick="addDocToTag('${d.id}','${escAttr(d.title||d.originalFilename)}')">
-        <i class="${mimeIcon(d.mimeType)} text-muted flex-shrink-0" style="font-size:.85rem"></i>
-        <span class="small text-truncate flex-grow-1">${escHtml(d.title || d.originalFilename)}</span>
-        <i class="bi bi-plus-circle text-primary flex-shrink-0"></i>
-      </div>`).join('');
-  } catch (err) { box.innerHTML = `<div class="text-danger small py-1 px-2">${escHtml(err.message)}</div>`; }
-}
+docInput.addEventListener('input', () => {
+  clearTimeout(docPickerDebounce);
+  docPickerDebounce = setTimeout(() => renderDocPickerList(docInput.value.trim()), 200);
+  document.getElementById('add-doc-results').style.display = 'block';
+});
+
+docInput.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { hideDocPicker(); docInput.blur(); }
+});
+
+// Close when clicking outside
+document.addEventListener('click', e => {
+  if (!document.getElementById('doc-picker-wrap').contains(e.target)) hideDocPicker();
+});
 
 async function addDocToTag(documentId, docTitle) {
   const spaceId = document.getElementById('space-select').value;
   try {
     await apiFetch(`/spaces/${spaceId}/tags/${selectedTagId}/documents/${documentId}`, { method: 'POST' });
     showToast(`已关联「${docTitle}」`);
-    document.getElementById('doc-search-input').value = '';
-    document.getElementById('add-doc-results').classList.add('d-none');
-    loadTagDocuments();
+    docInput.value = '';
+    hideDocPicker();
+    await loadTagDocuments();
+    renderDocPickerList(''); // refresh linked state
   } catch (err) { showToast(err.message, 'error'); }
 }
 
