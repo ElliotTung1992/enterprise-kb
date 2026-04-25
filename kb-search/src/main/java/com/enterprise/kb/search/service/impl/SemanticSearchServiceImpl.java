@@ -40,11 +40,13 @@ public class SemanticSearchServiceImpl implements SemanticSearchService {
     @Override
     public SearchResponse search(UUID spaceId, SearchRequest req) {
         long start = System.currentTimeMillis();
+        // HyDE 场景下使用假设文档向量检索，否则退回原始 query
+        String effectiveQuery = req.semanticQuery() != null ? req.semanticQuery() : req.query();
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         var filter = b.eq("spaceId", spaceId.toString()).build();
         List<Document> results = vectorStore.similaritySearch(
                 org.springframework.ai.vectorstore.SearchRequest.builder()
-                        .query(req.query()).topK(req.topK()).filterExpression(filter).build());
+                        .query(effectiveQuery).topK(req.topK()).filterExpression(filter).build());
         List<SearchHit> hits = results.stream().map(doc -> {
             String docIdStr = (String) doc.getMetadata().get("documentId");
             UUID documentId = docIdStr != null ? UUID.fromString(docIdStr) : null;

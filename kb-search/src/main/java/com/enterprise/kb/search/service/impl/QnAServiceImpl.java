@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.search.service.QnAService;
 import com.enterprise.kb.search.service.HybridSearchService;
+import com.enterprise.kb.search.service.HydeService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
@@ -36,6 +37,7 @@ public class QnAServiceImpl implements QnAService {
     private final ModelProviderResolver modelProviderResolver;
     private final HybridSearchService hybridSearchService;
     private final QueryRewriteService queryRewriteService;
+    private final HydeService hydeService;
     private final RedisChatMemory redisChatMemory;
 
     /**
@@ -49,11 +51,13 @@ public class QnAServiceImpl implements QnAService {
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
 
-        // Pre-retrieval：改写查询，提升检索召回质量；改写结果仅用于检索，原始问题仍发给 LLM
+        // Pre-retrieval 阶段：查询改写 + HyDE 假设文档生成，两者并行提升检索质量
         String retrievalQuery = queryRewriteService.rewrite(req.question());
-        // 混合检索（语义 + 关键词 RRF 融合），比纯向量检索召回更全面
+        // HyDE：用假设文档向量做语义检索；关键词检索仍使用改写后的 retrievalQuery
+        String hypotheticalDoc = hydeService.generateHypotheticalDocument(retrievalQuery);
+        // 混合检索：语义路用假设文档(semanticQuery)，关键词路用改写查询(query)
         List<SearchHit> hits = hybridSearchService.search(spaceId,
-                new SearchRequest(retrievalQuery, req.topK(), req.modelProvider(), null)).hits();
+                new SearchRequest(retrievalQuery, req.topK(), req.modelProvider(), null, hypotheticalDoc)).hits();
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         // 按 sessionId 加载/保存多轮对话历史；MessageChatMemoryAdvisor 在请求前注入历史，在响应后自动存储
@@ -91,8 +95,9 @@ public class QnAServiceImpl implements QnAService {
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
         String retrievalQuery = queryRewriteService.rewrite(req.question());
+        String hypotheticalDoc = hydeService.generateHypotheticalDocument(retrievalQuery);
         List<SearchHit> hits = hybridSearchService.search(spaceId,
-                new SearchRequest(retrievalQuery, req.topK(), req.modelProvider(), null)).hits();
+                new SearchRequest(retrievalQuery, req.topK(), req.modelProvider(), null, hypotheticalDoc)).hits();
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         return chatClient.prompt()
                 .system(buildSystemPrompt(hits))
