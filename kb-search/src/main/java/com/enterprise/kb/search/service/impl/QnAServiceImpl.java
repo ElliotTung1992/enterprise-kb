@@ -24,6 +24,7 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * 问答服务实现，RAG 模式：先向量检索相关文档块，再调用 LLM 生成答案。
@@ -86,9 +87,12 @@ public class QnAServiceImpl implements QnAService {
             if (usage != null) tokensUsed = (int) usage.getTotalTokens();
         }
         // citations 直接从检索结果映射，无需再查数据库
-        List<Citation> citations = hits.stream()
-                .map(h -> new Citation(h.chunkId(), h.documentId(), h.documentTitle(),
-                        h.excerpt(), h.pageNumber(), h.score()))
+        List<Citation> citations = IntStream.range(0, hits.size())
+                .mapToObj(i -> {
+                    SearchHit h = hits.get(i);
+                    return new Citation(i + 1, h.chunkId(), h.documentId(),
+                            h.documentTitle(), h.excerpt(), h.pageNumber(), h.score());
+                })
                 .toList();
         return new QnAResponse(answer, sessionId, citations, modelUsed, tokensUsed);
     }

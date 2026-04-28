@@ -50,7 +50,7 @@ public class AiModelConfig {
     @Primary
     @ConditionalOnProperty("spring.ai.dashscope.api-key")
     public ChatClient dashscopeChatClient(
-            @Qualifier("dashscopeChatModel") ChatModel dashScopeChatModel) {
+            @Qualifier("dashScopeChatModel") ChatModel dashScopeChatModel) {
         return ChatClient.builder(dashScopeChatModel).build();
     }
 
@@ -84,6 +84,25 @@ public class AiModelConfig {
     public EmbeddingModel minimaxEmbeddingModel(
             @Qualifier("miniMaxEmbeddingModel") EmbeddingModel miniMaxEmbeddingModel) {
         return miniMaxEmbeddingModel;
+    }
+
+    /**
+     * 系统主 EmbeddingModel，供 MilvusVectorStore 自动装配时使用（@Primary 选择）。
+     *
+     * <p>使用 DashScope text-embedding-v2（1536 维），与 MiniMax embo-01 维度一致。
+     * 这里做一层代理是为了让 Milvus 自动装配找到唯一主模型，
+     * 同时保留 {@code dashscopeEmbeddingModel}（来自自动配置）供
+     * {@link ModelProviderResolver} 按名称注入。
+     *
+     * @param dashscopeEmbeddingModel DashScope 自动配置的 EmbeddingModel
+     * @return DashScope EmbeddingModel 实例
+     */
+    @Bean("primaryEmbeddingModel")
+    @Primary
+    @ConditionalOnProperty("spring.ai.dashscope.api-key")
+    public EmbeddingModel primaryEmbeddingModel(
+            @Qualifier("dashscopeEmbeddingModel") EmbeddingModel dashscopeEmbeddingModel) {
+        return dashscopeEmbeddingModel;
     }
 
 }

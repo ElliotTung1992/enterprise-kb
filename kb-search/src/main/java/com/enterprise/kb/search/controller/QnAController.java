@@ -3,6 +3,7 @@ package com.enterprise.kb.search.controller;
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
+import com.enterprise.kb.search.service.AgenticQnAService;
 import com.enterprise.kb.search.service.QnAService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import java.util.UUID;
 public class QnAController {
 
     private final QnAService qnAService;
+    private final AgenticQnAService agenticQnAService;
 
     /**
      * 同步 RAG 问答
@@ -37,12 +39,29 @@ public class QnAController {
      * @param req     问答请求体，包含 question、sessionId（可选）、modelProvider（可选）、topK
      * @return 完整的问答响应，含答案正文和引用来源列表
      */
-    @PostMapping("/ask")
+    @PostMapping("/ask/advanced")
     @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
     public ResponseEntity<ApiResponse<QnAResponse>> ask(
             @PathVariable UUID spaceId,
             @Valid @RequestBody QnARequest req) {
         return ResponseEntity.ok(ApiResponse.ok(qnAService.ask(spaceId, req)));
+    }
+
+    /**
+     * Agentic RAG 问答
+     * <p>LLM 作为 Agent 自主决定检索策略，通过 searchKnowledgeBase 工具进行多轮检索，
+     * 适合复杂问题、多跳推理等场景。citations 汇总所有轮次的检索结果。</p>
+     *
+     * @param spaceId 空间 ID
+     * @param req     问答请求体，同 {@code /ask} 接口
+     * @return 问答响应，含 Agent 综合多轮检索后生成的答案及所有引用来源
+     */
+    @PostMapping("/ask")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    public ResponseEntity<ApiResponse<QnAResponse>> askAgentic(
+            @PathVariable UUID spaceId,
+            @Valid @RequestBody QnARequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(agenticQnAService.ask(spaceId, req)));
     }
 
     /**
