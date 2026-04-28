@@ -8,6 +8,7 @@
 |------|------|
 | `docs/operation.md` | 用户操作手册：功能说明、API 接口速查、部署运维 |
 | `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，含全部 16 张表） |
+| `docs/plan.md` | 可扩展内容与优化点规划 |
 
 ---
 
