@@ -52,10 +52,7 @@ spring:
       api-key: ${MINIMAX_API_KEY:sk-cp-aDkY31-Ku2XhenfhqDUVWWhtHaUyVVxx9k2aIrJ_tUyrFuO1DNlNHtp88fknYEIPZUWhnsFz99Qe5-h_JPkEdyb56oI9RpuzdHByb7Ii4fteJO6RudmAocg}
       chat:
         options:
-          model: abab6.5s-chat
-      embedding:
-        options:
-          model: embo-01
+          model: MiniMax-M2.7-highspeed
 
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:sk-361580ba837c439c81c9e93caf43abb1}
@@ -121,8 +118,9 @@ enterprise:
       access-token-expiry-minutes: 60
       refresh-token-expiry-days: 30
     ai:
-      default-provider: DASHSCOPE
+      default-provider: MINIMAX
       default-embedding-provider: DASHSCOPE
+      minimax-openai-base-url: ${MINIMAX_OPENAI_BASE_URL:https://api.minimax.chat}
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
     document:

@@ -3,7 +3,11 @@ package com.enterprise.kb.search.ai;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,6 +42,12 @@ import org.springframework.context.annotation.Primary;
 @Configuration
 public class AiModelConfig {
 
+    @Value("${spring.ai.minimax.api-key:}")
+    private String minimaxApiKey;
+
+    @Value("${enterprise.kb.ai.minimax-openai-base-url:https://api.minimax.chat/v1}")
+    private String minimaxOpenAiBaseUrl;
+
     // ---- DashScope（默认提供商，Spring AI Alibaba 原生接口） ----
 
     /**
@@ -60,33 +70,69 @@ public class AiModelConfig {
     // ---- MiniMax ----
 
     /**
-     * 创建 MiniMax 的 {@link ChatClient}，用于问答生成。
+     * 创建 MiniMax 的 {@link ChatClient}，通过 MiniMax 的 OpenAI 兼容接口调用。
+     *
+     * <p>使用 {@code spring-ai-openai} 适配器而非原生 MiniMax 适配器，
+     * 解决原生适配器 tool calling 响应解析异常的问题，确保 ReactAgent 正常运行。
      *
      * <p>仅当配置文件中存在 {@code spring.ai.minimax.api-key} 时生效。
      *
-     * @param miniMaxChatModel Spring AI 自动装配的 MiniMax ChatModel
-     * @return 封装了 MiniMax 模型的 {@link ChatClient}
+     * @return 封装了 MiniMax 模型（via OpenAI 兼容接口）的 {@link ChatClient}
      */
     @Bean("minimaxChatClient")
     @ConditionalOnProperty("spring.ai.minimax.api-key")
-    public ChatClient minimaxChatClient(
-            @Qualifier("miniMaxChatModel") ChatModel miniMaxChatModel) {
-        return ChatClient.builder(miniMaxChatModel).build();
-    }
+    public ChatClient minimaxChatClient() {
 
-    /**
-     * 创建 MiniMax 的 {@link EmbeddingModel}（embo-01），用于文档向量化和查询向量化。
-     *
-     * <p>仅当配置文件中存在 {@code spring.ai.minimax.api-key} 时生效。
-     *
-     * @param miniMaxEmbeddingModel Spring AI 自动装配的 MiniMax EmbeddingModel
-     * @return MiniMax EmbeddingModel 实例
-     */
-    @Bean("minimaxEmbeddingModel")
-    @ConditionalOnProperty("spring.ai.minimax.api-key")
-    public EmbeddingModel minimaxEmbeddingModel(
-            @Qualifier("miniMaxEmbeddingModel") EmbeddingModel miniMaxEmbeddingModel) {
-        return miniMaxEmbeddingModel;
+        // 1. 定义一个拦截器，专门负责清洗 <think> 标签
+        org.springframework.http.client.ClientHttpRequestInterceptor cleanThinkInterceptor =
+                (request, body, execution) -> {
+                    org.springframework.http.client.ClientHttpResponse response = execution.execute(request, body);
+
+                    // 读取原始返回体
+                    java.io.InputStream bodyStream = response.getBody();
+                    String responseStr = org.springframework.util.StreamUtils.copyToString(bodyStream, java.nio.charset.StandardCharsets.UTF_8);
+
+                    // 核心逻辑：用正则表达式抹除 <think>...</think> 及其内部的所有内容
+                    // 使用 (?s) 确保可以跨越所有的转义换行符
+                    String cleanedStr = responseStr.replaceAll("(?s)<think>.*?</think>", "");
+
+                    byte[] cleanedBytes = cleanedStr.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+                    // 将清洗后的干净 JSON 重新包装回去
+                    return new org.springframework.http.client.ClientHttpResponse() {
+                        @Override @org.springframework.lang.NonNull
+                        public java.io.InputStream getBody() { return new java.io.ByteArrayInputStream(cleanedBytes); }
+                        @Override @org.springframework.lang.NonNull
+                        public org.springframework.http.HttpHeaders getHeaders() { return response.getHeaders(); }
+                        @Override @org.springframework.lang.NonNull
+                        public org.springframework.http.HttpStatusCode getStatusCode() throws java.io.IOException { return response.getStatusCode(); }
+                        @Override @org.springframework.lang.NonNull
+                        public String getStatusText() throws java.io.IOException { return response.getStatusText(); }
+                        @Override public void close() { response.close(); }
+                    };
+                };
+
+        // 2. 将拦截器注入到 RestClient 中
+        org.springframework.web.client.RestClient.Builder restClientBuilder =
+                org.springframework.web.client.RestClient.builder()
+                        .requestInterceptor(cleanThinkInterceptor);
+
+        // 3. 构建 OpenAiApi 时使用自定义的 RestClient
+        OpenAiApi openAiApi = OpenAiApi.builder()
+                .baseUrl(minimaxOpenAiBaseUrl)
+                .apiKey(minimaxApiKey)
+                .restClientBuilder(restClientBuilder)
+                .build();
+
+        // 4. 放心地把模型名字换回你套餐支持的 M2.7-highspeed
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(openAiApi)
+                .defaultOptions(OpenAiChatOptions.builder()
+                        .model("MiniMax-M2.7-highspeed")
+                        .build())
+                .build();
+
+        return ChatClient.builder(chatModel).build();
     }
 
     /**
