@@ -10,8 +10,10 @@ import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
 import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
+import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.service.AgenticQnAService;
 import com.enterprise.kb.search.service.HybridSearchService;
+import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.RerankService;
 import com.enterprise.kb.common.exception.KbException;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +51,7 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
     private final HybridSearchService hybridSearchService;
     private final RerankService rerankService;
     private final RedisChatMemory redisChatMemory;
+    private final QaChatSessionService qaChatSessionService;
 
     /** 工具单次检索召回数 */
     private static final int TOOL_RECALL_SIZE = 10;
@@ -147,8 +150,16 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                 .toList();
 
         log.info("Agentic RAG 完成：sessionId={}，引用文档块数={}", sessionId, citations.size());
-        return new QnAResponse(answer, sessionId, citations,
+        QnAResponse response = new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
+        // 异步持久化会话，失败不影响正常响应
+        try {
+            qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(),
+                    req.question(), answer);
+        } catch (Exception e) {
+            log.warn("保存会话记录失败：sessionId={}", sessionId, e);
+        }
+        return response;
     }
 
     /**

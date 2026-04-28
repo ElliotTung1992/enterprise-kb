@@ -1,8 +1,10 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.service.QnAService;
 import com.enterprise.kb.search.service.HybridSearchService;
 import com.enterprise.kb.search.service.HydeService;
+import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.service.RerankService;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
@@ -45,6 +47,7 @@ public class QnAServiceImpl implements QnAService {
     private final HydeService hydeService;
     private final RerankService rerankService;
     private final RedisChatMemory redisChatMemory;
+    private final QaChatSessionService qaChatSessionService;
 
     /**
      * 同步 RAG 问答。
@@ -94,7 +97,15 @@ public class QnAServiceImpl implements QnAService {
                             h.documentTitle(), h.excerpt(), h.pageNumber(), h.score());
                 })
                 .toList();
-        return new QnAResponse(answer, sessionId, citations, modelUsed, tokensUsed);
+        QnAResponse response = new QnAResponse(answer, sessionId, citations, modelUsed, tokensUsed);
+        // 异步持久化会话，失败不影响正常响应
+        try {
+            qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(),
+                    req.question(), answer);
+        } catch (Exception e) {
+            log.warn("保存会话记录失败：sessionId={}", sessionId, e);
+        }
+        return response;
     }
 
     /**

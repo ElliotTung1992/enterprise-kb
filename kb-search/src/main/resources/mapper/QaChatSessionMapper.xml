@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.search.mapper.QaChatSessionMapper">
+
+    <resultMap id="QaChatSessionResultMap" type="com.enterprise.kb.search.model.QaChatSession">
+        <id property="id" column="id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="title" column="title"/>
+        <result property="messageCount" column="message_count"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="QaChatSessionResultMap">
+        SELECT s.*,
+               (SELECT COUNT(*) FROM qa_messages m WHERE m.session_id = s.id) AS message_count
+        FROM qa_sessions s
+        WHERE s.id = #{id,jdbcType=OTHER}
+          AND s.deleted_at IS NULL
+    </select>
+
+    <select id="findBySpaceIdAndUserId" resultMap="QaChatSessionResultMap">
+        SELECT s.*,
+               (SELECT COUNT(*) FROM qa_messages m WHERE m.session_id = s.id) AS message_count
+        FROM qa_sessions s
+        WHERE s.space_id = #{spaceId,jdbcType=OTHER}
+          AND s.user_id  = #{userId,jdbcType=OTHER}
+          AND s.deleted_at IS NULL
+        ORDER BY s.updated_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO qa_sessions (id, space_id, user_id, title, created_at, updated_at)
+        VALUES (
+            #{id,jdbcType=OTHER},
+            #{spaceId,jdbcType=OTHER},
+            #{userId,jdbcType=OTHER},
+            #{title},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateTitle">
+        UPDATE qa_sessions
+        SET title = #{title}, updated_at = #{updatedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="updateUpdatedAt">
+        UPDATE qa_sessions
+        SET updated_at = #{updatedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="softDelete">
+        UPDATE qa_sessions
+        SET deleted_at = #{deletedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="existsByIdAndUserId" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM qa_sessions
+        WHERE id      = #{id,jdbcType=OTHER}
+          AND user_id = #{userId,jdbcType=OTHER}
+          AND deleted_at IS NULL
+    </select>
+
+</mapper>

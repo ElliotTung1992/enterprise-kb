@@ -4,10 +4,13 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+
 
 /**
  * AI 模型提供商的 Bean 声明配置。
@@ -87,22 +90,22 @@ public class AiModelConfig {
     }
 
     /**
-     * 系统主 EmbeddingModel，供 MilvusVectorStore 自动装配时使用（@Primary 选择）。
+     * BeanFactoryPostProcessor：在 bean 实例化之前将 {@code dashscopeEmbeddingModel} 设为 primary，
+     * 解决 MilvusVectorStore 面对多个 EmbeddingModel 候选时的注入歧义。
      *
-     * <p>使用 DashScope text-embedding-v2（1536 维），与 MiniMax embo-01 维度一致。
-     * 这里做一层代理是为了让 Milvus 自动装配找到唯一主模型，
-     * 同时保留 {@code dashscopeEmbeddingModel}（来自自动配置）供
-     * {@link ModelProviderResolver} 按名称注入。
-     *
-     * @param dashscopeEmbeddingModel DashScope 自动配置的 EmbeddingModel
-     * @return DashScope EmbeddingModel 实例
+     * <p>MiniMax 和 DashScope 自动配置各自注册了 EmbeddingModel，加上 AiModelConfig 手工声明的
+     * {@code minimaxEmbeddingModel}，共 3 个候选。Milvus 按类型注入时不知选哪个，直接设置
+     * {@code dashscopeEmbeddingModel.primary = true} 后 Spring 会优先选它，不再抛歧义异常。
+     * 其他 EmbeddingModel bean 仍可通过 {@code @Qualifier} 按名称注入，供 ModelProviderResolver 使用。
      */
-    @Bean("primaryEmbeddingModel")
-    @Primary
-    @ConditionalOnProperty("spring.ai.dashscope.api-key")
-    public EmbeddingModel primaryEmbeddingModel(
-            @Qualifier("dashscopeEmbeddingModel") EmbeddingModel dashscopeEmbeddingModel) {
-        return dashscopeEmbeddingModel;
+    @Bean
+    public static BeanFactoryPostProcessor embeddingModelPrimaryPostProcessor() {
+        return beanFactory -> {
+            if (!(beanFactory instanceof DefaultListableBeanFactory dlbf)) return;
+            if (dlbf.containsBeanDefinition("dashscopeEmbeddingModel")) {
+                dlbf.getBeanDefinition("dashscopeEmbeddingModel").setPrimary(true);
+            }
+        };
     }
 
 }
