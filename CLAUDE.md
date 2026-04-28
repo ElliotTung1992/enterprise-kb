@@ -20,7 +20,7 @@ kb-common → kb-auth → kb-user → kb-document / kb-search / kb-knowledge-gra
 | `kb-auth` | JWT 认证、登录注册、Token 刷新 |
 | `kb-user` | 用户管理、知识空间、权限校验 |
 | `kb-document` | 文档上传、解析、向量入库 |
-| `kb-search` | 关键词检索、语义检索、混合检索、问答 |
+| `kb-search` | 关键词检索、语义检索、混合检索、问答、**会话管理** |
 | `kb-knowledge-graph` | 标签管理、知识图谱、自动打标 |
 | `kb-app` | 启动入口、Bean 装配（AppConfig） |
 
@@ -222,7 +222,83 @@ User user = userMapper.findById(id)
 
 ---
 
-## 十一、Git 提交规范
+## 十一、问答会话管理
+
+### 数据模型
+
+会话元数据持久化到 PostgreSQL，对话上下文同时缓存到 Redis（TTL 24 小时）。
+
+**`qa_sessions` 表**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | UUID PK | 由后端在首次问答时生成，前端传 `sessionId` 延续 |
+| `space_id` | UUID | 所属知识空间 |
+| `user_id` | UUID | 会话所有者 |
+| `title` | VARCHAR(200) | 默认取首条问题（截断至 50 字符） |
+| `created_at` / `updated_at` | TIMESTAMPTZ | 创建 / 最后活跃时间 |
+| `deleted_at` | TIMESTAMPTZ | 软删除标记 |
+
+**`qa_messages` 表**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | UUID PK | 自动生成 |
+| `session_id` | UUID FK | 关联 qa_sessions（ON DELETE CASCADE） |
+| `role` | VARCHAR(20) | `user` 或 `assistant` |
+| `content` | TEXT | 消息正文 |
+| `created_at` | TIMESTAMPTZ | 消息时间 |
+
+### 会话 API
+
+所有接口均需空间级 `VIEWER` 权限（`@PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")`）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/v1/spaces/{spaceId}/qa/sessions` | 当前用户的会话列表（含消息数，按活跃时间倒序） |
+| `GET` | `/api/v1/spaces/{spaceId}/qa/sessions/{sessionId}/messages` | 指定会话的历史消息（仅所有者可访问） |
+| `PATCH` | `/api/v1/spaces/{spaceId}/qa/sessions/{sessionId}/title` | 修改会话标题，请求体 `{"title":"..."}` |
+| `DELETE` | `/api/v1/spaces/{spaceId}/qa/sessions/{sessionId}` | 软删除会话并清空对应 Redis 历史 |
+
+### 会话持久化机制
+
+每次问答（`/qa/ask` 或 `/qa/ask/advanced`）成功后，`QnAServiceImpl` / `AgenticQnAServiceImpl` 会调用 `QaChatSessionService.saveExchange()`：
+
+1. 首次调用时自动创建会话记录（title = 首条问题）
+2. 后续调用仅追加消息并刷新 `updated_at`
+3. 持久化失败以 WARN 日志记录，**不影响正常问答响应**
+
+### 前端交互
+
+- 空间切换时调用 `GET /sessions` 刷新侧边栏列表
+- 点击历史会话时调用 `GET /sessions/{id}/messages` 恢复对话记录
+- 删除会话调用 `DELETE /sessions/{id}` 同步清理后端和 Redis
+- 会话 `sessionId` 在问答响应中返回，前端持有后传给下一次请求实现多轮对话
+
+---
+
+## 十二、AI 多模型配置
+
+### 多 EmbeddingModel 冲突处理
+
+系统同时启用 DashScope 和 MiniMax，两个自动配置各自注册了 `EmbeddingModel` bean，加上 `AiModelConfig` 手工声明的 `minimaxEmbeddingModel`，共 3 个候选，导致 MilvusVectorStore 自动装配歧义。
+
+**解决方案**（`AiModelConfig.embeddingModelPrimaryPostProcessor`）：使用 `BeanFactoryPostProcessor` 在 bean 实例化前将 `dashscopeEmbeddingModel` 的 bean 定义设为 `primary = true`，Milvus 即可唯一选中它。其他 EmbeddingModel bean 仍可通过 `@Qualifier` 按名称注入，供 `ModelProviderResolver` 使用。
+
+> **注意**：若新增 AI 提供商并注册新的 `EmbeddingModel` bean，需在该 PostProcessor 中确认只有一个 bean 被标为 primary，否则启动报歧义错误。
+
+### ModelProviderResolver
+
+`ModelProviderResolver` 通过 `@Qualifier` 按名称注入各提供商的 `ChatClient` 和 `EmbeddingModel`，在运行时根据请求参数 `modelProvider` 动态切换：
+
+| 配置项 | 默认值 |
+|--------|--------|
+| `enterprise.kb.ai.default-provider` | `DASHSCOPE` |
+| `enterprise.kb.ai.default-embedding-provider` | `DASHSCOPE` |
+
+---
+
+## 十三、Git 提交规范
 
 提交信息格式：`<type>: <subject>`
 
@@ -255,5 +331,10 @@ refactor: 将 ServiceImpl 移至 service/impl 子包
 ```bash
 export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home
 export PATH=$JAVA_HOME/bin:$PATH
-mvn -f kb-app/pom.xml spring-boot:run
+# 修改了任意子模块代码后，必须先 install 更新本地仓库，再启动 kb-app
+mvn install -pl kb-search -am -DskipTests   # 以 kb-search 为例
+set -a && source .env && set +a
+mvn spring-boot:run -pl kb-app
 ```
+
+> **注意**：`mvn spring-boot:run -pl kb-app` 从 `~/.m2` 加载子模块 JAR。若直接运行而未先 `install`，改动不会生效。
