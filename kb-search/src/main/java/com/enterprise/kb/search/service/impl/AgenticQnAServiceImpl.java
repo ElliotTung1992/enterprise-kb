@@ -162,6 +162,9 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         return response;
     }
 
+    /** 单次工具返回的最大字符数，防止单次检索结果撑爆上下文 */
+    private static final int MAX_TOOL_RESULT_CHARS = 4000;
+
     /**
      * 将检索结果格式化为带编号的 LLM 可读文本，作为工具调用的返回值。
      * 编号与最终 citations 数组的 citationNumber 一一对应，LLM 在回答时用 [n] 引用。
@@ -170,15 +173,22 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         if (hits.isEmpty()) {
             return "未找到与「" + query + "」相关的文档内容。";
         }
-        return IntStream.range(0, hits.size())
-                .mapToObj(i -> {
-                    SearchHit h = hits.get(i);
-                    return "[%d] 来源：%s（第%s页）\n内容：%s".formatted(
-                            nums.get(i),
-                            h.documentTitle(),
-                            h.pageNumber() != null ? h.pageNumber() : "未知",
-                            h.excerpt());
-                })
-                .collect(Collectors.joining("\n---\n"));
+        StringBuilder sb = new StringBuilder();
+        int totalChars = 0;
+        for (int i = 0; i < hits.size(); i++) {
+            SearchHit h = hits.get(i);
+            String entry = "[%d] 来源：%s（第%s页）\n内容：%s\n---\n".formatted(
+                    nums.get(i),
+                    h.documentTitle(),
+                    h.pageNumber() != null ? h.pageNumber() : "未知",
+                    h.excerpt());
+            if (totalChars + entry.length() > MAX_TOOL_RESULT_CHARS) {
+                log.warn("Tool result truncated at {} chars to prevent context overflow", totalChars);
+                break;
+            }
+            sb.append(entry);
+            totalChars += entry.length();
+        }
+        return sb.toString();
     }
 }

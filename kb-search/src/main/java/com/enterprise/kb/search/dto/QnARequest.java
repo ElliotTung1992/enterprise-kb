@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.UUID;
@@ -9,7 +10,7 @@ public record QnARequest(
         UUID sessionId,
         String modelProvider,
         String modelName,
-        int topK
+        @Max(10) int topK
 ) {
     public QnARequest {
         topK = topK <= 0 ? 5 : topK;
