@@ -27,6 +27,10 @@ async function apiFetch(path, options = {}, _retried = false) {
         throw new Error(err.message || 'Request failed');
     }
 
+    const contentType = res.headers.get('Content-Type');
+    if (res.status === 204 || !contentType || !contentType.includes('application/json')) {
+        return null;
+    }
     return res.json();
 }
 
