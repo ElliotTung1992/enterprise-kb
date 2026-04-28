@@ -1,5 +1,16 @@
 # 项目开发规范
 
+## 文档目录
+
+项目文档位于 `docs/` 目录：
+
+| 文件 | 内容 |
+|------|------|
+| `docs/operation.md` | 用户操作手册：功能说明、API 接口速查、部署运维 |
+| `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，含全部 16 张表） |
+
+---
+
 ## 环境说明
 
 - 本项目使用 **JDK 21**，本机安装路径：`/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home`
