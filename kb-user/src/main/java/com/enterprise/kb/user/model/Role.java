@@ -11,7 +11,10 @@ import java.util.UUID;
 public class Role {
 
     private UUID id;
+    /** 角色名，如 SYSTEM_ADMIN */
     private String name;
+    /** 角色描述 */
     private String description;
+    /** 创建时间 */
     private Instant createdAt = Instant.now();
 }

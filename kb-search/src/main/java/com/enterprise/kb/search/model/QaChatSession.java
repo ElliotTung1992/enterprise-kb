@@ -11,11 +11,17 @@ import java.util.UUID;
 public class QaChatSession {
 
     private UUID id;
+    /** 所属知识空间 ID */
     private UUID spaceId;
+    /** 会话所有者用户 ID */
     private UUID userId;
+    /** 会话标题（默认取首条问题前 50 字） */
     private String title;
+    /** 创建时间 */
     private Instant createdAt;
+    /** 最后活跃时间 */
     private Instant updatedAt;
+    /** 软删除时间，为 null 表示未删除 */
     private Instant deletedAt;
     /** 非列字段，由 SQL COUNT 子查询填充 */
     private int messageCount;

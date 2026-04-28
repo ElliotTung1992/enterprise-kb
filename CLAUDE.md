@@ -8,7 +8,8 @@
 |------|------|
 | `docs/operation.md` | 用户操作手册：功能说明、API 接口速查、部署运维 |
 | `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，含全部 16 张表） |
-| `docs/plan.md` | 可扩展内容与优化点规划 |
+| `docs/plan.md` | 可扩展内容与优化点规划（技术向：RAG/性能/质量） |
+| `docs/plan2.md` | 可扩展内容与优化点规划（产品向：体验/安全/集成） |
 
 ---
 
@@ -96,6 +97,41 @@ kb-common → kb-auth → kb-user → kb-document / kb-search / kb-knowledge-gra
 - 核心业务逻辑、复杂算法必须添加行内注释说明意图
 - 禁止无意义注释，如 `// 获取用户` 后紧跟 `getUser()`
 - 配置类需要写详细的注释
+
+### 实体类规范
+
+所有 Model 类（位于 `{module}/model/` 目录下）必须遵循以下规范：
+
+1. **类注解**：`@Getter @Setter`（Lombok），如需表名关联可加 `@Table(name = "table_name")`
+2. **字段注释**：每个字段必须写中文注释，说明其含义和用途
+3. **默认值**：`= Instant.now()` 等默认值写在字段声明上
+4. **非列字段**标记：非数据库列字段（如 `messageCount` 由 SQL COUNT 子查询填充）加 `/** 非列字段 */` 注释
+5. **布尔字段**：统一不加 `is` 前缀，直接用动词或形容词命名，如 `active`、`autoDetected`
+6. **禁止 JPA 完整注解**：不使用 `@Entity`、`@Column`、`@Id` 等 JPA 注解（项目用 MyBatis），`@Table` 可选使用
+7. **枚举字段**：使用 `RoleType`、`DocumentStatus` 等常量类，不直接映射数据库 VARCHAR 值
+
+```java
+@Getter
+@Setter
+public class QaChatSession {
+
+    private UUID id;
+    /** 所属知识空间 ID */
+    private UUID spaceId;
+    /** 会话所有者用户 ID */
+    private UUID userId;
+    /** 会话标题（默认取首条问题前 50 字） */
+    private String title;
+    /** 创建时间 */
+    private Instant createdAt;
+    /** 最后活跃时间 */
+    private Instant updatedAt;
+    /** 软删除时间，为 null 表示未删除 */
+    private Instant deletedAt;
+    /** 非列字段，由 SQL COUNT 子查询填充 */
+    private int messageCount;
+}
+```
 
 ---
 
