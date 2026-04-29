@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.alibaba.cloud.ai.graph.CompileConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
@@ -25,16 +26,17 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
-import com.alibaba.cloud.ai.graph.CompileConfig;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -62,9 +64,11 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
     private static final int TOOL_RERANK_TOP_N = 3;
     /** Rerank 最低相关性分数阈值，低于此值视为噪音过滤掉 */
     private static final double MIN_RERANK_SCORE = 0.3;
+    /** 高质量结果分数阈值，达到后提示 LLM 可直接作答 */
+    private static final double HIGH_QUALITY_SCORE = 0.7;
     /** 最大工具调用次数 */
     private static final int MAX_TOOL_CALLS = 5;
-    /** ReAct 图最大节点遍历次数：每次工具调用经过 LLM + 工具两个节点，最后一次 LLM 输出答案额外加 1 */
+    /** ReAct 图最大节点遍历次数，作为框架兜底（每次工具调用经过 LLM + 工具两个节点，最后一次 LLM 额外加 1） */
     private static final int MAX_RECURSION_LIMIT = MAX_TOOL_CALLS * 2 + 1;
 
     private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
@@ -84,13 +88,19 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         // chunkId → 引用编号（首次出现时按顺序分配，后续调用不变）
         Map<String, Integer> numByChunkId = new HashMap<>();
         AtomicInteger nextNum = new AtomicInteger(1);
+        // 工具调用计数器，超过上限后返回停止信号
+        AtomicInteger toolCallCount = new AtomicInteger(0);
+        // 已搜索过的 query 集合，防止 LLM 重复搜索相同关键词
+        Set<String> searchedQueries = new HashSet<>();
 
         // 将知识库混合检索封装为 LLM 可调用的工具
         // 通过闭包直接捕获 spaceId，无需 ToolContext 传递运行时状态
         FunctionToolCallback<KnowledgeSearchInput, String> searchTool = FunctionToolCallback.builder(
                         "searchKnowledgeBase",
                         (KnowledgeSearchInput input) -> executeSearch(
-                                input.query(), spaceId, budget, bestHitByChunkId, numByChunkId, nextNum))
+                                input.query(), spaceId, budget,
+                                bestHitByChunkId, numByChunkId, nextNum,
+                                toolCallCount, searchedQueries))
                 .description("""
                         根据精准关键词在知识库中检索相关文档片段。
                         query 必须是简洁的名词短语或核心概念，不要包含问句或完整句子。
@@ -101,12 +111,14 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                 .build();
 
         // 构建 ReactAgent：每次请求按需创建，工具闭包持有当次 spaceId 和 allHits
+        // compileConfig.recursionLimit 作为框架层兜底，防止极端情况下的无限循环
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         ReactAgent reactAgent = ReactAgent.builder()
                 .name("kb-search-agent")
                 .chatClient(chatClient)
                 .systemPrompt(AgenticTokenBudgetService.AGENT_SYSTEM_PROMPT)
                 .tools(searchTool)
+                .compileConfig(CompileConfig.builder().recursionLimit(MAX_RECURSION_LIMIT).build())
                 .build();
 
         // 构建消息列表：用截断后的 history，不影响 Redis 原始存储
@@ -137,7 +149,8 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                 })
                 .toList();
 
-        log.info("Agentic RAG 完成：sessionId={}，引用文档块数={}", sessionId, citations.size());
+        log.info("Agentic RAG 完成：sessionId={}，工具调用次数={}，引用文档块数={}",
+                sessionId, toolCallCount.get(), citations.size());
         QnAResponse response = new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
         // 异步持久化会话，失败不影响正常响应
@@ -155,8 +168,22 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                                  AgenticTokenBudgetService.Budget budget,
                                  LinkedHashMap<String, SearchHit> bestHitByChunkId,
                                  Map<String, Integer> numByChunkId,
-                                 AtomicInteger nextNum) {
-        log.debug("Agent 调用检索工具，query=\"{}\".", query);
+                                 AtomicInteger nextNum,
+                                 AtomicInteger toolCallCount,
+                                 Set<String> searchedQueries) {
+        // 硬限制：超过最大调用次数，返回停止信号让 LLM 直接作答
+        if (toolCallCount.incrementAndGet() > MAX_TOOL_CALLS) {
+            log.warn("已达到最大工具调用次数 {}，强制停止检索", MAX_TOOL_CALLS);
+            return "已达到最大检索次数，请根据已有内容作答。";
+        }
+
+        // Query 去重：相同关键词不重复检索
+        if (!searchedQueries.add(query)) {
+            log.debug("重复 query 已跳过：\"{}\"", query);
+            return "该关键词已检索过，请换用不同关键词或根据已有内容作答。";
+        }
+
+        log.debug("Agent 调用检索工具（第{}次），query=\"{}\"", toolCallCount.get(), query);
         List<SearchHit> candidates = hybridSearchService.search(spaceId,
                 new SearchRequest(query, TOOL_RECALL_SIZE, null, null)).hits();
         List<SearchHit> reranked = rerankService.rerank(query, candidates, TOOL_RERANK_TOP_N);
@@ -192,7 +219,16 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                     (old, newer) -> newer.score() > old.score() ? newer : old);
             assignedNums.add(num);
         }
-        return formatHitsForLlm(withinBudget, assignedNums);
+
+        String result = formatHitsForLlm(withinBudget, assignedNums);
+
+        // 高质量结果早退提示：引导 LLM 停止继续搜索
+        boolean hasHighQuality = withinBudget.stream().anyMatch(h -> h.score() >= HIGH_QUALITY_SCORE);
+        if (hasHighQuality) {
+            result += "\n[已找到高相关性内容，可直接作答]";
+        }
+
+        return result;
     }
 
     private String formatHitsForLlm(List<SearchHit> hits, List<Integer> nums) {
