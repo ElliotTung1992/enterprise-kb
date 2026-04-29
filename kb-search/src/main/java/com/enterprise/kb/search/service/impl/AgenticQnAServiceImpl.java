@@ -12,7 +12,10 @@ import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.service.AgenticQnAService;
+import com.enterprise.kb.search.service.AgenticTokenBudgetService;
 import com.enterprise.kb.search.service.HybridSearchService;
+import com.knuddels.jtokkit.api.Encoding;
+import com.knuddels.jtokkit.api.EncodingType;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.RerankService;
 import com.enterprise.kb.common.exception.KbException;
@@ -33,8 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Agentic RAG 问答服务实现（基于 ReactAgent）。
@@ -52,31 +53,24 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
     private final RerankService rerankService;
     private final RedisChatMemory redisChatMemory;
     private final QaChatSessionService qaChatSessionService;
+    private final AgenticTokenBudgetService tokenBudget;
 
     /** 工具单次检索召回数 */
     private static final int TOOL_RECALL_SIZE = 10;
     /** 工具单次 Rerank 后保留数 */
     private static final int TOOL_RERANK_TOP_N = 3;
 
-    private static final String AGENT_SYSTEM_PROMPT = """
-            你是一个智能知识库问答助手，拥有 searchKnowledgeBase 工具可以查询知识库文档。
-
-            工作流程：
-            1. 收到问题后，分析需要哪些信息
-            2. 调用 searchKnowledgeBase 工具检索相关文档（可多次调用，每次使用不同关键词）
-            3. 工具返回的每条结果都有编号 [n]，综合所有结果后生成完整准确的答案
-            4. 在答案中用 [n] 标注引用来源，例如：根据[1]的说明，……；具体步骤见[2][3]
-            5. 仅基于检索到的文档内容作答；如果知识库中没有相关信息，明确告知用户
-
-            搜索建议：
-            - 复杂问题可拆分为多个子问题分别搜索
-            - 第一次结果不满意时，换用更精准的关键词重试
-            - 每次搜索关键词保持简洁，避免使用完整句子
-            """;
+    private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
+            .getEncoding(EncodingType.CL100K_BASE);
 
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+
+        // 计算 token 预算：history 按实际大小分配（上限 40%），剩余全给 retrieval
+        List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
+        AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
+        List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
 
         // chunkId → 当前最优 hit（跨多轮去重，保留最高 score）
         LinkedHashMap<String, SearchHit> bestHitByChunkId = new LinkedHashMap<>();
@@ -89,15 +83,27 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         FunctionToolCallback<KnowledgeSearchInput, String> searchTool = FunctionToolCallback.builder(
                         "searchKnowledgeBase",
                         (KnowledgeSearchInput input) -> {
-                            log.debug("Agent 调用检索工具，query=\"{}\"", input.query());
+                            log.debug("Agent 调用检索工具，query=\"{}\".", input.query());
                             List<SearchHit> candidates = hybridSearchService.search(spaceId,
                                     new SearchRequest(input.query(), TOOL_RECALL_SIZE, null, null)).hits();
                             List<SearchHit> reranked = rerankService.rerank(
                                     input.query(), candidates, TOOL_RERANK_TOP_N);
 
+                            // 按 retrievalSpace 截断：能放多少放多少，保底至少 1 条
+                            List<SearchHit> withinBudget = new ArrayList<>();
+                            int totalTokens = 0;
+                            for (int i = 0; i < reranked.size(); i++) {
+                                SearchHit hit = reranked.get(i);
+                                int excerptTokens = encoding.encode(hit.excerpt()).size();
+                                int hitTokens = excerptTokens + 20; // 来源/页码模板 token
+                                if (totalTokens + hitTokens > budget.retrievalSpace() && i > 0) break;
+                                withinBudget.add(hit);
+                                totalTokens += hitTokens;
+                            }
+
                             // 分配稳定引用编号：同一 chunk 跨多次调用编号不变
                             List<Integer> assignedNums = new ArrayList<>();
-                            for (SearchHit hit : reranked) {
+                            for (SearchHit hit : withinBudget) {
                                 String key = hit.chunkId() != null ? hit.chunkId()
                                         : String.valueOf(hit.excerpt().hashCode());
                                 int num = numByChunkId.computeIfAbsent(key, k -> nextNum.getAndIncrement());
@@ -105,7 +111,7 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                                         (old, newer) -> newer.score() > old.score() ? newer : old);
                                 assignedNums.add(num);
                             }
-                            return formatHitsForLlm(input.query(), reranked, assignedNums);
+                            return formatHitsForLlm(withinBudget, assignedNums);
                         })
                 .description("根据关键词在知识库中检索相关文档片段，返回来源和内容摘要")
                 .inputType(KnowledgeSearchInput.class)
@@ -116,13 +122,12 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         ReactAgent reactAgent = ReactAgent.builder()
                 .name("kb-search-agent")
                 .chatClient(chatClient)
-                .systemPrompt(AGENT_SYSTEM_PROMPT)
+                .systemPrompt(AgenticTokenBudgetService.AGENT_SYSTEM_PROMPT)
                 .tools(searchTool)
                 .build();
 
-        // 从 Redis 加载历史会话，构建包含完整上下文的消息列表
-        List<Message> history = redisChatMemory.get(sessionId.toString());
-        List<Message> messages = new ArrayList<>(history);
+        // 构建消息列表：用截断后的 history，不影响 Redis 原始存储
+        List<Message> messages = new ArrayList<>(trimmedHistory);
         messages.add(new UserMessage(req.question()));
 
         // 执行 ReactAgent：进入 ReAct 循环，LLM 自主驱动多轮 Reason + Act
@@ -162,32 +167,18 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         return response;
     }
 
-    /** 单次工具返回的最大字符数，防止单次检索结果撑爆上下文 */
-    private static final int MAX_TOOL_RESULT_CHARS = 4000;
-
-    /**
-     * 将检索结果格式化为带编号的 LLM 可读文本，作为工具调用的返回值。
-     * 编号与最终 citations 数组的 citationNumber 一一对应，LLM 在回答时用 [n] 引用。
-     */
-    private String formatHitsForLlm(String query, List<SearchHit> hits, List<Integer> nums) {
+    private String formatHitsForLlm(List<SearchHit> hits, List<Integer> nums) {
         if (hits.isEmpty()) {
-            return "未找到与「" + query + "」相关的文档内容。";
+            return "未找到相关文档内容。";
         }
         StringBuilder sb = new StringBuilder();
-        int totalChars = 0;
         for (int i = 0; i < hits.size(); i++) {
             SearchHit h = hits.get(i);
-            String entry = "[%d] 来源：%s（第%s页）\n内容：%s\n---\n".formatted(
+            sb.append("[%d] 来源：%s（第%s页）\n内容：%s\n---\n".formatted(
                     nums.get(i),
                     h.documentTitle(),
                     h.pageNumber() != null ? h.pageNumber() : "未知",
-                    h.excerpt());
-            if (totalChars + entry.length() > MAX_TOOL_RESULT_CHARS) {
-                log.warn("Tool result truncated at {} chars to prevent context overflow", totalChars);
-                break;
-            }
-            sb.append(entry);
-            totalChars += entry.length();
+                    h.excerpt()));
         }
         return sb.toString();
     }

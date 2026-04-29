@@ -49,7 +49,7 @@ spring:
 
   ai:
     minimax:
-      api-key: ${MINIMAX_API_KEY:sk-cp-aDkY31-Ku2XhenfhqDUVWWhtHaUyVVxx9k2aIrJ_tUyrFuO1DNlNHtp88fknYEIPZUWhnsFz99Qe5-h_JPkEdyb56oI9RpuzdHByb7Ii4fteJO6RudmAocg}
+      api-key: ${MINIMAX_API_KEY:sk-cp-kfqglSsSm-dUHkXVExln5sVomNgZszha1MXi2qey72wpolDdhQxv0C1VVGYKwJlN4lyHweJBU3-w8Sl4NqN1qwfkpUdy9W3b8f-A8u4IGIPKj_yvq7YkcVg}
       chat:
         options:
           model: MiniMax-M2.7-highspeed
@@ -121,6 +121,9 @@ enterprise:
       default-provider: MINIMAX
       default-embedding-provider: DASHSCOPE
       minimax-openai-base-url: ${MINIMAX_OPENAI_BASE_URL:https://api.minimax.chat}
+      context-limit: ${AI_CONTEXT_LIMIT:204800}
+      agentic:
+        chunk-token-size: ${AI_AGENTIC_CHUNK_TOKEN_SIZE:512}
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
     document:
