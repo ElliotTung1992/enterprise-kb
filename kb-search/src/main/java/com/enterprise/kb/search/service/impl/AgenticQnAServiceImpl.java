@@ -25,6 +25,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import com.alibaba.cloud.ai.graph.CompileConfig;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -59,6 +60,12 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
     private static final int TOOL_RECALL_SIZE = 10;
     /** 工具单次 Rerank 后保留数 */
     private static final int TOOL_RERANK_TOP_N = 3;
+    /** Rerank 最低相关性分数阈值，低于此值视为噪音过滤掉 */
+    private static final double MIN_RERANK_SCORE = 0.3;
+    /** 最大工具调用次数 */
+    private static final int MAX_TOOL_CALLS = 5;
+    /** ReAct 图最大节点遍历次数：每次工具调用经过 LLM + 工具两个节点，最后一次 LLM 输出答案额外加 1 */
+    private static final int MAX_RECURSION_LIMIT = MAX_TOOL_CALLS * 2 + 1;
 
     private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
             .getEncoding(EncodingType.CL100K_BASE);
@@ -82,38 +89,14 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         // 通过闭包直接捕获 spaceId，无需 ToolContext 传递运行时状态
         FunctionToolCallback<KnowledgeSearchInput, String> searchTool = FunctionToolCallback.builder(
                         "searchKnowledgeBase",
-                        (KnowledgeSearchInput input) -> {
-                            log.debug("Agent 调用检索工具，query=\"{}\".", input.query());
-                            List<SearchHit> candidates = hybridSearchService.search(spaceId,
-                                    new SearchRequest(input.query(), TOOL_RECALL_SIZE, null, null)).hits();
-                            List<SearchHit> reranked = rerankService.rerank(
-                                    input.query(), candidates, TOOL_RERANK_TOP_N);
-
-                            // 按 retrievalSpace 截断：能放多少放多少，保底至少 1 条
-                            List<SearchHit> withinBudget = new ArrayList<>();
-                            int totalTokens = 0;
-                            for (int i = 0; i < reranked.size(); i++) {
-                                SearchHit hit = reranked.get(i);
-                                int excerptTokens = encoding.encode(hit.excerpt()).size();
-                                int hitTokens = excerptTokens + 20; // 来源/页码模板 token
-                                if (totalTokens + hitTokens > budget.retrievalSpace() && i > 0) break;
-                                withinBudget.add(hit);
-                                totalTokens += hitTokens;
-                            }
-
-                            // 分配稳定引用编号：同一 chunk 跨多次调用编号不变
-                            List<Integer> assignedNums = new ArrayList<>();
-                            for (SearchHit hit : withinBudget) {
-                                String key = hit.chunkId() != null ? hit.chunkId()
-                                        : String.valueOf(hit.excerpt().hashCode());
-                                int num = numByChunkId.computeIfAbsent(key, k -> nextNum.getAndIncrement());
-                                bestHitByChunkId.merge(key, hit,
-                                        (old, newer) -> newer.score() > old.score() ? newer : old);
-                                assignedNums.add(num);
-                            }
-                            return formatHitsForLlm(withinBudget, assignedNums);
-                        })
-                .description("根据关键词在知识库中检索相关文档片段，返回来源和内容摘要")
+                        (KnowledgeSearchInput input) -> executeSearch(
+                                input.query(), spaceId, budget, bestHitByChunkId, numByChunkId, nextNum))
+                .description("""
+                        根据精准关键词在知识库中检索相关文档片段。
+                        query 必须是简洁的名词短语或核心概念，不要包含问句或完整句子。
+                        如果问题包含多个独立概念，拆分为多次调用分别检索。
+                        如果返回结果与问题明显无关，换用更精准的关键词重新搜索。
+                        """)
                 .inputType(KnowledgeSearchInput.class)
                 .build();
 
@@ -165,6 +148,51 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
             log.warn("保存会话记录失败：sessionId={}", sessionId, e);
         }
         return response;
+    }
+
+    private String executeSearch(String query,
+                                 UUID spaceId,
+                                 AgenticTokenBudgetService.Budget budget,
+                                 LinkedHashMap<String, SearchHit> bestHitByChunkId,
+                                 Map<String, Integer> numByChunkId,
+                                 AtomicInteger nextNum) {
+        log.debug("Agent 调用检索工具，query=\"{}\".", query);
+        List<SearchHit> candidates = hybridSearchService.search(spaceId,
+                new SearchRequest(query, TOOL_RECALL_SIZE, null, null)).hits();
+        List<SearchHit> reranked = rerankService.rerank(query, candidates, TOOL_RERANK_TOP_N);
+
+        // 过滤低相关性文档；若全部低于阈值则保留最高分的 1 条，让 LLM 自行判断
+        List<SearchHit> aboveThreshold = reranked.stream()
+                .filter(h -> h.score() >= MIN_RERANK_SCORE)
+                .toList();
+        List<SearchHit> filtered = aboveThreshold.isEmpty()
+                ? (reranked.isEmpty() ? reranked : reranked.subList(0, 1))
+                : aboveThreshold;
+        log.debug("Rerank 过滤：候选={}, 高于阈值={}, 保留={}",
+                reranked.size(), aboveThreshold.size(), filtered.size());
+
+        // 按 retrievalSpace 截断：能放多少放多少，保底至少 1 条
+        List<SearchHit> withinBudget = new ArrayList<>();
+        int totalTokens = 0;
+        for (int i = 0; i < filtered.size(); i++) {
+            SearchHit hit = filtered.get(i);
+            int hitTokens = encoding.encode(hit.excerpt()).size() + 20; // 来源/页码模板 token
+            if (totalTokens + hitTokens > budget.retrievalSpace() && i > 0) break;
+            withinBudget.add(hit);
+            totalTokens += hitTokens;
+        }
+
+        // 分配稳定引用编号：同一 chunk 跨多次调用编号不变
+        List<Integer> assignedNums = new ArrayList<>();
+        for (SearchHit hit : withinBudget) {
+            String key = hit.chunkId() != null ? hit.chunkId()
+                    : String.valueOf(hit.excerpt().hashCode());
+            int num = numByChunkId.computeIfAbsent(key, k -> nextNum.getAndIncrement());
+            bestHitByChunkId.merge(key, hit,
+                    (old, newer) -> newer.score() > old.score() ? newer : old);
+            assignedNums.add(num);
+        }
+        return formatHitsForLlm(withinBudget, assignedNums);
     }
 
     private String formatHitsForLlm(List<SearchHit> hits, List<Integer> nums) {

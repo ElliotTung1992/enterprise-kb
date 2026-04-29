@@ -142,6 +142,6 @@ enterprise:
 
 logging:
   level:
-    com.enterprise.kb: INFO
+    com.enterprise.kb: debug
     org.springframework.ai: INFO
     org.springframework.security: WARN
