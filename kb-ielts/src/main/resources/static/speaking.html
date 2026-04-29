@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>口语话题 - IELTS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="css/ielts.css">
+</head>
+<body>
+<div id="sidebarMount"></div>
+<div id="main">
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button id="sidebarToggler" class="btn btn-sm btn-outline-secondary d-md-none"><i class="bi bi-list"></i></button>
+      <h4 class="mb-0 fw-bold"><i class="bi bi-chat-dots me-2"></i>口语话题</h4>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" onclick="openImport()"><i class="bi bi-upload me-1"></i>批量导入</button>
+      <button class="btn btn-primary btn-sm" onclick="openAdd()"><i class="bi bi-plus me-1"></i>添加话题</button>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2"><select class="form-select form-select-sm" id="fDiff"><option value="">全部难度</option><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
+        <div class="col-md-2"><select class="form-select form-select-sm" id="fPart"><option value="">全部 Part</option><option value="1">Part 1</option><option value="2">Part 2</option><option value="3">Part 3</option></select></div>
+        <div class="col-md-3"><input class="form-control form-control-sm" id="fTopic" placeholder="话题标签"></div>
+        <div class="col-md-1"><button class="btn btn-primary btn-sm w-100" onclick="loadPage(1)"><i class="bi bi-search"></i></button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light"><tr><th>话题标题</th><th>Part</th><th>问题（摘要）</th><th>难度</th><th>操作</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+      <span class="text-muted small" id="totalInfo"></span>
+      <nav><ul class="pagination pagination-sm mb-0" id="pagination"></ul></nav>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="modalTitle">添加口语话题</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-8"><label class="form-label">话题标题 *</label><input class="form-control" id="fTitle" required></div>
+        <div class="col-md-2"><label class="form-label">Part *</label><select class="form-select" id="fPart"><option value="1">Part 1</option><option value="2">Part 2</option><option value="3">Part 3</option></select></div>
+        <div class="col-md-2"><label class="form-label">难度</label><select class="form-select" id="fDiffEdit"><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
+        <div class="col-md-12"><label class="form-label">问题（Part 2 为完整 Cue Card）*</label><textarea class="form-control" id="fQuestion" rows="4" required></textarea></div>
+        <div class="col-md-6"><label class="form-label">参考答案思路</label><textarea class="form-control" id="fAnswer" rows="4"></textarea></div>
+        <div class="col-md-6"><label class="form-label">高分词汇（换行分隔）</label><textarea class="form-control" id="fVocab" rows="4"></textarea></div>
+        <div class="col-md-6"><label class="form-label">常用句式</label><textarea class="form-control" id="fPhrases" rows="3"></textarea></div>
+        <div class="col-md-6"><label class="form-label">话题标签</label><input class="form-control" id="fTopics"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" onclick="save()">保存</button></div>
+  </div></div>
+</div>
+
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">批量导入 (JSON)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><textarea class="form-control font-monospace" id="importJson" rows="12" placeholder='[{"title":"Technology","part":1,"question":"Do you use technology often?","difficulty":1}]'></textarea></div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" onclick="doImport()">导入</button></div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/api.js"></script><script src="js/nav.js"></script>
+<script>
+document.getElementById('sidebarMount').innerHTML = renderSidebar();
+const TYPE='speaking-topics'; let currentPage=1,editId=null;
+const editModal=new bootstrap.Modal(document.getElementById('editModal'));
+const importModal=new bootstrap.Modal(document.getElementById('importModal'));
+
+async function loadPage(page=1) {
+    currentPage=page;
+    const data=await Api.list(TYPE,{difficulty:document.getElementById('fDiff').value,part:document.getElementById('fPart').value,topicTags:document.getElementById('fTopic').value,page,size:20});
+    document.getElementById('totalInfo').textContent=`共 ${data.totalElements} 条`;
+    document.getElementById('tbody').innerHTML=data.content.map(t=>`
+    <tr><td class="fw-semibold">${escHtml(t.title)}</td><td><span class="badge bg-primary">Part ${t.part}</span></td>
+      <td class="small text-muted">${escHtml((t.question||'').substring(0,60))}</td>
+      <td>${diffBadge(t.difficulty)}</td>
+      <td><button class="btn btn-sm btn-outline-primary me-1" onclick='edit(${JSON.stringify(t)})'><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-success me-1" onclick="startStudy('SPEAKING','${t.id}')"><i class="bi bi-play"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="remove('${t.id}')"><i class="bi bi-trash"></i></button></td></tr>`).join('');
+    document.getElementById('pagination').innerHTML=Array.from({length:data.totalPages},(_,i)=>`<li class="page-item${i+1===data.page+1?' active':''}"><a class="page-link" href="#" onclick="loadPage(${i+1});return false">${i+1}</a></li>`).join('');
+}
+
+function openAdd(){editId=null;document.getElementById('modalTitle').textContent='添加口语话题';['fTitle','fQuestion','fAnswer','fVocab','fPhrases','fTopics'].forEach(id=>document.getElementById(id).value='');document.getElementById('fPart').value='1';document.getElementById('fDiffEdit').value='1';editModal.show();}
+function openImport(){importModal.show();}
+function edit(t){editId=t.id;document.getElementById('modalTitle').textContent='编辑口语话题';document.getElementById('fTitle').value=t.title||'';document.getElementById('fPart').value=t.part||1;document.getElementById('fQuestion').value=t.question||'';document.getElementById('fAnswer').value=t.referenceAnswer||'';document.getElementById('fVocab').value=t.keyVocabulary||'';document.getElementById('fPhrases').value=t.usefulPhrases||'';document.getElementById('fDiffEdit').value=t.difficulty||1;document.getElementById('fTopics').value=t.topicTags||'';editModal.show();}
+async function save(){const body={title:document.getElementById('fTitle').value.trim(),part:parseInt(document.getElementById('fPart').value),question:document.getElementById('fQuestion').value.trim(),referenceAnswer:document.getElementById('fAnswer').value.trim()||null,keyVocabulary:document.getElementById('fVocab').value.trim()||null,usefulPhrases:document.getElementById('fPhrases').value.trim()||null,difficulty:parseInt(document.getElementById('fDiffEdit').value),topicTags:document.getElementById('fTopics').value.trim()||null};try{if(editId)await Api.update(TYPE,editId,body);else await Api.create(TYPE,body);editModal.hide();showToast(editId?'更新成功':'添加成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
+async function remove(id){if(!confirm('确认删除？'))return;try{await Api.remove(TYPE,id);showToast('删除成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
+async function startStudy(type,id){try{await Api.study.start(type,id);showToast('已加入学习计划');}catch(e){showToast(e.message,'danger');}}
+async function doImport(){try{const arr=JSON.parse(document.getElementById('importJson').value.trim());const res=await Api.batchImport(TYPE,arr);importModal.hide();showToast(`成功导入 ${res.imported} 条`);loadPage(1);}catch(e){showToast('导入失败: '+e.message,'danger');}}
+
+loadPage(1).catch(e=>showToast('加载失败','danger'));
+</script>
+</body>
+</html>

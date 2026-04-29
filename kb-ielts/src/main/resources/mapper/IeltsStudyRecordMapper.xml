@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.ielts.mapper.IeltsStudyRecordMapper">
+
+    <resultMap id="BaseResultMap" type="com.enterprise.kb.ielts.model.IeltsStudyRecord" autoMapping="true">
+        <id property="id" column="id" javaType="java.util.UUID" jdbcType="OTHER"/>
+        <result property="contentId" column="content_id" javaType="java.util.UUID" jdbcType="OTHER"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, content_type, content_id, status, ease_factor, interval_days,
+        repetition_count, next_review_at, last_reviewed_at, created_at
+    </sql>
+
+    <select id="findById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_study_records
+        WHERE id = #{id,jdbcType=OTHER}
+    </select>
+
+    <select id="findByContentTypeAndContentId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_study_records
+        WHERE content_type = #{contentType}
+          AND content_id = #{contentId,jdbcType=OTHER}
+    </select>
+
+    <select id="findDueForReview" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_study_records
+        WHERE next_review_at &lt;= #{today}
+          AND status != 'MASTERED'
+        ORDER BY next_review_at
+    </select>
+
+    <select id="findByStatus" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_study_records
+        WHERE status = #{status}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="countByStatus" resultType="long">
+        SELECT COUNT(*) FROM ielts_study_records WHERE status = #{status}
+    </select>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*) FROM ielts_study_records
+    </select>
+
+    <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsStudyRecord">
+        INSERT INTO ielts_study_records (id, content_type, content_id, status, ease_factor,
+            interval_days, repetition_count, next_review_at, last_reviewed_at, created_at)
+        VALUES (#{id,jdbcType=OTHER}, #{contentType}, #{contentId,jdbcType=OTHER}, #{status},
+            #{easeFactor}, #{intervalDays}, #{repetitionCount}, #{nextReviewAt},
+            #{lastReviewedAt}, #{createdAt})
+    </insert>
+
+    <update id="update" parameterType="com.enterprise.kb.ielts.model.IeltsStudyRecord">
+        UPDATE ielts_study_records SET
+            status = #{status},
+            ease_factor = #{easeFactor},
+            interval_days = #{intervalDays},
+            repetition_count = #{repetitionCount},
+            next_review_at = #{nextReviewAt},
+            last_reviewed_at = #{lastReviewedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+</mapper>

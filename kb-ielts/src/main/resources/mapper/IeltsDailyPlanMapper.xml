@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.ielts.mapper.IeltsDailyPlanMapper">
+
+    <resultMap id="BaseResultMap" type="com.enterprise.kb.ielts.model.IeltsDailyPlan" autoMapping="true">
+        <id property="id" column="id" javaType="java.util.UUID" jdbcType="OTHER"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, plan_date, total_items, completed_items, generated_at
+    </sql>
+
+    <select id="findByPlanDate" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_daily_plans
+        WHERE plan_date = #{planDate}
+    </select>
+
+    <select id="findRecent" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_daily_plans
+        ORDER BY plan_date DESC
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsDailyPlan">
+        INSERT INTO ielts_daily_plans (id, plan_date, total_items, completed_items, generated_at)
+        VALUES (#{id,jdbcType=OTHER}, #{planDate}, #{totalItems}, #{completedItems}, #{generatedAt})
+    </insert>
+
+    <update id="update" parameterType="com.enterprise.kb.ielts.model.IeltsDailyPlan">
+        UPDATE ielts_daily_plans SET
+            total_items = #{totalItems},
+            completed_items = #{completedItems}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+</mapper>

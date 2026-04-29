@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.ielts.mapper.IeltsReviewLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.enterprise.kb.ielts.model.IeltsReviewLog" autoMapping="true">
+        <id property="id" column="id" javaType="java.util.UUID" jdbcType="OTHER"/>
+        <result property="recordId" column="record_id" javaType="java.util.UUID" jdbcType="OTHER"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, record_id, rating, reviewed_at
+    </sql>
+
+    <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsReviewLog">
+        INSERT INTO ielts_review_logs (id, record_id, rating, reviewed_at)
+        VALUES (#{id,jdbcType=OTHER}, #{recordId,jdbcType=OTHER}, #{rating}, #{reviewedAt})
+    </insert>
+
+    <select id="findByRecordId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_review_logs
+        WHERE record_id = #{recordId,jdbcType=OTHER}
+        ORDER BY reviewed_at DESC
+    </select>
+
+    <select id="countByDate" resultType="long">
+        SELECT COUNT(*) FROM ielts_review_logs
+        WHERE DATE(reviewed_at AT TIME ZONE 'UTC') = #{date}
+    </select>
+
+</mapper>

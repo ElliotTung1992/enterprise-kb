@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>阅读练习 - IELTS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="css/ielts.css">
+</head>
+<body>
+<div id="sidebarMount"></div>
+<div id="main">
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-3">
+      <button id="sidebarToggler" class="btn btn-sm btn-outline-secondary d-md-none"><i class="bi bi-list"></i></button>
+      <h4 class="mb-0 fw-bold"><i class="bi bi-file-text me-2"></i>阅读练习</h4>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" onclick="openImport()"><i class="bi bi-upload me-1"></i>批量导入</button>
+      <button class="btn btn-primary btn-sm" onclick="openAdd()"><i class="bi bi-plus me-1"></i>添加练习</button>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2"><select class="form-select form-select-sm" id="fDiff"><option value="">全部难度</option><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
+        <div class="col-md-2"><select class="form-select form-select-sm" id="fTT"><option value="">Academic/General</option><option value="ACADEMIC">Academic</option><option value="GENERAL">General</option></select></div>
+        <div class="col-md-2"><select class="form-select form-select-sm" id="fQT"><option value="">全部题型</option><option value="tfng">TFNG</option><option value="ynng">YNNG</option><option value="matching-headings">matching-headings</option><option value="multiple-choice">multiple-choice</option><option value="summary-completion">summary-completion</option></select></div>
+        <div class="col-md-3"><input class="form-control form-control-sm" id="fTopic" placeholder="话题标签"></div>
+        <div class="col-md-1"><button class="btn btn-primary btn-sm w-100" onclick="loadPage(1)"><i class="bi bi-search"></i></button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-light"><tr><th>标题</th><th>类型</th><th>题型</th><th>难度</th><th>操作</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+      <span class="text-muted small" id="totalInfo"></span>
+      <nav><ul class="pagination pagination-sm mb-0" id="pagination"></ul></nav>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-xl"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="modalTitle">添加阅读练习</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-md-5"><label class="form-label">标题 *</label><input class="form-control" id="fTitle" required></div>
+        <div class="col-md-2"><label class="form-label">考试类型</label><select class="form-select" id="fTTEdit"><option value="ACADEMIC">Academic</option><option value="GENERAL">General</option></select></div>
+        <div class="col-md-3"><label class="form-label">题型</label><select class="form-select" id="fQTEdit"><option value="tfng">TFNG</option><option value="ynng">YNNG</option><option value="matching-headings">matching-headings</option><option value="matching-info">matching-info</option><option value="sentence-completion">sentence-completion</option><option value="multiple-choice">multiple-choice</option><option value="summary-completion">summary-completion</option><option value="short-answer">short-answer</option></select></div>
+        <div class="col-md-2"><label class="form-label">难度</label><select class="form-select" id="fDiffEdit"><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
+        <div class="col-md-12"><label class="form-label">文章正文 *</label><textarea class="form-control" id="fPassage" rows="6" required></textarea></div>
+        <div class="col-md-6"><label class="form-label">题目（换行分隔）</label><textarea class="form-control" id="fQuestions" rows="4"></textarea></div>
+        <div class="col-md-6"><label class="form-label">答案及定位解析</label><textarea class="form-control" id="fAnswers" rows="4"></textarea></div>
+        <div class="col-md-6"><label class="form-label">核心词汇</label><textarea class="form-control" id="fVocab" rows="3"></textarea></div>
+        <div class="col-md-6"><label class="form-label">阅读技巧</label><textarea class="form-control" id="fTips" rows="3"></textarea></div>
+        <div class="col-md-12"><label class="form-label">话题标签</label><input class="form-control" id="fTopics"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" onclick="save()">保存</button></div>
+  </div></div>
+</div>
+
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">批量导入 (JSON)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><textarea class="form-control font-monospace" id="importJson" rows="12" placeholder='[{"title":"Climate Change","trainingType":"ACADEMIC","questionType":"tfng","difficulty":2}]'></textarea></div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-primary" onclick="doImport()">导入</button></div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/api.js"></script><script src="js/nav.js"></script>
+<script>
+document.getElementById('sidebarMount').innerHTML = renderSidebar();
+const TYPE='reading-items'; let currentPage=1,editId=null;
+const editModal=new bootstrap.Modal(document.getElementById('editModal'));
+const importModal=new bootstrap.Modal(document.getElementById('importModal'));
+
+async function loadPage(page=1) {
+    currentPage=page;
+    const data=await Api.list(TYPE,{difficulty:document.getElementById('fDiff').value,trainingType:document.getElementById('fTT').value,questionType:document.getElementById('fQT').value,topicTags:document.getElementById('fTopic').value,page,size:20});
+    document.getElementById('totalInfo').textContent=`共 ${data.totalElements} 条`;
+    document.getElementById('tbody').innerHTML=data.content.map(r=>`
+    <tr><td class="fw-semibold">${escHtml(r.title)}</td><td><span class="badge ${r.trainingType==='ACADEMIC'?'bg-primary':'bg-success'}">${r.trainingType||'-'}</span></td>
+      <td><span class="badge bg-light text-dark">${escHtml(r.questionType||'-')}</span></td>
+      <td>${diffBadge(r.difficulty)}</td>
+      <td><button class="btn btn-sm btn-outline-primary me-1" onclick='edit(${JSON.stringify(r)})'><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-success me-1" onclick="startStudy('READING','${r.id}')"><i class="bi bi-play"></i></button>
+        <button class="btn btn-sm btn-outline-danger" onclick="remove('${r.id}')"><i class="bi bi-trash"></i></button></td></tr>`).join('');
+    document.getElementById('pagination').innerHTML=Array.from({length:data.totalPages},(_,i)=>`<li class="page-item${i+1===data.page+1?' active':''}"><a class="page-link" href="#" onclick="loadPage(${i+1});return false">${i+1}</a></li>`).join('');
+}
+
+function openAdd(){editId=null;document.getElementById('modalTitle').textContent='添加阅读练习';['fTitle','fPassage','fQuestions','fAnswers','fVocab','fTips','fTopics'].forEach(id=>document.getElementById(id).value='');document.getElementById('fTTEdit').value='ACADEMIC';document.getElementById('fQTEdit').value='tfng';document.getElementById('fDiffEdit').value='1';editModal.show();}
+function openImport(){importModal.show();}
+function edit(r){editId=r.id;document.getElementById('modalTitle').textContent='编辑阅读练习';document.getElementById('fTitle').value=r.title||'';document.getElementById('fTTEdit').value=r.trainingType||'ACADEMIC';document.getElementById('fQTEdit').value=r.questionType||'tfng';document.getElementById('fPassage').value=r.passageText||'';document.getElementById('fQuestions').value=r.questions||'';document.getElementById('fAnswers').value=r.answers||'';document.getElementById('fVocab').value=r.keyVocabulary||'';document.getElementById('fTips').value=r.tips||'';document.getElementById('fDiffEdit').value=r.difficulty||1;document.getElementById('fTopics').value=r.topicTags||'';editModal.show();}
+async function save(){const body={title:document.getElementById('fTitle').value.trim(),trainingType:document.getElementById('fTTEdit').value,questionType:document.getElementById('fQTEdit').value,passageText:document.getElementById('fPassage').value.trim(),questions:document.getElementById('fQuestions').value.trim()||null,answers:document.getElementById('fAnswers').value.trim()||null,keyVocabulary:document.getElementById('fVocab').value.trim()||null,tips:document.getElementById('fTips').value.trim()||null,difficulty:parseInt(document.getElementById('fDiffEdit').value),topicTags:document.getElementById('fTopics').value.trim()||null};try{if(editId)await Api.update(TYPE,editId,body);else await Api.create(TYPE,body);editModal.hide();showToast(editId?'更新成功':'添加成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
+async function remove(id){if(!confirm('确认删除？'))return;try{await Api.remove(TYPE,id);showToast('删除成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
+async function startStudy(type,id){try{await Api.study.start(type,id);showToast('已加入学习计划');}catch(e){showToast(e.message,'danger');}}
+async function doImport(){try{const arr=JSON.parse(document.getElementById('importJson').value.trim());const res=await Api.batchImport(TYPE,arr);importModal.hide();showToast(`成功导入 ${res.imported} 条`);loadPage(1);}catch(e){showToast('导入失败: '+e.message,'danger');}}
+
+loadPage(1).catch(e=>showToast('加载失败','danger'));
+</script>
+</body>
+</html>

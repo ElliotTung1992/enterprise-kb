@@ -1,0 +1,65 @@
+server:
+  port: 8082
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: kb-ielts
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/enterprise_kb}
+    username: ${SPRING_DATASOURCE_USERNAME:kb_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:dge2026}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+    jdbc-type-for-null: NULL
+
+pagehelper:
+  helper-dialect: postgresql
+  reasonable: true
+  support-methods-arguments: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+enterprise:
+  ielts:
+    study:
+      daily-words: 20
+      daily-phrases: 10
+      daily-grammar: 5
+      daily-others: 5
+
+logging:
+  level:
+    com.enterprise.kb.ielts: debug
