@@ -23,9 +23,9 @@ public class IeltsWritingTaskServiceImpl implements IeltsWritingTaskService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsWritingTask> listTasks(Integer difficulty, Integer taskNumber, String trainingType, String topicTags, int page, int size) {
+    public PageResponse<IeltsWritingTask> listTasks(Integer difficulty, Integer taskNumber, String trainingType, String topicTags, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsWritingTask> list = taskMapper.findAll(difficulty, taskNumber, trainingType, topicTags);
+        List<IeltsWritingTask> list = taskMapper.findAll(difficulty, taskNumber, trainingType, topicTags, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 

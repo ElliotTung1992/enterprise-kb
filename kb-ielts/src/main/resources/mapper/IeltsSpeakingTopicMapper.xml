@@ -14,9 +14,15 @@
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="part != null">AND part = #{part}</if>
-            <if test="topicTags != null and topicTags != ''">AND topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="difficulty != null">AND st.difficulty = #{difficulty}</if>
+            <if test="part != null">AND st.part = #{part}</if>
+            <if test="topicTags != null and topicTags != ''">AND st.topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -27,14 +33,17 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_speaking_topics
+        SELECT st.*, sr.status AS study_status
+        FROM ielts_speaking_topics st
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'SPEAKING' AND sr.content_id = st.id
         <include refid="Where_Clause"/>
-        ORDER BY part, created_at DESC
+        ORDER BY st.part, st.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_speaking_topics
+        SELECT COUNT(*)
+        FROM ielts_speaking_topics st
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'SPEAKING' AND sr.content_id = st.id
         <include refid="Where_Clause"/>
     </select>
 
@@ -73,5 +82,16 @@
              #{t.createdAt}, #{t.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT st.*
+        FROM ielts_speaking_topics st
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'SPEAKING' AND sr.content_id = st.id
+        )
+        ORDER BY st.difficulty, st.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

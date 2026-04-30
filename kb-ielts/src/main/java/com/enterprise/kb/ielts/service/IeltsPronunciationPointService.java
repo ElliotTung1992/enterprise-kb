@@ -20,7 +20,7 @@ public interface IeltsPronunciationPointService {
      * @param size       每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsPronunciationPoint> listPoints(Integer difficulty, String category, int page, int size);
+    PageResponse<IeltsPronunciationPoint> listPoints(Integer difficulty, String category, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询发音要点

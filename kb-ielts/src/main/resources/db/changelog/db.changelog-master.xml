@@ -7,5 +7,7 @@
 
     <include file="classpath:db/changelog/001-create-ielts-tables.sql"
              relativeToChangelogFile="false"/>
+    <include file="classpath:db/changelog/002-create-ielts-examples.sql"
+             relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

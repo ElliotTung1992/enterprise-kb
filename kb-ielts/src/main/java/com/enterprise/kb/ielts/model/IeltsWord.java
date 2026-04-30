@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -23,10 +25,6 @@ public class IeltsWord {
     private String definitionZh;
     /** 英文释义 */
     private String definitionEn;
-    /** 例句（英文） */
-    private String exampleSentence;
-    /** 例句翻译 */
-    private String exampleTranslation;
     /** 雅思出现频率（1-5，5最高） */
     private Integer frequencyLevel;
     /** 词表来源：AWL / GSL / IELTS */
@@ -39,4 +37,8 @@ public class IeltsWord {
     private String topicTags;
     private Instant createdAt;
     private Instant updatedAt;
+    /** 非列字段，由 LEFT JOIN ielts_study_records 填充；null=待学习 / LEARNING=学习中 / REVIEWING=复习中 / MASTERED=已掌握 */
+    private String studyStatus;
+    /** 非列字段，由 ielts_examples 表关联加载 */
+    private List<IeltsExample> examples = new ArrayList<>();
 }

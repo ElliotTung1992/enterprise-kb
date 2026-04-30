@@ -3,6 +3,7 @@ package com.enterprise.kb.ielts.controller;
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.ielts.dto.ReviewRequest;
 import com.enterprise.kb.ielts.dto.StartStudyRequest;
+import com.enterprise.kb.ielts.dto.StudyPlanItem;
 import com.enterprise.kb.ielts.dto.StudyStatsResponse;
 import com.enterprise.kb.ielts.dto.TodayPlanResponse;
 import com.enterprise.kb.ielts.model.IeltsStudyRecord;
@@ -10,6 +11,8 @@ import com.enterprise.kb.ielts.service.IeltsStudyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 雅思学习核心逻辑接口（今日计划、复习提交、统计）
@@ -61,5 +64,16 @@ public class IeltsStudyController {
     @GetMapping("/stats")
     public ApiResponse<StudyStatsResponse> getStats() {
         return ApiResponse.ok(studyService.getStats());
+    }
+
+    /**
+     * 按学习状态查询所有条目列表（含摘要），用于统计页点击展开列表
+     *
+     * @param status LEARNING / REVIEWING / MASTERED
+     * @return 条目列表
+     */
+    @GetMapping("/records")
+    public ApiResponse<List<StudyPlanItem>> getRecordsByStatus(@RequestParam String status) {
+        return ApiResponse.ok(studyService.getRecordsByStatus(status));
     }
 }

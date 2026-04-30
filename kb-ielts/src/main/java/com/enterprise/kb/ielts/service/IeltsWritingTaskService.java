@@ -22,7 +22,7 @@ public interface IeltsWritingTaskService {
      * @param size         每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsWritingTask> listTasks(Integer difficulty, Integer taskNumber, String trainingType, String topicTags, int page, int size);
+    PageResponse<IeltsWritingTask> listTasks(Integer difficulty, Integer taskNumber, String trainingType, String topicTags, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询写作任务

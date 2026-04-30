@@ -15,9 +15,15 @@
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="questionType != null and questionType != ''">AND question_type = #{questionType}</if>
-            <if test="grammarPointId != null">AND grammar_point_id = #{grammarPointId,jdbcType=OTHER}</if>
+            <if test="difficulty != null">AND ge.difficulty = #{difficulty}</if>
+            <if test="questionType != null and questionType != ''">AND ge.question_type = #{questionType}</if>
+            <if test="grammarPointId != null">AND ge.grammar_point_id = #{grammarPointId,jdbcType=OTHER}</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -28,14 +34,17 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_grammar_exercises
+        SELECT ge.*, sr.status AS study_status
+        FROM ielts_grammar_exercises ge
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'GRAMMAR_EXERCISE' AND sr.content_id = ge.id
         <include refid="Where_Clause"/>
-        ORDER BY created_at DESC
+        ORDER BY ge.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_grammar_exercises
+        SELECT COUNT(*)
+        FROM ielts_grammar_exercises ge
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'GRAMMAR_EXERCISE' AND sr.content_id = ge.id
         <include refid="Where_Clause"/>
     </select>
 
@@ -79,5 +88,16 @@
              #{e.options}, #{e.answer}, #{e.explanation}, #{e.difficulty}, #{e.createdAt}, #{e.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT ge.*
+        FROM ielts_grammar_exercises ge
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'GRAMMAR_EXERCISE' AND sr.content_id = ge.id
+        )
+        ORDER BY ge.difficulty, ge.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

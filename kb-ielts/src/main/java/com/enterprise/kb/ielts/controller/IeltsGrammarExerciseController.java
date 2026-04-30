@@ -37,9 +37,10 @@ public class IeltsGrammarExerciseController {
             @RequestParam(required = false) Integer difficulty,
             @RequestParam(required = false) String questionType,
             @RequestParam(required = false) UUID grammarPointId,
+            @RequestParam(required = false) String studyStatus,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(exerciseService.listExercises(difficulty, questionType, grammarPointId, page, size));
+        return ApiResponse.ok(exerciseService.listExercises(difficulty, questionType, grammarPointId, studyStatus, page, size));
     }
 
     /**

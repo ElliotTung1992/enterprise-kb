@@ -4,7 +4,7 @@
 
 新增 `kb-ielts` 模块，作为**完全独立的 Spring Boot 应用**，仅依赖 `kb-common`（公共工具类），**独立启动，不挂载到 kb-app**。
 
-- **独立进程**：有自己的 main class、`application.yml`、端口（**8082**）、Liquibase 迁移
+- **独立进程**：有自己的 main class、`application.yml`、端口（**8083**）、Liquibase 迁移
 - **无认证、无权限校验**，所有接口直接开放
 - **单学习者模式**：不引入用户体系，所有学习记录为全局唯一，无 `user_id` 概念
 - 与现有知识库（kb-user、kb-document、kb-search 等）完全解耦
@@ -19,6 +19,18 @@
 ### 2.1 数据内容管理（按四技能设计）
 
 内容按雅思四项技能分类，单词和短语作为跨技能的基础资源，通过 `skill_tags` 标注适用范围。
+
+**统一学习状态筛选**：所有十类内容的列表接口均支持 `?studyStatus=` 查询参数，实现按学习进度过滤：
+
+| 参数值 | 含义 | 实现方式 |
+|--------|------|----------|
+| 不传 | 返回所有内容（不按状态过滤） | 无 WHERE 条件 |
+| `NEW` | 尚未开始学习的内容 | `ielts_study_records` 中无对应记录（`sr.id IS NULL`） |
+| `LEARNING` | 学习中（初次接触） | `sr.status = 'LEARNING'` |
+| `REVIEWING` | 复习中（间隔复习阶段） | `sr.status = 'REVIEWING'` |
+| `MASTERED` | 已掌握 | `sr.status = 'MASTERED'` |
+
+实现架构：`findAll` 和 `countAll` SQL 通过 `LEFT JOIN ielts_study_records sr ON sr.content_type = '...' AND sr.content_id = t.id` 关联，并将 `sr.status` 以 `study_status` 列名返回，由 Model 类中的非列字段 `studyStatus` 自动映射（`autoMapping="true"` + `map-underscore-to-camel-case: true`）。
 
 **统一难度字段**：所有十类内容表均包含 `difficulty` 字段，取值 1-3，用于每日学习计划的分层和筛选：
 
@@ -52,6 +64,7 @@
 - 系统每天生成学习计划（可在配置文件中设置每日单词数、短语数、口语话题数）
 - 计划来源：优先安排复习到期的内容，不足则从未学过的内容中补充
 - 学习状态流转：`NEW` → `LEARNING` → `REVIEWING` → `MASTERED`
+- **注意**：`NEW` 是隐式状态，表示 `ielts_study_records` 中尚无该内容的记录。一旦用户开始学习，即在 `ielts_study_records` 写入一条 `status = 'LEARNING'` 的记录；`NEW` 状态本身不占数据库行
 
 ### 2.4 间隔复习（SM-2 算法）
 
@@ -98,6 +111,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签，逗号分隔（如 environment,health） |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.2 `ielts_phrases`（常用短语，跨技能）
 
@@ -115,6 +129,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签 |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.3 `ielts_paraphrase_groups`（同义替换组 — 跨技能）
 
@@ -134,6 +149,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签 |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.4 `ielts_pronunciation_points`（发音要点 — 听力 / 口语）
 
@@ -150,6 +166,7 @@
 | `difficulty` | SMALLINT | 难度（1-3） |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.5 `ielts_grammar_points`（语法要点 — Grammar）
 
@@ -170,6 +187,7 @@
 | `topic_tags` | VARCHAR(255) | 相关话题标签 |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.6 `ielts_grammar_exercises`（语法练习 — Grammar）
 
@@ -187,6 +205,7 @@
 | `difficulty` | SMALLINT | 难度（1-3） |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.7 `ielts_speaking_topics`（口语话题 — Speaking）
 
@@ -203,6 +222,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签（lifestyle,technology,environment…） |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.8 `ielts_listening_items`（听力练习 — Listening）
 
@@ -221,6 +241,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签 |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.9 `ielts_reading_items`（阅读练习 — Reading）
 
@@ -239,6 +260,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签 |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.10 `ielts_writing_tasks`（写作题目 — Writing）
 
@@ -258,6 +280,7 @@
 | `topic_tags` | VARCHAR(255) | 话题标签 |
 | `created_at` | TIMESTAMPTZ | — |
 | `updated_at` | TIMESTAMPTZ | — |
+| `study_status` | *(非列字段)* | `findAll` 时通过 LEFT JOIN `ielts_study_records` 填充；`null`=NEW / `LEARNING` / `REVIEWING` / `MASTERED` |
 
 ### 3.11 `ielts_study_records`（学习记录，每条内容唯一）
 
@@ -307,106 +330,106 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/words` | 分页查询单词（支持关键词、分类、频率级别、标签筛选） |
+| `GET` | `/words` | 分页查询单词；支持 `?difficulty` / `?wordList` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/words/{id}` | 获取单词详情 |
 | `POST` | `/words` | 新增单词 |
 | `PUT` | `/words/{id}` | 更新单词 |
 | `DELETE` | `/words/{id}` | 删除单词 |
-| `POST` | `/words/import` | 批量导入（CSV 或 JSON） |
+| `POST` | `/words/batch` | 批量导入（JSON 数组） |
 
 ### 4.2 短语管理
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/phrases` | 分页查询短语 |
+| `GET` | `/phrases` | 分页查询短语；支持 `?difficulty` / `?category` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/phrases/{id}` | 短语详情 |
 | `POST` | `/phrases` | 新增 |
 | `PUT` | `/phrases/{id}` | 更新 |
 | `DELETE` | `/phrases/{id}` | 删除 |
-| `POST` | `/phrases/import` | 批量导入 |
+| `POST` | `/phrases/batch` | 批量导入 |
 
 ### 4.3 同义替换管理（Paraphrase）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/paraphrase-groups` | 分页查询（支持关键词、技能标签、话题标签筛选） |
+| `GET` | `/paraphrase-groups` | 分页查询；支持 `?difficulty` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/paraphrase-groups/{id}` | 替换组详情 |
 | `POST` | `/paraphrase-groups` | 新增 |
 | `PUT` | `/paraphrase-groups/{id}` | 更新 |
 | `DELETE` | `/paraphrase-groups/{id}` | 删除 |
-| `POST` | `/paraphrase-groups/import` | 批量导入 |
+| `POST` | `/paraphrase-groups/batch` | 批量导入 |
 
 ### 4.4 发音要点管理（Pronunciation）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/pronunciation-points` | 分页查询（支持 category / difficulty 筛选） |
+| `GET` | `/pronunciation-points` | 分页查询；支持 `?difficulty` / `?category` / `?studyStatus` 筛选 |
 | `GET` | `/pronunciation-points/{id}` | 发音要点详情 |
 | `POST` | `/pronunciation-points` | 新增 |
 | `PUT` | `/pronunciation-points/{id}` | 更新 |
 | `DELETE` | `/pronunciation-points/{id}` | 删除 |
-| `POST` | `/pronunciation-points/import` | 批量导入 |
+| `POST` | `/pronunciation-points/batch` | 批量导入 |
 
 ### 4.5 语法管理（Grammar）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/grammar-points` | 分页查询语法要点（支持 category / difficulty / skill_tags 筛选） |
+| `GET` | `/grammar-points` | 分页查询语法要点；支持 `?difficulty` / `?category` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/grammar-points/{id}` | 语法要点详情（含关联练习题列表） |
 | `POST` | `/grammar-points` | 新增语法要点 |
 | `PUT` | `/grammar-points/{id}` | 更新语法要点 |
 | `DELETE` | `/grammar-points/{id}` | 删除语法要点（级联删除关联练习题） |
-| `POST` | `/grammar-points/import` | 批量导入语法要点 |
-| `GET` | `/grammar-exercises` | 分页查询语法练习（支持 grammar_point_id / question_type / difficulty 筛选） |
+| `POST` | `/grammar-points/batch` | 批量导入语法要点 |
+| `GET` | `/grammar-exercises` | 分页查询语法练习；支持 `?difficulty` / `?questionType` / `?grammarPointId` / `?studyStatus` 筛选 |
 | `GET` | `/grammar-exercises/{id}` | 练习题详情 |
 | `POST` | `/grammar-exercises` | 新增练习题 |
 | `PUT` | `/grammar-exercises/{id}` | 更新练习题 |
 | `DELETE` | `/grammar-exercises/{id}` | 删除练习题 |
-| `POST` | `/grammar-exercises/import` | 批量导入练习题 |
+| `POST` | `/grammar-exercises/batch` | 批量导入练习题 |
 
 ### 4.6 口语话题管理（Speaking）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/speaking-topics` | 分页查询（支持 Part / 标签筛选） |
+| `GET` | `/speaking-topics` | 分页查询；支持 `?difficulty` / `?part` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/speaking-topics/{id}` | 话题详情 |
 | `POST` | `/speaking-topics` | 新增 |
 | `PUT` | `/speaking-topics/{id}` | 更新 |
 | `DELETE` | `/speaking-topics/{id}` | 删除 |
-| `POST` | `/speaking-topics/import` | 批量导入 |
+| `POST` | `/speaking-topics/batch` | 批量导入 |
 
 ### 4.7 听力练习管理（Listening）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/listening-items` | 分页查询（支持 section / 题型 / 难度筛选） |
+| `GET` | `/listening-items` | 分页查询；支持 `?difficulty` / `?section` / `?questionType` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/listening-items/{id}` | 练习详情 |
 | `POST` | `/listening-items` | 新增 |
 | `PUT` | `/listening-items/{id}` | 更新 |
 | `DELETE` | `/listening-items/{id}` | 删除 |
-| `POST` | `/listening-items/import` | 批量导入 |
+| `POST` | `/listening-items/batch` | 批量导入 |
 
 ### 4.8 阅读练习管理（Reading）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/reading-items` | 分页查询（支持 training-type / 题型 / 难度筛选） |
+| `GET` | `/reading-items` | 分页查询；支持 `?difficulty` / `?trainingType` / `?questionType` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/reading-items/{id}` | 练习详情 |
 | `POST` | `/reading-items` | 新增 |
 | `PUT` | `/reading-items/{id}` | 更新 |
 | `DELETE` | `/reading-items/{id}` | 删除 |
-| `POST` | `/reading-items/import` | 批量导入 |
+| `POST` | `/reading-items/batch` | 批量导入 |
 
 ### 4.9 写作题目管理（Writing）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `GET` | `/writing-tasks` | 分页查询（支持 task-number / task-type / training-type 筛选） |
+| `GET` | `/writing-tasks` | 分页查询；支持 `?difficulty` / `?taskNumber` / `?trainingType` / `?topicTags` / `?studyStatus` 筛选 |
 | `GET` | `/writing-tasks/{id}` | 题目详情 |
 | `POST` | `/writing-tasks` | 新增 |
 | `PUT` | `/writing-tasks/{id}` | 更新 |
 | `DELETE` | `/writing-tasks/{id}` | 删除 |
-| `POST` | `/writing-tasks/import` | 批量导入 |
+| `POST` | `/writing-tasks/batch` | 批量导入 |
 
 ### 4.10 学习计划与复习
 
@@ -569,7 +592,7 @@ kb-ielts/
     │   └── util/
     │       └── SpacedRepetitionCalculator.java  ← SM-2 间隔计算
     └── resources/
-        ├── application.yml              ← 独立配置，端口 8082，只含 PostgreSQL + MyBatis
+        ├── application.yml              ← 独立配置，端口 8083，只含 PostgreSQL + MyBatis
         ├── db/changelog/
         │   ├── db.changelog-master.xml
         │   └── 001-create-ielts-tables.sql  ← 13 张表的 DDL
@@ -618,7 +641,7 @@ kb-ielts/
 
 - [ ] 创建 `kb-ielts` Maven 模块，`pom.xml` 仅依赖 `kb-common` + MyBatis + web，配置 `spring-boot-maven-plugin` repackage
 - [ ] 根 `pom.xml` 新增模块声明 + `dependencyManagement` 条目（**不**修改 kb-app 依赖）
-- [ ] 编写 `IeltsApplication.java`（独立 main class，端口 8082）
+- [ ] 编写 `IeltsApplication.java`（独立 main class，端口 8083）
 - [ ] 编写 `application.yml`（仅含 PostgreSQL、MyBatis、PageHelper，无 Redis/Milvus/AI）
 - [ ] Liquibase 迁移：`001-create-ielts-tables.sql`（9 张表 + 索引）
 - [ ] 实现全部 Model 类、Mapper 接口、Mapper XML（基础 CRUD）
@@ -661,7 +684,7 @@ kb-ielts/
 
 | 决策点 | 选择 | 原因 |
 |--------|------|------|
-| 启动方式 | 独立 Spring Boot 进程（端口 8082） | 与知识库主应用完全解耦，可单独开发、部署、重启 |
+| 启动方式 | 独立 Spring Boot 进程（端口 8083） | 与知识库主应用完全解耦，可单独开发、部署、重启 |
 | 认证方案 | 无认证 | 纯个人学习工具，完全独立于知识库用户体系 |
 | 用户维度 | 不区分用户（单学习者） | 无 auth，无 user_id，所有记录全局唯一，逻辑最简 |
 | SRS 算法 | SM-2 简化版 | 逻辑简单可控，参数可调，无外部依赖 |

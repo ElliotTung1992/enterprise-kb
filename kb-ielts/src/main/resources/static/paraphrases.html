@@ -58,8 +58,11 @@
           <div class="col-md-6"><label class="form-label">组名</label><input class="form-control" id="fGroup" placeholder="increase"></div>
           <div class="col-md-12"><label class="form-label">同义替换词（每行一条）*</label><textarea class="form-control" id="fSyns" rows="4" required></textarea></div>
           <div class="col-md-6"><label class="form-label">用法区别说明</label><textarea class="form-control" id="fUsage" rows="3"></textarea></div>
-          <div class="col-md-6"><label class="form-label">原句（含核心表达）</label><textarea class="form-control" id="fOriginal" rows="3"></textarea></div>
-          <div class="col-md-6"><label class="form-label">改写句</label><textarea class="form-control" id="fParaphrased" rows="3"></textarea></div>
+          <div class="col-12">
+            <label class="form-label">例句（原句 / 改写句）</label>
+            <div id="examplesContainer"></div>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addExRow()"><i class="bi bi-plus me-1"></i>添加例句</button>
+          </div>
           <div class="col-md-2"><label class="form-label">难度</label><select class="form-select" id="fDiffEdit"><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
           <div class="col-md-4"><label class="form-label">适用技能</label><input class="form-control" id="fSkills"></div>
           <div class="col-md-6"><label class="form-label">话题标签</label><input class="form-control" id="fTopics"></div>
@@ -104,20 +107,31 @@ async function loadPage(page = 1) {
         `<li class="page-item${i+1===data.page+1?' active':''}"><a class="page-link" href="#" onclick="loadPage(${i+1});return false">${i+1}</a></li>`).join('');
 }
 
-function openAdd() { editId = null; document.getElementById('modalTitle').textContent='添加替换组'; ['fCore','fGroup','fSyns','fUsage','fOriginal','fParaphrased','fSkills','fTopics'].forEach(id=>document.getElementById(id).value=''); document.getElementById('fDiffEdit').value='1'; editModal.show(); }
+function addExRow(sen = '', trans = '') {
+    const container = document.getElementById('examplesContainer');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 ex-row';
+    div.innerHTML = `<div class="col-md-6"><input class="form-control form-control-sm ex-sen" placeholder="原句（含核心表达）" value="${escHtml(sen)}"></div>
+      <div class="col-md-5"><input class="form-control form-control-sm ex-trans" placeholder="改写句" value="${escHtml(trans)}"></div>
+      <div class="col-md-1"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.ex-row').remove()"><i class="bi bi-trash"></i></button></div>`;
+    container.appendChild(div);
+}
+
+function openAdd() { editId = null; document.getElementById('modalTitle').textContent='添加替换组'; ['fCore','fGroup','fSyns','fUsage','fSkills','fTopics'].forEach(id=>document.getElementById(id).value=''); document.getElementById('examplesContainer').innerHTML=''; document.getElementById('fDiffEdit').value='1'; editModal.show(); }
 function openImport() { importModal.show(); }
 
 function edit(g) {
     editId = g.id; document.getElementById('modalTitle').textContent='编辑替换组';
     document.getElementById('fCore').value=g.coreExpression||''; document.getElementById('fGroup').value=g.groupName||'';
     document.getElementById('fSyns').value=g.synonyms||''; document.getElementById('fUsage').value=g.usageNote||'';
-    document.getElementById('fOriginal').value=g.exampleOriginal||''; document.getElementById('fParaphrased').value=g.exampleParaphrased||'';
+    document.getElementById('examplesContainer').innerHTML='';
+    (g.examples||[]).forEach(e=>addExRow(e.sentence||'',e.translation||''));
     document.getElementById('fDiffEdit').value=g.difficulty||1; document.getElementById('fSkills').value=g.skillTags||''; document.getElementById('fTopics').value=g.topicTags||'';
     editModal.show();
 }
 
 async function save() {
-    const body = { coreExpression: document.getElementById('fCore').value.trim(), groupName: document.getElementById('fGroup').value.trim()||null, synonyms: document.getElementById('fSyns').value.trim(), usageNote: document.getElementById('fUsage').value.trim()||null, exampleOriginal: document.getElementById('fOriginal').value.trim()||null, exampleParaphrased: document.getElementById('fParaphrased').value.trim()||null, difficulty: parseInt(document.getElementById('fDiffEdit').value), skillTags: document.getElementById('fSkills').value.trim()||null, topicTags: document.getElementById('fTopics').value.trim()||null };
+    const body = { coreExpression: document.getElementById('fCore').value.trim(), groupName: document.getElementById('fGroup').value.trim()||null, synonyms: document.getElementById('fSyns').value.trim(), usageNote: document.getElementById('fUsage').value.trim()||null, examples: Array.from(document.querySelectorAll('.ex-row')).map((row,i)=>({sentence:row.querySelector('.ex-sen').value.trim()||null,translation:row.querySelector('.ex-trans').value.trim()||null,sortOrder:i})).filter(e=>e.sentence), difficulty: parseInt(document.getElementById('fDiffEdit').value), skillTags: document.getElementById('fSkills').value.trim()||null, topicTags: document.getElementById('fTopics').value.trim()||null };
     try { if (editId) await Api.update(TYPE, editId, body); else await Api.create(TYPE, body); editModal.hide(); showToast(editId?'更新成功':'添加成功'); loadPage(currentPage); } catch(e) { showToast(e.message,'danger'); }
 }
 async function remove(id) { if (!confirm('确认删除？')) return; try { await Api.remove(TYPE,id); showToast('删除成功'); loadPage(currentPage); } catch(e) { showToast(e.message,'danger'); } }

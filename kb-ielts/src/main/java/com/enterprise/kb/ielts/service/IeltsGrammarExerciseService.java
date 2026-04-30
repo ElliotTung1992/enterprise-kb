@@ -21,7 +21,7 @@ public interface IeltsGrammarExerciseService {
      * @param size           每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsGrammarExercise> listExercises(Integer difficulty, String questionType, UUID grammarPointId, int page, int size);
+    PageResponse<IeltsGrammarExercise> listExercises(Integer difficulty, String questionType, UUID grammarPointId, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询练习题

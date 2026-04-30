@@ -21,7 +21,7 @@ public interface IeltsSpeakingTopicService {
      * @param size       每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsSpeakingTopic> listTopics(Integer difficulty, Integer part, String topicTags, int page, int size);
+    PageResponse<IeltsSpeakingTopic> listTopics(Integer difficulty, Integer part, String topicTags, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询口语话题

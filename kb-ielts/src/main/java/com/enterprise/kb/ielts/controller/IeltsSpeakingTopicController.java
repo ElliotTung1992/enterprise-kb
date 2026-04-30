@@ -37,9 +37,10 @@ public class IeltsSpeakingTopicController {
             @RequestParam(required = false) Integer difficulty,
             @RequestParam(required = false) Integer part,
             @RequestParam(required = false) String topicTags,
+            @RequestParam(required = false) String studyStatus,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(topicService.listTopics(difficulty, part, topicTags, page, size));
+        return ApiResponse.ok(topicService.listTopics(difficulty, part, topicTags, studyStatus, page, size));
     }
 
     /**

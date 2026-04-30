@@ -2,7 +2,9 @@ package com.enterprise.kb.ielts.service.impl;
 
 import com.enterprise.kb.common.dto.PageResponse;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
+import com.enterprise.kb.ielts.mapper.IeltsExampleMapper;
 import com.enterprise.kb.ielts.mapper.IeltsGrammarPointMapper;
+import com.enterprise.kb.ielts.model.IeltsExample;
 import com.enterprise.kb.ielts.model.IeltsGrammarPoint;
 import com.enterprise.kb.ielts.service.IeltsGrammarPointService;
 import com.github.pagehelper.PageHelper;
@@ -19,21 +21,26 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class IeltsGrammarPointServiceImpl implements IeltsGrammarPointService {
 
+    private static final String CONTENT_TYPE = "GRAMMAR_POINT";
+
     private final IeltsGrammarPointMapper pointMapper;
+    private final IeltsExampleMapper exampleMapper;
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsGrammarPoint> listPoints(Integer difficulty, String category, String topicTags, int page, int size) {
+    public PageResponse<IeltsGrammarPoint> listPoints(Integer difficulty, String category, String topicTags, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsGrammarPoint> list = pointMapper.findAll(difficulty, category, topicTags);
+        List<IeltsGrammarPoint> list = pointMapper.findAll(difficulty, category, topicTags, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 
     @Override
     @Transactional(readOnly = true)
     public IeltsGrammarPoint getById(UUID id) {
-        return pointMapper.findById(id)
+        IeltsGrammarPoint point = pointMapper.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("IeltsGrammarPoint", id));
+        point.setExamples(exampleMapper.findByContent(CONTENT_TYPE, id));
+        return point;
     }
 
     @Override
@@ -44,24 +51,28 @@ public class IeltsGrammarPointServiceImpl implements IeltsGrammarPointService {
         point.setCreatedAt(now);
         point.setUpdatedAt(now);
         pointMapper.insert(point);
+        saveExamples(point.getId(), point.getExamples());
         return point;
     }
 
     @Override
     @Transactional
     public IeltsGrammarPoint update(UUID id, IeltsGrammarPoint point) {
-        IeltsGrammarPoint existing = getById(id);
+        IeltsGrammarPoint existing = pointMapper.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("IeltsGrammarPoint", id));
         point.setId(existing.getId());
         point.setCreatedAt(existing.getCreatedAt());
         point.setUpdatedAt(Instant.now());
         pointMapper.update(point);
+        saveExamples(id, point.getExamples());
         return point;
     }
 
     @Override
     @Transactional
     public void delete(UUID id) {
-        getById(id);
+        pointMapper.findById(id).orElseThrow(() -> new ResourceNotFoundException("IeltsGrammarPoint", id));
+        exampleMapper.deleteByContent(CONTENT_TYPE, id);
         pointMapper.deleteById(id);
     }
 
@@ -78,5 +89,20 @@ public class IeltsGrammarPointServiceImpl implements IeltsGrammarPointService {
             if (p.getUpdatedAt() == null) p.setUpdatedAt(now);
         });
         return pointMapper.batchInsert(points);
+    }
+
+    private void saveExamples(UUID contentId, List<IeltsExample> examples) {
+        exampleMapper.deleteByContent(CONTENT_TYPE, contentId);
+        if (examples == null || examples.isEmpty()) return;
+        Instant now = Instant.now();
+        for (int i = 0; i < examples.size(); i++) {
+            IeltsExample ex = examples.get(i);
+            if (ex.getId() == null) ex.setId(UUID.randomUUID());
+            ex.setContentType(CONTENT_TYPE);
+            ex.setContentId(contentId);
+            ex.setSortOrder(i);
+            if (ex.getCreatedAt() == null) ex.setCreatedAt(now);
+        }
+        exampleMapper.batchInsert(examples);
     }
 }

@@ -23,9 +23,9 @@ public class IeltsSpeakingTopicServiceImpl implements IeltsSpeakingTopicService 
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsSpeakingTopic> listTopics(Integer difficulty, Integer part, String topicTags, int page, int size) {
+    public PageResponse<IeltsSpeakingTopic> listTopics(Integer difficulty, Integer part, String topicTags, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsSpeakingTopic> list = topicMapper.findAll(difficulty, part, topicTags);
+        List<IeltsSpeakingTopic> list = topicMapper.findAll(difficulty, part, topicTags, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 

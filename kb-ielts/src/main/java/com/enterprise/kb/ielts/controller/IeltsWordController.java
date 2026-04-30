@@ -37,9 +37,10 @@ public class IeltsWordController {
             @RequestParam(required = false) Integer difficulty,
             @RequestParam(required = false) String wordList,
             @RequestParam(required = false) String topicTags,
+            @RequestParam(required = false) String studyStatus,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(wordService.listWords(difficulty, wordList, topicTags, page, size));
+        return ApiResponse.ok(wordService.listWords(difficulty, wordList, topicTags, studyStatus, page, size));
     }
 
     /**

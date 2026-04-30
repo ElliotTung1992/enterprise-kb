@@ -46,6 +46,7 @@ const Api = {
         review:       (recordId, rating) =>
             post(`${API_BASE}/study/review`, { recordId, rating }),
         stats:        ()        => get(`${API_BASE}/study/stats`),
+        recordsByStatus: (status) => get(`${API_BASE}/study/records?status=${status}`),
     }
 };
 

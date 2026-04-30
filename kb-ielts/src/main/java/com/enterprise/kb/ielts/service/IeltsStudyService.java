@@ -1,10 +1,12 @@
 package com.enterprise.kb.ielts.service;
 
 import com.enterprise.kb.ielts.dto.ReviewRequest;
+import com.enterprise.kb.ielts.dto.StudyPlanItem;
 import com.enterprise.kb.ielts.dto.StudyStatsResponse;
 import com.enterprise.kb.ielts.dto.TodayPlanResponse;
 import com.enterprise.kb.ielts.model.IeltsStudyRecord;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -42,4 +44,12 @@ public interface IeltsStudyService {
      * @return 各状态数量、今日复习次数、连续天数
      */
     StudyStatsResponse getStats();
+
+    /**
+     * 按学习状态查询所有条目（含摘要），用于统计页列表展示
+     *
+     * @param status LEARNING / REVIEWING / MASTERED
+     * @return 学习条目列表
+     */
+    List<StudyPlanItem> getRecordsByStatus(String status);
 }

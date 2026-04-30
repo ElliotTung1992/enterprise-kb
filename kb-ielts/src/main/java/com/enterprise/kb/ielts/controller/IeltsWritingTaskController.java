@@ -39,9 +39,10 @@ public class IeltsWritingTaskController {
             @RequestParam(required = false) Integer taskNumber,
             @RequestParam(required = false) String trainingType,
             @RequestParam(required = false) String topicTags,
+            @RequestParam(required = false) String studyStatus,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(taskService.listTasks(difficulty, taskNumber, trainingType, topicTags, page, size));
+        return ApiResponse.ok(taskService.listTasks(difficulty, taskNumber, trainingType, topicTags, studyStatus, page, size));
     }
 
     /**

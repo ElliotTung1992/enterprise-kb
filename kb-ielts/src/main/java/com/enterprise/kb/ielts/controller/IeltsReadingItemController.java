@@ -39,9 +39,10 @@ public class IeltsReadingItemController {
             @RequestParam(required = false) String trainingType,
             @RequestParam(required = false) String questionType,
             @RequestParam(required = false) String topicTags,
+            @RequestParam(required = false) String studyStatus,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(itemService.listItems(difficulty, trainingType, questionType, topicTags, page, size));
+        return ApiResponse.ok(itemService.listItems(difficulty, trainingType, questionType, topicTags, studyStatus, page, size));
     }
 
     /**

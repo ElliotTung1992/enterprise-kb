@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.ielts.mapper.IeltsExampleMapper">
+
+    <resultMap id="BaseResultMap" type="com.enterprise.kb.ielts.model.IeltsExample" autoMapping="true">
+        <id property="id" column="id" javaType="java.util.UUID" jdbcType="OTHER"/>
+        <result property="contentId" column="content_id" javaType="java.util.UUID" jdbcType="OTHER"/>
+    </resultMap>
+
+    <select id="findByContent" resultMap="BaseResultMap">
+        SELECT id, content_type, content_id, sentence, translation, note, sort_order, created_at
+        FROM ielts_examples
+        WHERE content_type = #{contentType} AND content_id = #{contentId,jdbcType=OTHER}
+        ORDER BY sort_order, created_at
+    </select>
+
+    <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsExample">
+        INSERT INTO ielts_examples (id, content_type, content_id, sentence, translation, note, sort_order, created_at)
+        VALUES (#{id,jdbcType=OTHER}, #{contentType}, #{contentId,jdbcType=OTHER},
+                #{sentence}, #{translation}, #{note}, #{sortOrder}, #{createdAt})
+    </insert>
+
+    <insert id="batchInsert">
+        INSERT INTO ielts_examples (id, content_type, content_id, sentence, translation, note, sort_order, created_at)
+        VALUES
+        <foreach collection="list" item="e" separator=",">
+            (#{e.id,jdbcType=OTHER}, #{e.contentType}, #{e.contentId,jdbcType=OTHER},
+             #{e.sentence}, #{e.translation}, #{e.note}, #{e.sortOrder}, #{e.createdAt})
+        </foreach>
+    </insert>
+
+    <delete id="deleteByContent">
+        DELETE FROM ielts_examples
+        WHERE content_type = #{contentType} AND content_id = #{contentId,jdbcType=OTHER}
+    </delete>
+
+</mapper>

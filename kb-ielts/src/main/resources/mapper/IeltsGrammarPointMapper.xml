@@ -8,15 +8,21 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, title, category, explanation_zh, explanation_en, key_rules, examples,
+        id, title, category, explanation_zh, explanation_en, key_rules,
         common_errors, difficulty, skill_tags, topic_tags, created_at, updated_at
     </sql>
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="category != null and category != ''">AND category = #{category}</if>
-            <if test="topicTags != null and topicTags != ''">AND topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="difficulty != null">AND gp.difficulty = #{difficulty}</if>
+            <if test="category != null and category != ''">AND gp.category = #{category}</if>
+            <if test="topicTags != null and topicTags != ''">AND gp.topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -27,22 +33,25 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_grammar_points
+        SELECT gp.*, sr.status AS study_status
+        FROM ielts_grammar_points gp
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'GRAMMAR_POINT' AND sr.content_id = gp.id
         <include refid="Where_Clause"/>
-        ORDER BY created_at DESC
+        ORDER BY gp.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_grammar_points
+        SELECT COUNT(*)
+        FROM ielts_grammar_points gp
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'GRAMMAR_POINT' AND sr.content_id = gp.id
         <include refid="Where_Clause"/>
     </select>
 
     <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsGrammarPoint">
         INSERT INTO ielts_grammar_points (id, title, category, explanation_zh, explanation_en,
-            key_rules, examples, common_errors, difficulty, skill_tags, topic_tags, created_at, updated_at)
+            key_rules, common_errors, difficulty, skill_tags, topic_tags, created_at, updated_at)
         VALUES (#{id,jdbcType=OTHER}, #{title}, #{category}, #{explanationZh}, #{explanationEn},
-            #{keyRules}, #{examples}, #{commonErrors}, #{difficulty}, #{skillTags}, #{topicTags},
+            #{keyRules}, #{commonErrors}, #{difficulty}, #{skillTags}, #{topicTags},
             #{createdAt}, #{updatedAt})
     </insert>
 
@@ -53,7 +62,6 @@
             explanation_zh = #{explanationZh},
             explanation_en = #{explanationEn},
             key_rules = #{keyRules},
-            examples = #{examples},
             common_errors = #{commonErrors},
             difficulty = #{difficulty},
             skill_tags = #{skillTags},
@@ -68,13 +76,24 @@
 
     <insert id="batchInsert">
         INSERT INTO ielts_grammar_points (id, title, category, explanation_zh, explanation_en,
-            key_rules, examples, common_errors, difficulty, skill_tags, topic_tags, created_at, updated_at)
+            key_rules, common_errors, difficulty, skill_tags, topic_tags, created_at, updated_at)
         VALUES
         <foreach collection="list" item="p" separator=",">
             (#{p.id,jdbcType=OTHER}, #{p.title}, #{p.category}, #{p.explanationZh}, #{p.explanationEn},
-             #{p.keyRules}, #{p.examples}, #{p.commonErrors}, #{p.difficulty}, #{p.skillTags},
+             #{p.keyRules}, #{p.commonErrors}, #{p.difficulty}, #{p.skillTags},
              #{p.topicTags}, #{p.createdAt}, #{p.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT gp.*
+        FROM ielts_grammar_points gp
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'GRAMMAR_POINT' AND sr.content_id = gp.id
+        )
+        ORDER BY gp.difficulty, gp.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

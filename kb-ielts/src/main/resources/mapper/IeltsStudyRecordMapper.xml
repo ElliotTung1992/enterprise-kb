@@ -8,6 +8,12 @@
         <result property="contentId" column="content_id" javaType="java.util.UUID" jdbcType="OTHER"/>
     </resultMap>
 
+    <!-- 用于 findDueItemsWithSummary，直接映射到 StudyPlanItem -->
+    <resultMap id="StudyPlanItemMap" type="com.enterprise.kb.ielts.dto.StudyPlanItem" autoMapping="true">
+        <result property="recordId"   column="record_id"   javaType="java.util.UUID" jdbcType="OTHER"/>
+        <result property="contentId"  column="content_id"  javaType="java.util.UUID" jdbcType="OTHER"/>
+    </resultMap>
+
     <sql id="Base_Column_List">
         id, content_type, content_id, status, ease_factor, interval_days,
         repetition_count, next_review_at, last_reviewed_at, created_at
@@ -34,11 +40,84 @@
         ORDER BY next_review_at
     </select>
 
+    <!--
+        联表查询今日到期复习项，通过 COALESCE 从各内容表取摘要字段：
+        WORD→word, PHRASE→phrase, PARAPHRASE→group_name, PRONUNCIATION/GRAMMAR_POINT/
+        SPEAKING/LISTENING/READING/WRITING→title, GRAMMAR_EXERCISE→question 前80字符
+    -->
+    <select id="findDueItemsWithSummary" resultMap="StudyPlanItemMap">
+        SELECT
+            sr.id           AS record_id,
+            sr.content_type,
+            sr.content_id,
+            'REVIEW'        AS study_mode,
+            COALESCE(
+                w.word,
+                p.phrase,
+                par.group_name,
+                pp.title,
+                gp.title,
+                LEFT(ge.question, 80),
+                st.title,
+                li.title,
+                ri.title,
+                wt.title
+            )               AS summary
+        FROM ielts_study_records sr
+        LEFT JOIN ielts_words               w   ON sr.content_type = 'WORD'             AND sr.content_id = w.id
+        LEFT JOIN ielts_phrases             p   ON sr.content_type = 'PHRASE'           AND sr.content_id = p.id
+        LEFT JOIN ielts_paraphrase_groups   par ON sr.content_type = 'PARAPHRASE'       AND sr.content_id = par.id
+        LEFT JOIN ielts_pronunciation_points pp ON sr.content_type = 'PRONUNCIATION'    AND sr.content_id = pp.id
+        LEFT JOIN ielts_grammar_points      gp  ON sr.content_type = 'GRAMMAR_POINT'    AND sr.content_id = gp.id
+        LEFT JOIN ielts_grammar_exercises   ge  ON sr.content_type = 'GRAMMAR_EXERCISE' AND sr.content_id = ge.id
+        LEFT JOIN ielts_speaking_topics     st  ON sr.content_type = 'SPEAKING'         AND sr.content_id = st.id
+        LEFT JOIN ielts_listening_items     li  ON sr.content_type = 'LISTENING'        AND sr.content_id = li.id
+        LEFT JOIN ielts_reading_items       ri  ON sr.content_type = 'READING'          AND sr.content_id = ri.id
+        LEFT JOIN ielts_writing_tasks       wt  ON sr.content_type = 'WRITING'          AND sr.content_id = wt.id
+        WHERE sr.next_review_at &lt;= #{today}
+          AND sr.status != 'MASTERED'
+        ORDER BY sr.next_review_at
+    </select>
+
     <select id="findByStatus" resultMap="BaseResultMap">
         SELECT <include refid="Base_Column_List"/>
         FROM ielts_study_records
         WHERE status = #{status}
         ORDER BY created_at DESC
+    </select>
+
+    <select id="findByStatusWithSummary" resultMap="StudyPlanItemMap">
+        SELECT
+            sr.id           AS record_id,
+            sr.content_type,
+            sr.content_id,
+            sr.status       AS study_mode,
+            sr.next_review_at,
+            COALESCE(
+                w.word,
+                p.phrase,
+                par.group_name,
+                pp.title,
+                gp.title,
+                LEFT(ge.question, 80),
+                st.title,
+                li.title,
+                ri.title,
+                wt.title
+            )               AS summary
+        FROM ielts_study_records sr
+        LEFT JOIN ielts_words               w   ON sr.content_type = 'WORD'             AND sr.content_id = w.id
+        LEFT JOIN ielts_phrases             p   ON sr.content_type = 'PHRASE'           AND sr.content_id = p.id
+        LEFT JOIN ielts_paraphrase_groups   par ON sr.content_type = 'PARAPHRASE'       AND sr.content_id = par.id
+        LEFT JOIN ielts_pronunciation_points pp ON sr.content_type = 'PRONUNCIATION'    AND sr.content_id = pp.id
+        LEFT JOIN ielts_grammar_points      gp  ON sr.content_type = 'GRAMMAR_POINT'    AND sr.content_id = gp.id
+        LEFT JOIN ielts_grammar_exercises   ge  ON sr.content_type = 'GRAMMAR_EXERCISE' AND sr.content_id = ge.id
+        LEFT JOIN ielts_speaking_topics     st  ON sr.content_type = 'SPEAKING'         AND sr.content_id = st.id
+        LEFT JOIN ielts_listening_items     li  ON sr.content_type = 'LISTENING'        AND sr.content_id = li.id
+        LEFT JOIN ielts_reading_items       ri  ON sr.content_type = 'READING'          AND sr.content_id = ri.id
+        LEFT JOIN ielts_writing_tasks       wt  ON sr.content_type = 'WRITING'          AND sr.content_id = wt.id
+        WHERE sr.status = #{status}
+        ORDER BY sr.next_review_at, sr.created_at DESC
     </select>
 
     <select id="countByStatus" resultType="long">

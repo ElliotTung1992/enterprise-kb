@@ -63,7 +63,11 @@
         <div class="col-md-6"><label class="form-label">中文讲解</label><textarea class="form-control" id="fExplZh" rows="3"></textarea></div>
         <div class="col-md-6"><label class="form-label">英文讲解</label><textarea class="form-control" id="fExplEn" rows="3"></textarea></div>
         <div class="col-md-6"><label class="form-label">核心规则（换行分隔）</label><textarea class="form-control" id="fRules" rows="4"></textarea></div>
-        <div class="col-md-6"><label class="form-label">典型例句</label><textarea class="form-control" id="fExamples" rows="4"></textarea></div>
+        <div class="col-md-6">
+          <label class="form-label">典型例句</label>
+          <div id="examplesContainer"></div>
+          <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addExRow()"><i class="bi bi-plus me-1"></i>添加</button>
+        </div>
         <div class="col-md-6"><label class="form-label">常见错误</label><textarea class="form-control" id="fErrors" rows="3"></textarea></div>
         <div class="col-md-2"><label class="form-label">难度</label><select class="form-select" id="fDiffEdit"><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
         <div class="col-md-4"><label class="form-label">适用技能</label><input class="form-control" id="fSkills" placeholder="writing,speaking"></div>
@@ -104,10 +108,19 @@ async function loadPage(page=1) {
     document.getElementById('pagination').innerHTML=Array.from({length:data.totalPages},(_,i)=>`<li class="page-item${i+1===data.page+1?' active':''}"><a class="page-link" href="#" onclick="loadPage(${i+1});return false">${i+1}</a></li>`).join('');
 }
 
-function openAdd(){editId=null;document.getElementById('modalTitle').textContent='添加语法要点';['fTitle','fExplZh','fExplEn','fRules','fExamples','fErrors','fSkills','fTopics'].forEach(id=>document.getElementById(id).value='');document.getElementById('fCatEdit').value='';document.getElementById('fDiffEdit').value='1';editModal.show();}
+function addExRow(sen = '') {
+    const container = document.getElementById('examplesContainer');
+    const div = document.createElement('div');
+    div.className = 'input-group mb-2 ex-row';
+    div.innerHTML = `<input class="form-control form-control-sm ex-sen" placeholder="典型例句" value="${escHtml(sen)}">
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.ex-row').remove()"><i class="bi bi-trash"></i></button>`;
+    container.appendChild(div);
+}
+
+function openAdd(){editId=null;document.getElementById('modalTitle').textContent='添加语法要点';['fTitle','fExplZh','fExplEn','fRules','fErrors','fSkills','fTopics'].forEach(id=>document.getElementById(id).value='');document.getElementById('examplesContainer').innerHTML='';document.getElementById('fCatEdit').value='';document.getElementById('fDiffEdit').value='1';editModal.show();}
 function openImport(){importModal.show();}
-function edit(p){editId=p.id;document.getElementById('modalTitle').textContent='编辑语法要点';document.getElementById('fTitle').value=p.title||'';document.getElementById('fCatEdit').value=p.category||'';document.getElementById('fExplZh').value=p.explanationZh||'';document.getElementById('fExplEn').value=p.explanationEn||'';document.getElementById('fRules').value=p.keyRules||'';document.getElementById('fExamples').value=p.examples||'';document.getElementById('fErrors').value=p.commonErrors||'';document.getElementById('fDiffEdit').value=p.difficulty||1;document.getElementById('fSkills').value=p.skillTags||'';document.getElementById('fTopics').value=p.topicTags||'';editModal.show();}
-async function save(){const body={title:document.getElementById('fTitle').value.trim(),category:document.getElementById('fCatEdit').value||null,explanationZh:document.getElementById('fExplZh').value.trim()||null,explanationEn:document.getElementById('fExplEn').value.trim()||null,keyRules:document.getElementById('fRules').value.trim()||null,examples:document.getElementById('fExamples').value.trim()||null,commonErrors:document.getElementById('fErrors').value.trim()||null,difficulty:parseInt(document.getElementById('fDiffEdit').value),skillTags:document.getElementById('fSkills').value.trim()||null,topicTags:document.getElementById('fTopics').value.trim()||null};try{if(editId)await Api.update(TYPE,editId,body);else await Api.create(TYPE,body);editModal.hide();showToast(editId?'更新成功':'添加成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
+function edit(p){editId=p.id;document.getElementById('modalTitle').textContent='编辑语法要点';document.getElementById('fTitle').value=p.title||'';document.getElementById('fCatEdit').value=p.category||'';document.getElementById('fExplZh').value=p.explanationZh||'';document.getElementById('fExplEn').value=p.explanationEn||'';document.getElementById('fRules').value=p.keyRules||'';document.getElementById('examplesContainer').innerHTML='';(p.examples||[]).forEach(e=>addExRow(e.sentence||''));document.getElementById('fErrors').value=p.commonErrors||'';document.getElementById('fDiffEdit').value=p.difficulty||1;document.getElementById('fSkills').value=p.skillTags||'';document.getElementById('fTopics').value=p.topicTags||'';editModal.show();}
+async function save(){const body={title:document.getElementById('fTitle').value.trim(),category:document.getElementById('fCatEdit').value||null,explanationZh:document.getElementById('fExplZh').value.trim()||null,explanationEn:document.getElementById('fExplEn').value.trim()||null,keyRules:document.getElementById('fRules').value.trim()||null,examples:Array.from(document.querySelectorAll('.ex-row')).map((row,i)=>({sentence:row.querySelector('.ex-sen').value.trim()||null,sortOrder:i})).filter(e=>e.sentence),commonErrors:document.getElementById('fErrors').value.trim()||null,difficulty:parseInt(document.getElementById('fDiffEdit').value),skillTags:document.getElementById('fSkills').value.trim()||null,topicTags:document.getElementById('fTopics').value.trim()||null};try{if(editId)await Api.update(TYPE,editId,body);else await Api.create(TYPE,body);editModal.hide();showToast(editId?'更新成功':'添加成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
 async function remove(id){if(!confirm('确认删除？'))return;try{await Api.remove(TYPE,id);showToast('删除成功');loadPage(currentPage);}catch(e){showToast(e.message,'danger');}}
 async function startStudy(type,id){try{await Api.study.start(type,id);showToast('已加入学习计划');}catch(e){showToast(e.message,'danger');}}
 async function doImport(){try{const arr=JSON.parse(document.getElementById('importJson').value.trim());const res=await Api.batchImport(TYPE,arr);importModal.hide();showToast(`成功导入 ${res.imported} 条`);loadPage(1);}catch(e){showToast('导入失败: '+e.message,'danger');}}

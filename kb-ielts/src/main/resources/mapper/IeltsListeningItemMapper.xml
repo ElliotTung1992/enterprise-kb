@@ -14,10 +14,16 @@
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="section != null">AND section = #{section}</if>
-            <if test="questionType != null and questionType != ''">AND question_type = #{questionType}</if>
-            <if test="topicTags != null and topicTags != ''">AND topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="difficulty != null">AND li.difficulty = #{difficulty}</if>
+            <if test="section != null">AND li.section = #{section}</if>
+            <if test="questionType != null and questionType != ''">AND li.question_type = #{questionType}</if>
+            <if test="topicTags != null and topicTags != ''">AND li.topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -28,14 +34,17 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_listening_items
+        SELECT li.*, sr.status AS study_status
+        FROM ielts_listening_items li
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'LISTENING' AND sr.content_id = li.id
         <include refid="Where_Clause"/>
-        ORDER BY section, created_at DESC
+        ORDER BY li.section, li.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_listening_items
+        SELECT COUNT(*)
+        FROM ielts_listening_items li
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'LISTENING' AND sr.content_id = li.id
         <include refid="Where_Clause"/>
     </select>
 
@@ -77,5 +86,16 @@
              #{i.createdAt}, #{i.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT li.*
+        FROM ielts_listening_items li
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'LISTENING' AND sr.content_id = li.id
+        )
+        ORDER BY li.difficulty, li.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

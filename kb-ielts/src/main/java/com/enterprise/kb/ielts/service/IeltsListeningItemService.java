@@ -22,7 +22,7 @@ public interface IeltsListeningItemService {
      * @param size         每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsListeningItem> listItems(Integer difficulty, Integer section, String questionType, String topicTags, int page, int size);
+    PageResponse<IeltsListeningItem> listItems(Integer difficulty, Integer section, String questionType, String topicTags, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询听力练习

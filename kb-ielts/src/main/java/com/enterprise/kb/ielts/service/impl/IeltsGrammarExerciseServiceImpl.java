@@ -23,9 +23,9 @@ public class IeltsGrammarExerciseServiceImpl implements IeltsGrammarExerciseServ
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsGrammarExercise> listExercises(Integer difficulty, String questionType, UUID grammarPointId, int page, int size) {
+    public PageResponse<IeltsGrammarExercise> listExercises(Integer difficulty, String questionType, UUID grammarPointId, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsGrammarExercise> list = exerciseMapper.findAll(difficulty, questionType, grammarPointId);
+        List<IeltsGrammarExercise> list = exerciseMapper.findAll(difficulty, questionType, grammarPointId, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 

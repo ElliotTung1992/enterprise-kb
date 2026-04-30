@@ -84,8 +84,11 @@
             <select class="form-select" id="fDiffEdit"><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select></div>
           <div class="col-md-6"><label class="form-label">中文释义</label><textarea class="form-control" id="fDefZh" rows="2"></textarea></div>
           <div class="col-md-6"><label class="form-label">英文释义</label><textarea class="form-control" id="fDefEn" rows="2"></textarea></div>
-          <div class="col-md-6"><label class="form-label">例句</label><textarea class="form-control" id="fExSen" rows="2"></textarea></div>
-          <div class="col-md-6"><label class="form-label">例句翻译</label><textarea class="form-control" id="fExTrans" rows="2"></textarea></div>
+          <div class="col-12">
+            <label class="form-label">例句</label>
+            <div id="examplesContainer"></div>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addExRow()"><i class="bi bi-plus me-1"></i>添加例句</button>
+          </div>
           <div class="col-md-6"><label class="form-label">适用技能</label><input class="form-control" id="fSkills" placeholder="listening,writing"></div>
           <div class="col-md-6"><label class="form-label">话题标签</label><input class="form-control" id="fTopics" placeholder="education,environment"></div>
         </div>
@@ -185,20 +188,29 @@ function edit(w) {
     document.getElementById('fDiffEdit').value = w.difficulty || 1;
     document.getElementById('fDefZh').value = w.definitionZh || '';
     document.getElementById('fDefEn').value = w.definitionEn || '';
-    document.getElementById('fExSen').value = w.exampleSentence || '';
-    document.getElementById('fExTrans').value = w.exampleTranslation || '';
+    document.getElementById('examplesContainer').innerHTML = '';
+    (w.examples || []).forEach(e => addExRow(e.sentence || '', e.translation || ''));
     document.getElementById('fSkills').value = w.skillTags || '';
     document.getElementById('fTopics').value = w.topicTags || '';
     editModal.show();
 }
 
+function addExRow(sen = '', trans = '') {
+    const container = document.getElementById('examplesContainer');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 ex-row';
+    div.innerHTML = `<div class="col-md-6"><input class="form-control form-control-sm ex-sen" placeholder="例句（英文）" value="${escHtml(sen)}"></div>
+      <div class="col-md-5"><input class="form-control form-control-sm ex-trans" placeholder="翻译（中文）" value="${escHtml(trans)}"></div>
+      <div class="col-md-1"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.ex-row').remove()"><i class="bi bi-trash"></i></button></div>`;
+    container.appendChild(div);
+}
+
 function clearForm() {
-    ['fWord','fPhoneticUk','fPhoneticUs','fPos','fFreq','fWl','fDefZh','fDefEn','fExSen','fExTrans','fSkills','fTopics'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el.tagName === 'SELECT') el.value = '';
-        else el.value = '';
+    ['fWord','fPhoneticUk','fPhoneticUs','fPos','fFreq','fWl','fDefZh','fDefEn','fSkills','fTopics'].forEach(id => {
+        document.getElementById(id).value = '';
     });
     document.getElementById('fDiffEdit').value = '1';
+    document.getElementById('examplesContainer').innerHTML = '';
 }
 
 async function save() {
@@ -212,8 +224,11 @@ async function save() {
         difficulty: parseInt(document.getElementById('fDiffEdit').value),
         definitionZh: document.getElementById('fDefZh').value.trim() || null,
         definitionEn: document.getElementById('fDefEn').value.trim() || null,
-        exampleSentence: document.getElementById('fExSen').value.trim() || null,
-        exampleTranslation: document.getElementById('fExTrans').value.trim() || null,
+        examples: Array.from(document.querySelectorAll('.ex-row')).map((row, i) => ({
+            sentence: row.querySelector('.ex-sen').value.trim() || null,
+            translation: row.querySelector('.ex-trans').value.trim() || null,
+            sortOrder: i
+        })).filter(e => e.sentence),
         skillTags: document.getElementById('fSkills').value.trim() || null,
         topicTags: document.getElementById('fTopics').value.trim() || null,
     };

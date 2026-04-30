@@ -2,7 +2,9 @@ package com.enterprise.kb.ielts.service.impl;
 
 import com.enterprise.kb.common.dto.PageResponse;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
+import com.enterprise.kb.ielts.mapper.IeltsExampleMapper;
 import com.enterprise.kb.ielts.mapper.IeltsPronunciationPointMapper;
+import com.enterprise.kb.ielts.model.IeltsExample;
 import com.enterprise.kb.ielts.model.IeltsPronunciationPoint;
 import com.enterprise.kb.ielts.service.IeltsPronunciationPointService;
 import com.github.pagehelper.PageHelper;
@@ -19,21 +21,26 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class IeltsPronunciationPointServiceImpl implements IeltsPronunciationPointService {
 
+    private static final String CONTENT_TYPE = "PRONUNCIATION";
+
     private final IeltsPronunciationPointMapper pointMapper;
+    private final IeltsExampleMapper exampleMapper;
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsPronunciationPoint> listPoints(Integer difficulty, String category, int page, int size) {
+    public PageResponse<IeltsPronunciationPoint> listPoints(Integer difficulty, String category, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsPronunciationPoint> list = pointMapper.findAll(difficulty, category);
+        List<IeltsPronunciationPoint> list = pointMapper.findAll(difficulty, category, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 
     @Override
     @Transactional(readOnly = true)
     public IeltsPronunciationPoint getById(UUID id) {
-        return pointMapper.findById(id)
+        IeltsPronunciationPoint point = pointMapper.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("IeltsPronunciationPoint", id));
+        point.setExamples(exampleMapper.findByContent(CONTENT_TYPE, id));
+        return point;
     }
 
     @Override
@@ -44,24 +51,28 @@ public class IeltsPronunciationPointServiceImpl implements IeltsPronunciationPoi
         point.setCreatedAt(now);
         point.setUpdatedAt(now);
         pointMapper.insert(point);
+        saveExamples(point.getId(), point.getExamples());
         return point;
     }
 
     @Override
     @Transactional
     public IeltsPronunciationPoint update(UUID id, IeltsPronunciationPoint point) {
-        IeltsPronunciationPoint existing = getById(id);
+        IeltsPronunciationPoint existing = pointMapper.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("IeltsPronunciationPoint", id));
         point.setId(existing.getId());
         point.setCreatedAt(existing.getCreatedAt());
         point.setUpdatedAt(Instant.now());
         pointMapper.update(point);
+        saveExamples(id, point.getExamples());
         return point;
     }
 
     @Override
     @Transactional
     public void delete(UUID id) {
-        getById(id);
+        pointMapper.findById(id).orElseThrow(() -> new ResourceNotFoundException("IeltsPronunciationPoint", id));
+        exampleMapper.deleteByContent(CONTENT_TYPE, id);
         pointMapper.deleteById(id);
     }
 
@@ -78,5 +89,20 @@ public class IeltsPronunciationPointServiceImpl implements IeltsPronunciationPoi
             if (p.getUpdatedAt() == null) p.setUpdatedAt(now);
         });
         return pointMapper.batchInsert(points);
+    }
+
+    private void saveExamples(UUID contentId, List<IeltsExample> examples) {
+        exampleMapper.deleteByContent(CONTENT_TYPE, contentId);
+        if (examples == null || examples.isEmpty()) return;
+        Instant now = Instant.now();
+        for (int i = 0; i < examples.size(); i++) {
+            IeltsExample ex = examples.get(i);
+            if (ex.getId() == null) ex.setId(UUID.randomUUID());
+            ex.setContentType(CONTENT_TYPE);
+            ex.setContentId(contentId);
+            ex.setSortOrder(i);
+            if (ex.getCreatedAt() == null) ex.setCreatedAt(now);
+        }
+        exampleMapper.batchInsert(examples);
     }
 }

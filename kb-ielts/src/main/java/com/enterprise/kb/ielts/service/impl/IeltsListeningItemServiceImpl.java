@@ -23,9 +23,9 @@ public class IeltsListeningItemServiceImpl implements IeltsListeningItemService 
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsListeningItem> listItems(Integer difficulty, Integer section, String questionType, String topicTags, int page, int size) {
+    public PageResponse<IeltsListeningItem> listItems(Integer difficulty, Integer section, String questionType, String topicTags, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsListeningItem> list = itemMapper.findAll(difficulty, section, questionType, topicTags);
+        List<IeltsListeningItem> list = itemMapper.findAll(difficulty, section, questionType, topicTags, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 

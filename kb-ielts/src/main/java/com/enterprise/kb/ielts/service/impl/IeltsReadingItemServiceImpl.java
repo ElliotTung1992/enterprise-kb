@@ -23,9 +23,9 @@ public class IeltsReadingItemServiceImpl implements IeltsReadingItemService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<IeltsReadingItem> listItems(Integer difficulty, String trainingType, String questionType, String topicTags, int page, int size) {
+    public PageResponse<IeltsReadingItem> listItems(Integer difficulty, String trainingType, String questionType, String topicTags, String studyStatus, int page, int size) {
         PageHelper.startPage(page, size);
-        List<IeltsReadingItem> list = itemMapper.findAll(difficulty, trainingType, questionType, topicTags);
+        List<IeltsReadingItem> list = itemMapper.findAll(difficulty, trainingType, questionType, topicTags, studyStatus);
         return PageResponse.of(new PageInfo<>(list));
     }
 

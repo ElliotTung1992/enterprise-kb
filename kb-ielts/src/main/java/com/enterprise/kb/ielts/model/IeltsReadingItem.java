@@ -33,4 +33,6 @@ public class IeltsReadingItem {
     private String topicTags;
     private Instant createdAt;
     private Instant updatedAt;
+    /** 非列字段，由 LEFT JOIN ielts_study_records 填充；null=待学习 / LEARNING=学习中 / REVIEWING=复习中 / MASTERED=已掌握 */
+    private String studyStatus;
 }

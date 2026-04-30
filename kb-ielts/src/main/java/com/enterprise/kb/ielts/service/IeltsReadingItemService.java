@@ -22,7 +22,7 @@ public interface IeltsReadingItemService {
      * @param size         每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsReadingItem> listItems(Integer difficulty, String trainingType, String questionType, String topicTags, int page, int size);
+    PageResponse<IeltsReadingItem> listItems(Integer difficulty, String trainingType, String questionType, String topicTags, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询阅读练习

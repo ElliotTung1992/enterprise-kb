@@ -15,11 +15,13 @@ public interface IeltsPhraseMapper {
 
     List<IeltsPhrase> findAll(@Param("difficulty") Integer difficulty,
                               @Param("category") String category,
-                              @Param("topicTags") String topicTags);
+                              @Param("topicTags") String topicTags,
+                            @Param("studyStatus") String studyStatus);
 
     long countAll(@Param("difficulty") Integer difficulty,
                   @Param("category") String category,
-                  @Param("topicTags") String topicTags);
+                  @Param("topicTags") String topicTags,
+                            @Param("studyStatus") String studyStatus);
 
     int insert(IeltsPhrase phrase);
 
@@ -27,5 +29,8 @@ public interface IeltsPhraseMapper {
 
     int deleteById(@Param("id") UUID id);
 
+
+    /** 取 limit 条尚无学习记录的新内容，按 difficulty、id 排序，用于每日计划补充新学项 */
+    List<IeltsPhrase> findNewContent(@Param("limit") int limit);
     int batchInsert(@Param("list") List<IeltsPhrase> list);
 }

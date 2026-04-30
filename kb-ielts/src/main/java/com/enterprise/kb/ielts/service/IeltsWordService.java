@@ -21,7 +21,7 @@ public interface IeltsWordService {
      * @param size       每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsWord> listWords(Integer difficulty, String wordList, String topicTags, int page, int size);
+    PageResponse<IeltsWord> listWords(Integer difficulty, String wordList, String topicTags, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询单词

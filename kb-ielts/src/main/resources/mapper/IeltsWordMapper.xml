@@ -9,15 +9,20 @@
 
     <sql id="Base_Column_List">
         id, word, phonetic_uk, phonetic_us, part_of_speech, definition_zh, definition_en,
-        example_sentence, example_translation, frequency_level, word_list, difficulty,
-        skill_tags, topic_tags, created_at, updated_at
+        frequency_level, word_list, difficulty, skill_tags, topic_tags, created_at, updated_at
     </sql>
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="wordList != null and wordList != ''">AND word_list = #{wordList}</if>
-            <if test="topicTags != null and topicTags != ''">AND topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="difficulty != null">AND w.difficulty = #{difficulty}</if>
+            <if test="wordList != null and wordList != ''">AND w.word_list = #{wordList}</if>
+            <if test="topicTags != null and topicTags != ''">AND w.topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -28,25 +33,27 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_words
+        SELECT w.*, sr.status AS study_status
+        FROM ielts_words w
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'WORD' AND sr.content_id = w.id
         <include refid="Where_Clause"/>
-        ORDER BY created_at DESC
+        ORDER BY w.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_words
+        SELECT COUNT(*)
+        FROM ielts_words w
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'WORD' AND sr.content_id = w.id
         <include refid="Where_Clause"/>
     </select>
 
     <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsWord">
         INSERT INTO ielts_words (id, word, phonetic_uk, phonetic_us, part_of_speech,
-            definition_zh, definition_en, example_sentence, example_translation,
-            frequency_level, word_list, difficulty, skill_tags, topic_tags, created_at, updated_at)
+            definition_zh, definition_en, frequency_level, word_list, difficulty,
+            skill_tags, topic_tags, created_at, updated_at)
         VALUES (#{id,jdbcType=OTHER}, #{word}, #{phoneticUk}, #{phoneticUs}, #{partOfSpeech},
-            #{definitionZh}, #{definitionEn}, #{exampleSentence}, #{exampleTranslation},
-            #{frequencyLevel}, #{wordList}, #{difficulty}, #{skillTags}, #{topicTags},
-            #{createdAt}, #{updatedAt})
+            #{definitionZh}, #{definitionEn}, #{frequencyLevel}, #{wordList}, #{difficulty},
+            #{skillTags}, #{topicTags}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="update" parameterType="com.enterprise.kb.ielts.model.IeltsWord">
@@ -57,8 +64,6 @@
             part_of_speech = #{partOfSpeech},
             definition_zh = #{definitionZh},
             definition_en = #{definitionEn},
-            example_sentence = #{exampleSentence},
-            example_translation = #{exampleTranslation},
             frequency_level = #{frequencyLevel},
             word_list = #{wordList},
             difficulty = #{difficulty},
@@ -74,15 +79,25 @@
 
     <insert id="batchInsert">
         INSERT INTO ielts_words (id, word, phonetic_uk, phonetic_us, part_of_speech,
-            definition_zh, definition_en, example_sentence, example_translation,
-            frequency_level, word_list, difficulty, skill_tags, topic_tags, created_at, updated_at)
+            definition_zh, definition_en, frequency_level, word_list, difficulty,
+            skill_tags, topic_tags, created_at, updated_at)
         VALUES
         <foreach collection="list" item="w" separator=",">
             (#{w.id,jdbcType=OTHER}, #{w.word}, #{w.phoneticUk}, #{w.phoneticUs}, #{w.partOfSpeech},
-             #{w.definitionZh}, #{w.definitionEn}, #{w.exampleSentence}, #{w.exampleTranslation},
-             #{w.frequencyLevel}, #{w.wordList}, #{w.difficulty}, #{w.skillTags}, #{w.topicTags},
-             #{w.createdAt}, #{w.updatedAt})
+             #{w.definitionZh}, #{w.definitionEn}, #{w.frequencyLevel}, #{w.wordList}, #{w.difficulty},
+             #{w.skillTags}, #{w.topicTags}, #{w.createdAt}, #{w.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT w.*
+        FROM ielts_words w
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'WORD' AND sr.content_id = w.id
+        )
+        ORDER BY w.difficulty, w.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

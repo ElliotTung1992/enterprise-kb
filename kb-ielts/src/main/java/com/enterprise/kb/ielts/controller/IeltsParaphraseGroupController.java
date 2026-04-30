@@ -35,9 +35,10 @@ public class IeltsParaphraseGroupController {
     public ApiResponse<PageResponse<IeltsParaphraseGroup>> list(
             @RequestParam(required = false) Integer difficulty,
             @RequestParam(required = false) String topicTags,
+            @RequestParam(required = false) String studyStatus,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(groupService.listGroups(difficulty, topicTags, page, size));
+        return ApiResponse.ok(groupService.listGroups(difficulty, topicTags, studyStatus, page, size));
     }
 
     /**

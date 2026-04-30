@@ -8,15 +8,20 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id, phrase, meaning_zh, usage_note, example_sentence, example_translation,
-        category, difficulty, skill_tags, topic_tags, created_at, updated_at
+        id, phrase, meaning_zh, usage_note, category, difficulty, skill_tags, topic_tags, created_at, updated_at
     </sql>
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="category != null and category != ''">AND category = #{category}</if>
-            <if test="topicTags != null and topicTags != ''">AND topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="difficulty != null">AND p.difficulty = #{difficulty}</if>
+            <if test="category != null and category != ''">AND p.category = #{category}</if>
+            <if test="topicTags != null and topicTags != ''">AND p.topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -27,23 +32,25 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_phrases
+        SELECT p.*, sr.status AS study_status
+        FROM ielts_phrases p
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'PHRASE' AND sr.content_id = p.id
         <include refid="Where_Clause"/>
-        ORDER BY created_at DESC
+        ORDER BY p.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_phrases
+        SELECT COUNT(*)
+        FROM ielts_phrases p
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'PHRASE' AND sr.content_id = p.id
         <include refid="Where_Clause"/>
     </select>
 
     <insert id="insert" parameterType="com.enterprise.kb.ielts.model.IeltsPhrase">
-        INSERT INTO ielts_phrases (id, phrase, meaning_zh, usage_note, example_sentence,
-            example_translation, category, difficulty, skill_tags, topic_tags, created_at, updated_at)
-        VALUES (#{id,jdbcType=OTHER}, #{phrase}, #{meaningZh}, #{usageNote}, #{exampleSentence},
-            #{exampleTranslation}, #{category}, #{difficulty}, #{skillTags}, #{topicTags},
-            #{createdAt}, #{updatedAt})
+        INSERT INTO ielts_phrases (id, phrase, meaning_zh, usage_note, category, difficulty,
+            skill_tags, topic_tags, created_at, updated_at)
+        VALUES (#{id,jdbcType=OTHER}, #{phrase}, #{meaningZh}, #{usageNote}, #{category},
+            #{difficulty}, #{skillTags}, #{topicTags}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="update" parameterType="com.enterprise.kb.ielts.model.IeltsPhrase">
@@ -51,8 +58,6 @@
             phrase = #{phrase},
             meaning_zh = #{meaningZh},
             usage_note = #{usageNote},
-            example_sentence = #{exampleSentence},
-            example_translation = #{exampleTranslation},
             category = #{category},
             difficulty = #{difficulty},
             skill_tags = #{skillTags},
@@ -66,14 +71,24 @@
     </delete>
 
     <insert id="batchInsert">
-        INSERT INTO ielts_phrases (id, phrase, meaning_zh, usage_note, example_sentence,
-            example_translation, category, difficulty, skill_tags, topic_tags, created_at, updated_at)
+        INSERT INTO ielts_phrases (id, phrase, meaning_zh, usage_note, category, difficulty,
+            skill_tags, topic_tags, created_at, updated_at)
         VALUES
         <foreach collection="list" item="p" separator=",">
-            (#{p.id,jdbcType=OTHER}, #{p.phrase}, #{p.meaningZh}, #{p.usageNote}, #{p.exampleSentence},
-             #{p.exampleTranslation}, #{p.category}, #{p.difficulty}, #{p.skillTags}, #{p.topicTags},
-             #{p.createdAt}, #{p.updatedAt})
+            (#{p.id,jdbcType=OTHER}, #{p.phrase}, #{p.meaningZh}, #{p.usageNote}, #{p.category},
+             #{p.difficulty}, #{p.skillTags}, #{p.topicTags}, #{p.createdAt}, #{p.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT p.*
+        FROM ielts_phrases p
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'PHRASE' AND sr.content_id = p.id
+        )
+        ORDER BY p.difficulty, p.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

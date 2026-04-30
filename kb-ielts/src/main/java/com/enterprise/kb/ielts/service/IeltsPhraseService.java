@@ -21,7 +21,7 @@ public interface IeltsPhraseService {
      * @param size       每页条数
      * @return 分页结果
      */
-    PageResponse<IeltsPhrase> listPhrases(Integer difficulty, String category, String topicTags, int page, int size);
+    PageResponse<IeltsPhrase> listPhrases(Integer difficulty, String category, String topicTags, String studyStatus, int page, int size);
 
     /**
      * 按 ID 查询短语

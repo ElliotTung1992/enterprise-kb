@@ -164,6 +164,9 @@ body {
 /* ── 进度环 ── */
 .progress-ring svg { transform: rotate(-90deg); }
 
+/* ── 统计页卡片 ── */
+.stat-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.1) !important; transition: box-shadow .15s; }
+
 /* ── 响应式 ── */
 @media (max-width: 768px) {
     #sidebar { transform: translateX(-100%); }

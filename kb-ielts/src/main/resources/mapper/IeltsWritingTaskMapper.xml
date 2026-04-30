@@ -14,10 +14,16 @@
 
     <sql id="Where_Clause">
         <where>
-            <if test="difficulty != null">AND difficulty = #{difficulty}</if>
-            <if test="taskNumber != null">AND task_number = #{taskNumber}</if>
-            <if test="trainingType != null and trainingType != ''">AND training_type = #{trainingType}</if>
-            <if test="topicTags != null and topicTags != ''">AND topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="difficulty != null">AND wt.difficulty = #{difficulty}</if>
+            <if test="taskNumber != null">AND wt.task_number = #{taskNumber}</if>
+            <if test="trainingType != null and trainingType != ''">AND wt.training_type = #{trainingType}</if>
+            <if test="topicTags != null and topicTags != ''">AND wt.topic_tags LIKE '%' || #{topicTags} || '%'</if>
+            <if test="studyStatus != null and studyStatus != ''">
+                <choose>
+                    <when test="studyStatus == 'NEW'">AND sr.id IS NULL</when>
+                    <otherwise>AND sr.status = #{studyStatus}</otherwise>
+                </choose>
+            </if>
         </where>
     </sql>
 
@@ -28,14 +34,17 @@
     </select>
 
     <select id="findAll" resultMap="BaseResultMap">
-        SELECT <include refid="Base_Column_List"/>
-        FROM ielts_writing_tasks
+        SELECT wt.*, sr.status AS study_status
+        FROM ielts_writing_tasks wt
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'WRITING' AND sr.content_id = wt.id
         <include refid="Where_Clause"/>
-        ORDER BY task_number, created_at DESC
+        ORDER BY wt.task_number, wt.created_at DESC
     </select>
 
     <select id="countAll" resultType="long">
-        SELECT COUNT(*) FROM ielts_writing_tasks
+        SELECT COUNT(*)
+        FROM ielts_writing_tasks wt
+        LEFT JOIN ielts_study_records sr ON sr.content_type = 'WRITING' AND sr.content_id = wt.id
         <include refid="Where_Clause"/>
     </select>
 
@@ -80,5 +89,16 @@
              #{t.difficulty}, #{t.topicTags}, #{t.createdAt}, #{t.updatedAt})
         </foreach>
     </insert>
+
+    <select id="findNewContent" resultMap="BaseResultMap">
+        SELECT wt.*
+        FROM ielts_writing_tasks wt
+        WHERE NOT EXISTS (
+            SELECT 1 FROM ielts_study_records sr
+            WHERE sr.content_type = 'WRITING' AND sr.content_id = wt.id
+        )
+        ORDER BY wt.difficulty, wt.id
+        LIMIT #{limit}
+    </select>
 
 </mapper>

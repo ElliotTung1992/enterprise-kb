@@ -76,8 +76,11 @@
           </div>
           <div class="col-md-6"><label class="form-label">中文含义</label><textarea class="form-control" id="fMeaning" rows="2"></textarea></div>
           <div class="col-md-6"><label class="form-label">用法说明</label><textarea class="form-control" id="fUsage" rows="2"></textarea></div>
-          <div class="col-md-6"><label class="form-label">例句</label><textarea class="form-control" id="fExSen" rows="2"></textarea></div>
-          <div class="col-md-6"><label class="form-label">例句翻译</label><textarea class="form-control" id="fExTrans" rows="2"></textarea></div>
+          <div class="col-12">
+            <label class="form-label">例句</label>
+            <div id="examplesContainer"></div>
+            <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addExRow()"><i class="bi bi-plus me-1"></i>添加例句</button>
+          </div>
           <div class="col-md-4"><label class="form-label">难度</label>
             <select class="form-select" id="fDiffEdit"><option value="1">基础</option><option value="2">中级</option><option value="3">高级</option></select>
           </div>
@@ -139,7 +142,17 @@ function renderPagination(page, total) {
         `<li class="page-item${i+1===page?' active':''}"><a class="page-link" href="#" onclick="loadPage(${i+1});return false">${i+1}</a></li>`).join('');
 }
 
-function openAdd() { editId = null; document.getElementById('modalTitle').textContent = '添加短语'; ['fPhrase','fMeaning','fUsage','fExSen','fExTrans','fSkills','fTopics'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fDiffEdit').value='1'; document.getElementById('fCatEdit').value=''; editModal.show(); }
+function addExRow(sen = '', trans = '') {
+    const container = document.getElementById('examplesContainer');
+    const div = document.createElement('div');
+    div.className = 'row g-2 mb-2 ex-row';
+    div.innerHTML = `<div class="col-md-6"><input class="form-control form-control-sm ex-sen" placeholder="例句（英文）" value="${escHtml(sen)}"></div>
+      <div class="col-md-5"><input class="form-control form-control-sm ex-trans" placeholder="翻译（中文）" value="${escHtml(trans)}"></div>
+      <div class="col-md-1"><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('.ex-row').remove()"><i class="bi bi-trash"></i></button></div>`;
+    container.appendChild(div);
+}
+
+function openAdd() { editId = null; document.getElementById('modalTitle').textContent = '添加短语'; ['fPhrase','fMeaning','fUsage','fSkills','fTopics'].forEach(id => document.getElementById(id).value = ''); document.getElementById('examplesContainer').innerHTML = ''; document.getElementById('fDiffEdit').value='1'; document.getElementById('fCatEdit').value=''; editModal.show(); }
 function openImport() { importModal.show(); }
 
 function edit(p) {
@@ -149,8 +162,8 @@ function edit(p) {
     document.getElementById('fCatEdit').value = p.category||'';
     document.getElementById('fMeaning').value = p.meaningZh||'';
     document.getElementById('fUsage').value = p.usageNote||'';
-    document.getElementById('fExSen').value = p.exampleSentence||'';
-    document.getElementById('fExTrans').value = p.exampleTranslation||'';
+    document.getElementById('examplesContainer').innerHTML = '';
+    (p.examples || []).forEach(e => addExRow(e.sentence || '', e.translation || ''));
     document.getElementById('fDiffEdit').value = p.difficulty||1;
     document.getElementById('fSkills').value = p.skillTags||'';
     document.getElementById('fTopics').value = p.topicTags||'';
@@ -158,7 +171,7 @@ function edit(p) {
 }
 
 async function save() {
-    const body = { phrase: document.getElementById('fPhrase').value.trim(), category: document.getElementById('fCatEdit').value||null, meaningZh: document.getElementById('fMeaning').value.trim()||null, usageNote: document.getElementById('fUsage').value.trim()||null, exampleSentence: document.getElementById('fExSen').value.trim()||null, exampleTranslation: document.getElementById('fExTrans').value.trim()||null, difficulty: parseInt(document.getElementById('fDiffEdit').value), skillTags: document.getElementById('fSkills').value.trim()||null, topicTags: document.getElementById('fTopics').value.trim()||null };
+    const body = { phrase: document.getElementById('fPhrase').value.trim(), category: document.getElementById('fCatEdit').value||null, meaningZh: document.getElementById('fMeaning').value.trim()||null, usageNote: document.getElementById('fUsage').value.trim()||null, examples: Array.from(document.querySelectorAll('.ex-row')).map((row,i)=>({sentence:row.querySelector('.ex-sen').value.trim()||null,translation:row.querySelector('.ex-trans').value.trim()||null,sortOrder:i})).filter(e=>e.sentence), difficulty: parseInt(document.getElementById('fDiffEdit').value), skillTags: document.getElementById('fSkills').value.trim()||null, topicTags: document.getElementById('fTopics').value.trim()||null };
     try { if (editId) await Api.update(TYPE, editId, body); else await Api.create(TYPE, body); editModal.hide(); showToast(editId?'更新成功':'添加成功'); loadPage(currentPage); }
     catch(e) { showToast(e.message, 'danger'); }
 }
