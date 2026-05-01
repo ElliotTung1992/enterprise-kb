@@ -13,6 +13,8 @@ public interface IeltsWordMapper {
 
     Optional<IeltsWord> findById(@Param("id") UUID id);
 
+    Optional<IeltsWord> findByWord(@Param("word") String word);
+
     List<IeltsWord> findAll(@Param("difficulty") Integer difficulty,
                             @Param("wordList") String wordList,
                             @Param("topicTags") String topicTags,
@@ -33,4 +35,5 @@ public interface IeltsWordMapper {
     /** 取 limit 条尚无学习记录的新内容，按 difficulty、id 排序，用于每日计划补充新学项 */
     List<IeltsWord> findNewContent(@Param("limit") int limit);
     int batchInsert(@Param("list") List<IeltsWord> list);
+
 }

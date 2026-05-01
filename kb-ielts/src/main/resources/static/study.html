@@ -175,34 +175,40 @@ async function showItem() {
 function renderCard(type, c, record) {
     let front = '', phonetic = '', back = '', example = '', extra = '';
     switch(type) {
-        case 'WORD':
+        case 'WORD': {
             front = c.word;
             phonetic = [c.phoneticUk && `UK: ${c.phoneticUk}`, c.phoneticUs && `US: ${c.phoneticUs}`].filter(Boolean).join('  ');
             back = c.definitionZh || c.definitionEn;
-            example = c.exampleSentence;
-            extra = c.exampleTranslation;
+            const ex0 = c.examples && c.examples[0];
+            example = ex0 ? ex0.sentence : '';
+            extra = ex0 ? ex0.translation : '';
             break;
-        case 'PHRASE':
+        }
+        case 'PHRASE': {
             front = c.phrase;
             back = c.meaningZh;
-            example = c.exampleSentence;
-            extra = c.exampleTranslation;
+            const ph0 = c.examples && c.examples[0];
+            example = ph0 ? ph0.sentence : '';
+            extra = ph0 ? ph0.translation : '';
             break;
-        case 'PARAPHRASE':
+        }
+        case 'PARAPHRASE': {
             front = c.coreExpression;
             back = c.synonyms;
-            example = c.exampleOriginal;
-            extra = c.exampleParaphrased;
+            const pa0 = c.examples && c.examples[0];
+            example = pa0 ? pa0.sentence : '';
+            extra = pa0 ? pa0.translation : '';
             break;
+        }
         case 'PRONUNCIATION':
             front = c.title;
             back = c.ruleSummary;
-            example = c.examples;
+            example = c.examples ? c.examples.map(e => e.sentence).filter(Boolean).join('\n') : '';
             break;
         case 'GRAMMAR_POINT':
             front = c.title;
             back = c.explanationZh;
-            example = c.examples;
+            example = c.examples ? c.examples.map(e => e.sentence).filter(Boolean).join('\n') : '';
             break;
         case 'GRAMMAR_EXERCISE':
             front = c.question;

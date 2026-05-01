@@ -32,6 +32,12 @@
         WHERE id = #{id,jdbcType=OTHER}
     </select>
 
+    <select id="findByWord" resultType="com.enterprise.kb.ielts.model.IeltsWord">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ielts_words
+        WHERE word = #{word}
+    </select>
+
     <select id="findAll" resultMap="BaseResultMap">
         SELECT w.*, sr.status AS study_status
         FROM ielts_words w
@@ -99,5 +105,6 @@
         ORDER BY w.difficulty, w.id
         LIMIT #{limit}
     </select>
+
 
 </mapper>

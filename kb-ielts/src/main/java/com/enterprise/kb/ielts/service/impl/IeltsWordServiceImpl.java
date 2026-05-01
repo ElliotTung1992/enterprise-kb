@@ -1,6 +1,7 @@
 package com.enterprise.kb.ielts.service.impl;
 
 import com.enterprise.kb.common.dto.PageResponse;
+import com.enterprise.kb.common.exception.ResourceExistException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.ielts.mapper.IeltsExampleMapper;
 import com.enterprise.kb.ielts.mapper.IeltsWordMapper;
@@ -14,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,6 +47,11 @@ public class IeltsWordServiceImpl implements IeltsWordService {
     @Override
     @Transactional
     public IeltsWord create(IeltsWord word) {
+
+        if(wordMapper.findByWord(word.getWord()).isPresent()){
+            throw new ResourceExistException(CONTENT_TYPE, "word_name", word.getWord());
+        }
+
         word.setId(UUID.randomUUID());
         Instant now = Instant.now();
         word.setCreatedAt(now);
