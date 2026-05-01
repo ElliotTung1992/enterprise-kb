@@ -49,13 +49,13 @@ spring:
 
   ai:
     minimax:
-      api-key: ${MINIMAX_API_KEY:sk-cp-kfqglSsSm-dUHkXVExln5sVomNgZszha1MXi2qey72wpolDdhQxv0C1VVGYKwJlN4lyHweJBU3-w8Sl4NqN1qwfkpUdy9W3b8f-A8u4IGIPKj_yvq7YkcVg}
+      api-key: ${MINIMAX_API_KEY:}
       chat:
         options:
           model: MiniMax-M2.7-highspeed
 
     dashscope:
-      api-key: ${DASHSCOPE_API_KEY:sk-361580ba837c439c81c9e93caf43abb1}
+      api-key: ${DASHSCOPE_API_KEY:}
       chat:
         options:
           model: qwen-plus
