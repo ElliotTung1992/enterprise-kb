@@ -38,7 +38,6 @@ public interface AgenticTokenBudgetService {
             - 复杂问题可拆分为多个子问题分别搜索
             - 关键词保持简洁，使用名词短语或核心概念，不要使用完整句子
             - 第一次结果不满意时，换用更精准的关键词重试
-            - 为保证数据质量, 至少查询7次
             """;
 
     /** searchKnowledgeBase 工具 schema（用于启动时预计算 token 数） */
