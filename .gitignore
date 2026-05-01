@@ -15,9 +15,7 @@ target/
 # Uploads
 uploads/
 
-# document
-docs/
-
 # Logs
 *.log
 logs/
+/docs/
