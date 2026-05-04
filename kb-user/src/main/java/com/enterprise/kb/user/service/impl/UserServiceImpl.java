@@ -7,7 +7,6 @@ import com.enterprise.kb.user.service.UserService;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.user.dto.CreateUserRequest;
 import com.enterprise.kb.user.dto.UserDto;
-import com.enterprise.kb.user.mapper.McpApiKeyMapper;
 import com.enterprise.kb.user.mapper.UserMapper;
 import com.enterprise.kb.user.mapper.UserSpaceRoleMapper;
 import com.enterprise.kb.user.model.User;
@@ -34,7 +33,6 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final RefreshTokenMapper refreshTokenMapper;
-    private final McpApiKeyMapper mcpApiKeyMapper;
     private final UserSpaceRoleMapper userSpaceRoleMapper;
 
     /**
@@ -134,7 +132,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * 软删除用户，并级联清理 refresh_tokens、mcp_api_keys、user_space_roles。
+     * 软删除用户，并级联清理 refresh_tokens、user_space_roles。
      *
      * @param id 用户 UUID
      */
@@ -143,7 +141,6 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(UUID id) {
         User user = findActive(id);
         refreshTokenMapper.deleteByUserId(id);
-        mcpApiKeyMapper.deleteByUserId(id);
         userSpaceRoleMapper.deleteByUserId(id);
         user.setDeletedAt(Instant.now());
         user.setActive(false);

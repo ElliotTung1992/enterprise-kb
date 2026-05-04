@@ -1,6 +1,5 @@
 package com.enterprise.kb.auth.service.impl;
 
-import com.enterprise.kb.auth.dto.ApiKeyExchangeResponse;
 import com.enterprise.kb.auth.dto.AuthResponse;
 import com.enterprise.kb.auth.dto.ChangePasswordRequest;
 import com.enterprise.kb.auth.dto.LoginRequest;
@@ -51,8 +50,6 @@ public class AuthServiceImpl implements AuthService {
     private final BiFunction<String, Object, UUID> userCreator;
     private final Function<String, UUID> userIdLookup;
     private final BiConsumer<UUID, String> passwordHashUpdater;
-    private final java.util.function.Function<String, java.util.Optional<UUID>> apiKeyToUserId;
-    private final java.util.function.Function<UUID, String> usernameByUserId;
 
     @Value("${enterprise.kb.jwt.refresh-token-expiry-days:30}")
     private long refreshTokenExpiryDays;
@@ -154,17 +151,6 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenMapper.insert(refreshToken);
         return new AuthResponse(accessToken, rawRefresh, jwtService.getAccessTokenExpirySeconds(),
                 userId, userDetails.getUsername(), null);
-    }
-
-    @Override
-    public ApiKeyExchangeResponse exchangeApiKey(String rawApiKey) {
-        String keyHash = hash(rawApiKey);
-        UUID userId = apiKeyToUserId.apply(keyHash)
-                .orElseThrow(() -> new KbException("Invalid or expired API key", HttpStatus.UNAUTHORIZED));
-        String username = usernameByUserId.apply(userId);
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-        String jwt = jwtService.generateAccessToken(userDetails, userId);
-        return new ApiKeyExchangeResponse(jwt, jwtService.getAccessTokenExpirySeconds());
     }
 
     private String generateRawRefreshToken() {

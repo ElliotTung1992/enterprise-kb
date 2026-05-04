@@ -21,4 +21,5 @@
     <include file="db/changelog/014-drop-foreign-keys.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/015-add-trgm-search.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/016-create-qa-sessions.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/017-drop-mcp-api-keys.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

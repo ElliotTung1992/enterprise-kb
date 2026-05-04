@@ -1,7 +1,5 @@
 package com.enterprise.kb.auth.controller;
 
-import com.enterprise.kb.auth.dto.ApiKeyExchangeRequest;
-import com.enterprise.kb.auth.dto.ApiKeyExchangeResponse;
 import com.enterprise.kb.auth.dto.AuthResponse;
 import com.enterprise.kb.auth.dto.ChangePasswordRequest;
 import com.enterprise.kb.auth.dto.LoginRequest;
@@ -89,19 +87,6 @@ public class AuthController {
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserDetails>> me(@AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.ok(userDetails));
-    }
-
-    /**
-     * API Key 换取短期 JWT
-     * <p>供 kb-mcp 在启动或过期时调用，将 API Key 转换为可用于 kb-app 所有接口的 Bearer Token。</p>
-     *
-     * @param request 包含 apiKey 的请求体
-     * @return 短期访问令牌
-     */
-    @PostMapping("/api-key/exchange")
-    public ResponseEntity<ApiResponse<ApiKeyExchangeResponse>> exchangeApiKey(
-            @Valid @RequestBody ApiKeyExchangeRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(authService.exchangeApiKey(request.apiKey())));
     }
 
     /**

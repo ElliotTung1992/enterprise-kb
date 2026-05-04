@@ -101,7 +101,12 @@ curl -X POST http://localhost:8081/api/v1/auth/register \
     "email": "zhangsan@company.com",
     "password": "SecurePass123",
     "fullName": "张三"
-  }'
+  }'  
+  
+-- windows版本  
+Invoke-RestMethod -Method POST -Uri "http://localhost:8081/api/v1/auth/register" `
+-ContentType "application/json" `
+-Body '{"username": "zhangsan1","email": "zhangsan1@company.com","password": "SecurePass123","fullName": "张三1"}'
 ```
 
 **返回**：
