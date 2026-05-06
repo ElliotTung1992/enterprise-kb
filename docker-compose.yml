@@ -180,25 +180,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── kb-ielts ─────────────────────────────────────────────────
-  ilets:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile-ielts
-    container_name: kb-ielts
-    ports:
-      - "8083:8083"
-    environment:
-      # Database (shared with kb-app)
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/enterprise_kb
-      SPRING_DATASOURCE_USERNAME: ${PG_USER:-kb_user}
-      SPRING_DATASOURCE_PASSWORD: ${PG_PASSWORD}
-    networks:
-      - kb-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
 
 volumes:
   postgres_data:

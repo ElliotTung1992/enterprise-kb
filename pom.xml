@@ -18,7 +18,6 @@
         <module>kb-search</module>
         <module>kb-knowledge-graph</module>
         <module>kb-app</module>
-        <module>kb-ielts</module>
     </modules>
 
     <properties>

@@ -14,7 +14,6 @@ COPY kb-document/pom.xml  kb-document/pom.xml
 COPY kb-search/pom.xml    kb-search/pom.xml
 COPY kb-knowledge-graph/pom.xml kb-knowledge-graph/pom.xml
 COPY kb-app/pom.xml       kb-app/pom.xml
-COPY kb-ielts/pom.xml     kb-ielts/pom.xml
 
 # Pre-download dependencies (cached unless pom.xml changes)
 RUN mvn dependency:go-offline -B -q
@@ -27,7 +26,6 @@ COPY kb-document/src    kb-document/src
 COPY kb-search/src      kb-search/src
 COPY kb-knowledge-graph/src kb-knowledge-graph/src
 COPY kb-app/src         kb-app/src
-COPY kb-ielts/src       kb-ielts/src
 
 # Build fat JAR
 RUN mvn -pl kb-app -am package -DskipTests -B
