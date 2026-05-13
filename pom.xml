@@ -29,7 +29,7 @@
         <!-- Core versions -->
         <spring-boot.version>3.4.1</spring-boot.version>
         <spring-ai.version>1.1.2</spring-ai.version>
-        <spring-ai-alibaba.version>1.1.2.1</spring-ai-alibaba.version>
+        <spring-ai-alibaba.version>1.1.2.2</spring-ai-alibaba.version>
         <!-- Auth -->
         <jjwt.version>0.12.6</jjwt.version>
 
@@ -69,7 +69,7 @@
             </dependency>
 
 
-            <!-- Spring AI Alibaba starters not covered by spring-ai-alibaba-bom:1.1.2.1 -->
+            <!-- Spring AI Alibaba starters not covered by spring-ai-alibaba-bom -->
             <dependency>
                 <groupId>com.alibaba.cloud.ai</groupId>
                 <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>

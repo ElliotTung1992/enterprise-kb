@@ -10,11 +10,12 @@
 |------|------|
 | 系统架构 | [[architecture/overview]] · [[architecture/module-dependency]] · [[architecture/data-flow]] |
 | 模块详情 | [[modules/kb-document]] · [[modules/kb-search]] · [[modules/kb-knowledge-graph]] |
-| AI / RAG | [[ai-rag/hybrid-search]] · [[ai-rag/agentic-qa]] · [[ai-rag/providers]] |
+| AI / RAG | [[ai-rag/hybrid-search]] · [[ai-rag/agentic-qa]] · [[ai-rag/providers]] · [[ai-rag/hitl-hook]] |
 | 数据库 | [[database/schema-overview]] · [[database/migrations]] |
-| API 接口 | [[api/qa]] · [[api/documents]] · [[api/search]] |
+| API 接口 | [[api/qa]] · [[api/documents]] · [[api/search]] · [[api/after-sales]] |
+| 功能 | [[features/document-ingestion]] · [[features/knowledge-graph]] · [[features/hitl-after-sales]] |
 | 基础设施 | [[infrastructure/docker-compose]] · [[infrastructure/services]] |
-| 架构决策 | [[decisions/adr-001-multi-module-maven]] |
+| 架构决策 | [[decisions/adr-001-multi-module-maven]] · [[decisions/adr-005-hitl-transaction-ordering]] · [[decisions/adr-006-customer-assistant-separation]] |
 
 ---
 

@@ -50,6 +50,9 @@ Token 计数使用 **JTokkit** 库。
 | 响应速度 | 快 | 较慢（多轮检索） |
 | 引用来源 | 单次检索结果 | 所有轮次的 citations 聚合 |
 
+> [!note] HITL 售后工具已独立
+> Human-in-the-Loop 售后流程已从 `AgenticQnAServiceImpl` 中彻底剥离，由独立的 `CustomerAssistantServiceImpl` 承载，使用独立的 `customer_sessions / customer_messages` 表。见 [[ai-rag/hitl-hook]] 和 [[decisions/adr-006-customer-assistant-separation]]。
+
 ## 相关文件
 
 - `kb-search/src/main/java/.../service/impl/AgenticQnAServiceImpl.java`

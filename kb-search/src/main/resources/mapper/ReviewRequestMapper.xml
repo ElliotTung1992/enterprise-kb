@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.search.mapper.ReviewRequestMapper">
+
+    <resultMap id="ReviewRequestResultMap" type="com.enterprise.kb.search.model.ReviewRequest">
+        <id property="id" column="id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="orderId" column="order_id"/>
+        <result property="reason" column="reason"/>
+        <result property="conversationSnapshot" column="conversation_snapshot"/>
+        <result property="orderDetails" column="order_details"/>
+        <result property="toolCallId" column="tool_call_id"/>
+        <result property="toolCallName" column="tool_call_name"/>
+        <result property="status" column="status"/>
+        <result property="reviewerId" column="reviewer_id"/>
+        <result property="reviewerComment" column="reviewer_comment"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="decidedAt" column="decided_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="ReviewRequestResultMap">
+        SELECT *
+        FROM review_requests
+        WHERE id = #{id,jdbcType=OTHER}
+    </select>
+
+    <select id="findPendingBySpaceId" resultMap="ReviewRequestResultMap">
+        SELECT *
+        FROM review_requests
+        WHERE space_id = #{spaceId,jdbcType=OTHER}
+          AND status = 'PENDING'
+        ORDER BY created_at ASC
+    </select>
+
+    <select id="findAllPending" resultMap="ReviewRequestResultMap">
+        SELECT *
+        FROM review_requests
+        WHERE status = 'PENDING'
+        ORDER BY created_at ASC
+    </select>
+
+    <select id="findByStatus" resultMap="ReviewRequestResultMap">
+        SELECT *
+        FROM review_requests
+        <where>
+            <if test="status != null">
+                status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO review_requests (
+            id, session_id, space_id, user_id, order_id, reason,
+            conversation_snapshot, order_details,
+            tool_call_id, tool_call_name,
+            status, created_at, updated_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{sessionId,jdbcType=OTHER},
+            #{spaceId,jdbcType=OTHER},
+            #{userId,jdbcType=OTHER},
+            #{orderId},
+            #{reason},
+            #{conversationSnapshot,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{orderDetails,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{toolCallId},
+            #{toolCallName},
+            #{status},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="updateDecision">
+        UPDATE review_requests
+        SET status           = #{status},
+            reviewer_id      = #{reviewerId,jdbcType=OTHER},
+            reviewer_comment = #{reviewerComment},
+            updated_at       = #{updatedAt},
+            decided_at       = #{decidedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+</mapper>

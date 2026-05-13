@@ -2,10 +2,78 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>企业知识库</title>
-<script>
-  window.location.href = localStorage.getItem('access_token') ? '/dashboard.html' : '/login.html';
-</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>企业平台</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+body { background: #f1f5f9; min-height: 100vh; display: flex; flex-direction: column; visibility: hidden }
+.portal-header {
+  background: #1e1b4b;
+  color: #fff;
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.portal-header .brand { font-size: 1.1rem; font-weight: 700; letter-spacing: .01em; }
+.portal-header .user-info { font-size: .85rem; color: #c7d2fe; display: flex; align-items: center; gap: 1rem; }
+.portal-body { flex: 1; display: flex; align-items: center; justify-content: center; padding: 3rem 1rem; }
+.app-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  width: 280px;
+  text-align: center;
+  box-shadow: 0 4px 24px rgba(0,0,0,.07);
+  cursor: pointer;
+  transition: box-shadow .2s, transform .15s;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.app-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,.13); transform: translateY(-3px); color: inherit; }
+.app-card .app-icon {
+  width: 64px; height: 64px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; margin: 0 auto 1.25rem;
+}
+.app-card .app-name { font-size: 1.1rem; font-weight: 700; margin-bottom: .4rem; }
+.app-card .app-desc { font-size: .82rem; color: #64748b; line-height: 1.5; }
+.kb-icon { background: #ede9fe; color: #6d28d9; }
+.mall-icon { background: #fdf4ff; color: #a855f7; }
+</style>
 </head>
-<body></body>
+<body>
+
+<div class="portal-header">
+  <div class="brand"><i class="bi bi-grid-1x2-fill me-2"></i>企业平台</div>
+  <div class="user-info">
+    <span id="header-username"></span>
+    <a href="#" onclick="logout()" style="color:#c7d2fe"><i class="bi bi-box-arrow-right me-1"></i>退出</a>
+  </div>
+</div>
+
+<div class="portal-body">
+  <div class="d-flex gap-4 flex-wrap justify-content-center">
+    <a class="app-card" href="/dashboard.html">
+      <div class="app-icon kb-icon"><i class="bi bi-journal-bookmark-fill"></i></div>
+      <div class="app-name">企业知识库</div>
+      <div class="app-desc">文档管理、语义搜索、AI 问答，构建企业内部知识中台</div>
+    </a>
+    <a class="app-card" href="/customer.html">
+      <div class="app-icon mall-icon"><i class="bi bi-headset"></i></div>
+      <div class="app-name">商城客服中心</div>
+      <div class="app-desc">AI 驱动的售后咨询、退换货申请，支持人工审核流程</div>
+    </a>
+  </div>
+</div>
+
+<script src="/assets/js/api.js"></script>
+<script src="/assets/js/auth.js"></script>
+<script>
+requireAuth();
+document.getElementById('header-username').textContent = localStorage.getItem('username') || '';
+</script>
+</body>
 </html>

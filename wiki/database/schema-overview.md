@@ -24,6 +24,9 @@ Schema 通过 **Liquibase** 管理，changelog: `kb-app/src/main/resources/db/ch
 | 015 | (trgm) | 安装 pg_trgm 扩展，建全文索引 |
 | 016 | `qa_sessions` + `qa_messages` | QA 会话持久化 |
 | 017 | (drop mcp_api_keys) | 删除 MCP API Key 表 |
+| 018 | `review_requests` | HITL 售后审核申请（含对话快照、订单详情 JSONB） |
+| 019 | `customer_sessions` + `customer_messages` | 商城客服对话会话与消息 |
+| 020 | (alter review_requests) | `space_id` 改为可空（客户助手无知识空间） |
 
 ## 通用规范
 
@@ -38,3 +41,4 @@ Schema 通过 **Liquibase** 管理，changelog: `kb-app/src/main/resources/db/ch
 - [[database/entities/documents-chunks]] — 文档、分块
 - [[database/entities/qa-sessions]] — QA 会话与消息
 - [[database/entities/tags-graph]] — 标签与知识图谱
+- [[database/entities/after-sales-tables]] — 售后审核、商城客服会话
