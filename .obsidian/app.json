@@ -1,0 +1,11 @@
+{
+  "legacyEditor": false,
+  "livePreview": true,
+  "defaultViewMode": "preview",
+  "foldHeading": true,
+  "showLineNumber": false,
+  "spellcheck": false,
+  "tabSize": 2,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "wiki"
+}
