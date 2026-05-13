@@ -1,0 +1,37 @@
+{
+  "sources": {
+    ".planning/2026-05-13-hitl-after-sales/task_plan.md": {
+      "hash": "ae01b1211c72c2a9d7be93665d1da204",
+      "ingested_at": "2026-05-13",
+      "pages_created": [
+        "wiki/features/hitl-after-sales.md",
+        "wiki/decisions/adr-005-hitl-transaction-ordering.md",
+        "wiki/decisions/adr-006-customer-assistant-separation.md"
+      ],
+      "pages_updated": [
+        "wiki/Home.md",
+        "wiki/database/schema-overview.md",
+        "wiki/ai-rag/agentic-qa.md"
+      ]
+    },
+    ".planning/2026-05-13-hitl-after-sales/findings.md": {
+      "hash": "686d5ca4f274aa20931a50fd51238c76",
+      "ingested_at": "2026-05-13",
+      "pages_created": [
+        "wiki/ai-rag/hitl-hook.md",
+        "wiki/api/after-sales.md",
+        "wiki/database/entities/after-sales-tables.md"
+      ],
+      "pages_updated": []
+    },
+    ".planning/2026-05-13-hitl-after-sales/progress.md": {
+      "hash": "126d54b2fc72c961bbce4bb182304c20",
+      "ingested_at": "2026-05-13",
+      "pages_created": [],
+      "pages_updated": [
+        "wiki/log.md",
+        "wiki/hot.md"
+      ]
+    }
+  }
+}
