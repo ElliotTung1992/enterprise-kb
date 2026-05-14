@@ -3,7 +3,7 @@
 ## Goal
 设计商城"用户投诉升级"场景的 AI 处理架构，采用 Plan + ReAct 组合模式，实现责任认定、方案制定、多方协商、自动执行的完整闭环。
 
-## Status: Phase 0-4 COMPLETE — Phase 5-7 pending
+## Status: Phase 0-5 COMPLETE — Phase 6-7 pending
 
 ---
 
@@ -457,7 +457,7 @@ Phase 4 结果：
 - 编译验证通过（`mvn install -pl kb-search -am -DskipTests`）。
 
 ### Phase 5: 超时与 Replanner
-**Status**: pending
+**Status**: complete
 
 目标：把 48h 等待、fallback、最多 2 次重规划做成确定状态机。
 
@@ -475,6 +475,22 @@ Phase 4 结果：
 - 最多重规划 2 次
 - 第 3 次失败自动升级高级专员
 - 状态流转可追踪
+
+Phase 5 结果：
+- DB 迁移 `023-add-complaint-plan-next-check-at.sql`：给 `complaint_plans` 加 `next_check_at TIMESTAMPTZ` 字段。
+- `KnowledgeBaseApplication` 加 `@EnableScheduling`。
+- `ComplaintPlan` model 加 `nextCheckAt` 字段，Mapper XML resultMap 同步更新。
+- `ComplaintPlanMapper` 新增 `startExecution()`（同时写 status=EXECUTING 和 next_check_at）、`findExecutingPastDeadline(now)`（查超时计划）。
+- `ComplaintEscalationService` 新增 `startPlanExecution(planId, nextCheckAt)`，实现类落库。
+- `ComplaintExecutorServiceImpl.execute()` 改用 `startPlanExecution(planId, now+48h)`，替换原来仅更新 status 的调用。
+- 新增 `ComplaintReplannerService` 接口 + `ComplaintReplannerServiceImpl`：
+  - 解析当前计划 `fallbackPlan` JSON；
+  - 用 `replanCount` 作为 fallback 索引；
+  - `replanCount >= 2` 或遇到 `ESCALATE_TO_SENIOR` 条目 → 投诉置 ESCALATED，计划置 FAILED；
+  - 否则从 fallback 取新责任方/补偿，调 `savePlan()` 生成新计划（PENDING_REVIEW，replanCount+1），旧计划置 FAILED。
+- 新增 `ComplaintDeadlineScheduler`：`@Scheduled(fixedDelay=60_000)` 扫描超时 EXECUTING 计划，逐一调 `replan()`，单条失败不影响其他计划。
+- `ComplaintController` 新增 `POST /plans/{id}/trigger-timeout` 手动触发重规划（测试用）。
+- 编译验证通过。
 
 ### Phase 6: 审核员前端
 **Status**: pending

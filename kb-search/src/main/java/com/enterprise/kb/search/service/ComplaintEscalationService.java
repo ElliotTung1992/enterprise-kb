@@ -6,6 +6,7 @@ import com.enterprise.kb.search.dto.ComplaintPlanModifyRequest;
 import com.enterprise.kb.search.model.Complaint;
 import com.enterprise.kb.search.model.ComplaintPlan;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -99,6 +100,14 @@ public interface ComplaintEscalationService {
      * @return 处理计划列表，按创建时间降序
      */
     List<ComplaintPlan> findPlansByStatus(ComplaintPlanStatus status);
+
+    /**
+     * 将计划置为执行中，同时记录 deadline 检查时间（now + 48h）。
+     *
+     * @param planId      计划 ID
+     * @param nextCheckAt 商家响应 deadline
+     */
+    void startPlanExecution(UUID planId, Instant nextCheckAt);
 
     /**
      * 修改处理计划字段并审批通过。

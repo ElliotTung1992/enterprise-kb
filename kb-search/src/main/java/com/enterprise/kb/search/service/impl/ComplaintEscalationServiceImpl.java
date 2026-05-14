@@ -144,6 +144,16 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
      */
     @Override
     @Transactional
+    public void startPlanExecution(UUID planId, Instant nextCheckAt) {
+        complaintPlanMapper.startExecution(planId, nextCheckAt, Instant.now());
+        log.info("计划进入执行中：planId={}，nextCheckAt={}", planId, nextCheckAt);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
     public ComplaintPlan approvePlan(UUID planId, UUID reviewerId, String comment) {
         ComplaintPlan plan = complaintPlanMapper.findById(planId)
                 .orElseThrow(() -> new ResourceNotFoundException("ComplaintPlan", planId));

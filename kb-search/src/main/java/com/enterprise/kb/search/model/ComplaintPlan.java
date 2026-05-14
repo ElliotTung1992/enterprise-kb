@@ -35,6 +35,8 @@ public class ComplaintPlan {
     private int replanCount;
     /** 计划状态 */
     private ComplaintPlanStatus status;
+    /** 下次 deadline 检查时间，进入 EXECUTING 时由 Executor 写入（now + 48h） */
+    private Instant nextCheckAt;
     /** 创建时间 */
     private Instant createdAt;
     /** 最后更新时间 */

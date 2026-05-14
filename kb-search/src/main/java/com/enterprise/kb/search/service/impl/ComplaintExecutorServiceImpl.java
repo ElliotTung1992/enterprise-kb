@@ -20,8 +20,11 @@ import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 投诉升级处理计划执行服务实现。
@@ -51,7 +54,7 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
                     HttpStatus.BAD_REQUEST);
         }
 
-        complaintEscalationService.updatePlanStatus(planId, ComplaintPlanStatus.EXECUTING);
+        complaintEscalationService.startPlanExecution(planId, Instant.now().plus(48, ChronoUnit.HOURS));
         log.info("开始执行投诉处理计划：planId={}，complaintId={}", planId, plan.getComplaintId());
 
         try {
@@ -69,7 +72,8 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
 
     private String runAgent(ComplaintPlan plan) throws GraphRunnerException {
         ChatClient chatClient = modelProviderResolver.resolveChatClient(null);
-        ReactAgent agent = buildAgent(plan, chatClient);
+        AtomicBoolean resolutionRecorded = new AtomicBoolean(false);
+        ReactAgent agent = buildAgent(plan, chatClient, resolutionRecorded);
 
         String planMessage = buildPlanMessage(plan);
         RunnableConfig config = RunnableConfig.builder()
@@ -77,10 +81,14 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
                 .build();
 
         var result = agent.call(List.of(new UserMessage(planMessage)), config);
+
+        if (!resolutionRecorded.get()) {
+            throw new KbException("ReactAgent 未调用 recordResolution，执行未完成", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
         return result.getText();
     }
 
-    private ReactAgent buildAgent(ComplaintPlan plan, ChatClient chatClient) {
+    private ReactAgent buildAgent(ComplaintPlan plan, ChatClient chatClient, AtomicBoolean resolutionRecorded) {
         UUID complaintId = plan.getComplaintId();
 
         FunctionToolCallback<NotifyPartyInput, String> notifyTool = FunctionToolCallback.builder(
@@ -108,6 +116,7 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
         FunctionToolCallback<RecordResolutionInput, String> resolutionTool = FunctionToolCallback.builder(
                         "recordResolution",
                         (RecordResolutionInput input) -> {
+                            resolutionRecorded.set(true);
                             log.info("记录投诉结案：complaintId={}，outcome={}", complaintId, input.outcome());
                             return "结案记录成功：" + input.outcome();
                         })
@@ -141,6 +150,7 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
                         .build())
                 .build();
     }
+
 
     private String mockNotifyParty(NotifyPartyInput input) {
         log.info("【Mock】通知责任方：partyType={}，caseId={}，deadline={}",

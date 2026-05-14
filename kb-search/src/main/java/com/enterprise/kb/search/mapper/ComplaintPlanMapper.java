@@ -62,6 +62,25 @@ public interface ComplaintPlanMapper {
     List<ComplaintPlan> findByStatus(@Param("status") ComplaintPlanStatus status);
 
     /**
+     * 将计划置为执行中，同时记录 deadline 检查时间
+     *
+     * @param id          计划 ID
+     * @param nextCheckAt 商家响应 deadline（now + 48h）
+     * @param updatedAt   更新时间
+     */
+    void startExecution(@Param("id") UUID id,
+                        @Param("nextCheckAt") Instant nextCheckAt,
+                        @Param("updatedAt") Instant updatedAt);
+
+    /**
+     * 查询所有 EXECUTING 且 next_check_at 已到期的计划
+     *
+     * @param now 当前时间
+     * @return 超时计划列表
+     */
+    List<ComplaintPlan> findExecutingPastDeadline(@Param("now") Instant now);
+
+    /**
      * 更新处理计划的可修改字段（责任方、补偿类型、补偿金额），null 参数不更新
      *
      * @param id                 计划 ID

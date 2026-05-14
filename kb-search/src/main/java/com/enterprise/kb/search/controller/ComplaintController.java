@@ -11,6 +11,7 @@ import com.enterprise.kb.search.model.ComplaintPlan;
 import com.enterprise.kb.search.service.ComplaintEscalationService;
 import com.enterprise.kb.search.service.ComplaintExecutorService;
 import com.enterprise.kb.search.service.ComplaintPlannerService;
+import com.enterprise.kb.search.service.ComplaintReplannerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +31,7 @@ public class ComplaintController {
     private final ComplaintEscalationService complaintEscalationService;
     private final ComplaintPlannerService complaintPlannerService;
     private final ComplaintExecutorService complaintExecutorService;
+    private final ComplaintReplannerService complaintReplannerService;
 
     // ---- 投诉案件 ----
 
@@ -156,5 +158,22 @@ public class ComplaintController {
             @PathVariable UUID planId) {
         return ResponseEntity.ok(ApiResponse.ok(
                 complaintExecutorService.execute(planId)));
+    }
+
+    // ---- 超时与重规划 ----
+
+    /**
+     * 手动触发计划超时重规划（测试用）。
+     * <p>模拟商家超时或拒绝响应，从 fallback 取下一方案重新进入审批；
+     * 若已达最大重规划次数则升级至高级专员。</p>
+     *
+     * @param planId 计划 ID
+     * @return 操作成功响应
+     */
+    @PostMapping("/plans/{planId}/trigger-timeout")
+    public ResponseEntity<ApiResponse<Void>> triggerTimeout(
+            @PathVariable UUID planId) {
+        complaintReplannerService.replan(planId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

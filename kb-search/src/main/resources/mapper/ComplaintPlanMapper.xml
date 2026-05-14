@@ -15,6 +15,7 @@
         <result property="fallbackPlan" column="fallback_plan"/>
         <result property="replanCount" column="replan_count"/>
         <result property="status" column="status"/>
+        <result property="nextCheckAt" column="next_check_at"/>
         <result property="createdAt" column="created_at"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
@@ -60,6 +61,22 @@
             updated_at = #{updatedAt}
         WHERE id = #{id,jdbcType=OTHER}
     </update>
+
+    <update id="startExecution">
+        UPDATE complaint_plans
+        SET status       = 'EXECUTING',
+            next_check_at = #{nextCheckAt},
+            updated_at   = #{updatedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+    <select id="findExecutingPastDeadline" resultMap="ComplaintPlanResultMap">
+        SELECT *
+        FROM complaint_plans
+        WHERE status = 'EXECUTING'
+          AND next_check_at IS NOT NULL
+          AND next_check_at &lt;= #{now}
+    </select>
 
     <update id="updateFields">
         UPDATE complaint_plans
