@@ -1,10 +1,13 @@
 package com.enterprise.kb.search.mapper;
 
+import com.enterprise.kb.common.constants.CompensationType;
 import com.enterprise.kb.common.constants.ComplaintPlanStatus;
+import com.enterprise.kb.common.constants.ResponsibleParty;
 import com.enterprise.kb.search.model.ComplaintPlan;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -48,5 +51,28 @@ public interface ComplaintPlanMapper {
      */
     void updateStatus(@Param("id") UUID id,
                       @Param("status") ComplaintPlanStatus status,
+                      @Param("updatedAt") Instant updatedAt);
+
+    /**
+     * 按状态查询处理计划，status 为 null 时返回全部，按创建时间降序
+     *
+     * @param status 计划状态（可为 null）
+     * @return 处理计划列表
+     */
+    List<ComplaintPlan> findByStatus(@Param("status") ComplaintPlanStatus status);
+
+    /**
+     * 更新处理计划的可修改字段（责任方、补偿类型、补偿金额），null 参数不更新
+     *
+     * @param id                 计划 ID
+     * @param responsibleParty   修改后的责任方（可为 null）
+     * @param compensationType   修改后的补偿类型（可为 null）
+     * @param compensationAmount 修改后的补偿金额（可为 null）
+     * @param updatedAt          更新时间
+     */
+    void updateFields(@Param("id") UUID id,
+                      @Param("responsibleParty") ResponsibleParty responsibleParty,
+                      @Param("compensationType") CompensationType compensationType,
+                      @Param("compensationAmount") BigDecimal compensationAmount,
                       @Param("updatedAt") Instant updatedAt);
 }

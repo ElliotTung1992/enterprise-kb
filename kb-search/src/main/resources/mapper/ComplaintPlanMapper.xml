@@ -61,4 +61,24 @@
         WHERE id = #{id,jdbcType=OTHER}
     </update>
 
+    <update id="updateFields">
+        UPDATE complaint_plans
+        <set>
+            updated_at = #{updatedAt},
+            <if test="responsibleParty != null">responsible_party = #{responsibleParty},</if>
+            <if test="compensationType != null">compensation_type = #{compensationType},</if>
+            <if test="compensationAmount != null">compensation_amount = #{compensationAmount},</if>
+        </set>
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+    <select id="findByStatus" resultMap="ComplaintPlanResultMap">
+        SELECT *
+        FROM complaint_plans
+        <where>
+            <if test="status != null">status = #{status}</if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
 </mapper>
