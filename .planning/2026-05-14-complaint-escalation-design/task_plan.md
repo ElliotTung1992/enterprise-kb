@@ -257,7 +257,7 @@ Phase 1 结果：
 - 新增 `ComplaintEscalationServiceImplTest` 覆盖创建投诉、保存计划默认值、查询异常和计划列表。
 
 ### Phase 2: Planner MVP
-**Status**: pending
+**Status**: complete
 
 目标：输入投诉内容和订单号，生成一个结构化计划。
 
@@ -273,6 +273,14 @@ Phase 1 结果：
 - 边界案例能走 LLM
 - 不确定案例输出 `DISPUTED`
 - 计划落库成功
+
+Phase 2 结果：
+- 新增 `ComplaintPlannerService.generatePlan(complaintId)`。
+- 新增 Planner 数据上下文 DTO 和责任认定结果 DTO。
+- 新增 `ComplaintResponsibilityInferenceService` 作为规则未命中时的 LLM 兜底接口。
+- Planner MVP 使用 mock 数据收集器，先实现确定性规则，再走 LLM 推理。
+- 生成计划后落库为 `PENDING_REVIEW`，并通过 `ComplaintEscalationService.savePlan()` 推进投诉状态。
+- 单元测试覆盖规则命中、物流责任、LLM 边界案例、DISPUTED 不确定案例和计划落库。
 
 ### Phase 3: HITL 审批接入
 **Status**: pending

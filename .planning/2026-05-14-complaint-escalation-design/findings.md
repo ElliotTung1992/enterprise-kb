@@ -17,6 +17,8 @@
 - `kb-app` 仍负责 Liquibase 迁移和静态页面；若 Phase 6 改审核员前端，需要改 `kb-app/src/main/resources/static/reviews.html`。
 - Phase 1 已落地基础数据模型：`complaints` 存投诉案件主线，`complaint_plans` 存 AI 生成的处理计划。
 - `complaint_plans` 的 `contact_sequence`、`timeouts`、`fallback_plan` 使用 JSONB 存储，但 Java model 暂按项目现有 `ReviewRequest` 风格用 `String` 承载 JSON。
+- Phase 2 已落地 Planner MVP：`ComplaintPlannerService.generatePlan(complaintId)` 会读取投诉、收集 mock 上下文、规则优先判责、规则未命中时走 LLM 兜底并保存计划。
+- Planner MVP 的 mock 数据收集基于投诉内容和订单号推断订单状态、物流状态、历史投诉和商家违规记录；真实订单/物流 API 留到后续替换。
 
 ## Technical Decisions
 | Decision | Rationale |
@@ -28,6 +30,8 @@
 - Phase 3 可扩展 `ReviewRequest` 加 `review_type` / `target_id` / `payload` | 用于让同一个审核中心承载 `AFTER_SALES` 与 `COMPLAINT_PLAN`，并路由到不同审批处理器。 |
 - Phase 1 先实现服务层与数据持久化，不改现有售后流程 | 降低风险，确保所有现有 `/after-sales` 行为保持不变。 |
 - `ComplaintEscalationService.savePlan()` 保存计划后将投诉状态推进为 `PENDING_REVIEW` | 与 Planner MVP 产物进入人工审核的业务流一致，Phase 3 再接入真正审核请求。 |
+- LLM 责任兜底独立为 `ComplaintResponsibilityInferenceService` | 让 Planner 规则层可单测，LLM Prompt 和解析逻辑可独立替换。 |
+- Planner MVP 暂不引入 Spring AI Alibaba Graph | 当前阶段目标是服务层可验证闭环；Graph 编排可在执行器/跨天流程阶段引入，避免 Phase 2 过重。 |
 
 ## Issues Encountered
 | Issue | Resolution |
@@ -50,3 +54,10 @@
 - `kb-search/src/main/java/com/enterprise/kb/search/service/ComplaintEscalationService.java`
 - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/ComplaintEscalationServiceImpl.java`
 - `kb-search/src/test/java/com/enterprise/kb/search/service/impl/ComplaintEscalationServiceImplTest.java`
+- `kb-search/src/main/java/com/enterprise/kb/search/service/ComplaintPlannerService.java`
+- `kb-search/src/main/java/com/enterprise/kb/search/service/impl/ComplaintPlannerServiceImpl.java`
+- `kb-search/src/main/java/com/enterprise/kb/search/service/ComplaintResponsibilityInferenceService.java`
+- `kb-search/src/main/java/com/enterprise/kb/search/service/impl/ComplaintResponsibilityInferenceServiceImpl.java`
+- `kb-search/src/main/java/com/enterprise/kb/search/dto/ComplaintPlanningContext.java`
+- `kb-search/src/main/java/com/enterprise/kb/search/dto/ComplaintResponsibilityDecision.java`
+- `kb-search/src/test/java/com/enterprise/kb/search/service/impl/ComplaintPlannerServiceImplTest.java`

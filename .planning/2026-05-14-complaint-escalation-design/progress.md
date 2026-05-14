@@ -54,3 +54,18 @@
 - [x] 新增 `ComplaintEscalationServiceImplTest`
 - [x] 验证通过：`mvn test -pl kb-search -am -Dsurefire.failIfNoSpecifiedTests=false`
 - [x] 验证通过：`mvn test -pl kb-app -am -Dsurefire.failIfNoSpecifiedTests=false`
+
+### Phase 2 开始
+- [x] 将 Phase 2 状态标记为 in_progress
+- [x] 新增 Planner MVP 服务，支持规则优先、LLM 兜底、计划落库
+- [x] 补充 Planner 单元测试并运行验证
+- [x] 将 Phase 2 状态标记为 complete
+
+### Phase 2 完成
+- [x] 新增 `ComplaintPlannerService` / `ComplaintPlannerServiceImpl`
+- [x] 新增 `ComplaintPlanningContext` 和 `ComplaintResponsibilityDecision`
+- [x] 新增 `ComplaintResponsibilityInferenceService` / `ComplaintResponsibilityInferenceServiceImpl`
+- [x] Planner 规则覆盖：签收后商品损坏、物流轨迹中断超 48h、系统订单状态异常、签收 7 天内质量问题、未发货超时
+- [x] 规则未命中时调用 LLM 兜底，证据不足时保存 `DISPUTED`
+- [x] 新增 `ComplaintPlannerServiceImplTest`
+- [x] 验证通过：`mvn test -pl kb-search -am -Dsurefire.failIfNoSpecifiedTests=false`
