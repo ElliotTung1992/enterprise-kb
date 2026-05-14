@@ -26,4 +26,5 @@
     <include file="db/changelog/019-add-customer-sessions.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/020-make-review-space-id-nullable.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/021-add-customer-sessions-composite-index.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/022-add-complaint-escalation-tables.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>
