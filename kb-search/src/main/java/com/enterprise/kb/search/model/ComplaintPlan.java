@@ -31,6 +31,8 @@ public class ComplaintPlan {
     private String timeouts;
     /** 备选方案（JSONB 数组） */
     private String fallbackPlan;
+    /** 非列字段，由 JOIN complaints 查询填充 */
+    private String orderId;
     /** 已重规划次数 */
     private int replanCount;
     /** 计划状态 */

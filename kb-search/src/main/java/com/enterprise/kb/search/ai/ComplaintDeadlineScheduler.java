@@ -2,7 +2,7 @@ package com.enterprise.kb.search.ai;
 
 import com.enterprise.kb.search.mapper.ComplaintPlanMapper;
 import com.enterprise.kb.search.model.ComplaintPlan;
-import com.enterprise.kb.search.service.ComplaintReplannerService;
+import com.enterprise.kb.search.service.ComplaintWorkflowService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,7 +22,7 @@ import java.util.List;
 public class ComplaintDeadlineScheduler {
 
     private final ComplaintPlanMapper complaintPlanMapper;
-    private final ComplaintReplannerService complaintReplannerService;
+    private final ComplaintWorkflowService complaintWorkflowService;
 
     @Scheduled(fixedDelay = 60_000)
     public void checkDeadlines() {
@@ -35,7 +35,7 @@ public class ComplaintDeadlineScheduler {
             try {
                 log.info("触发重规划：planId={}，complaintId={}，nextCheckAt={}",
                         plan.getId(), plan.getComplaintId(), plan.getNextCheckAt());
-                complaintReplannerService.replan(plan.getId());
+                complaintWorkflowService.triggerReplan(plan.getId());
             } catch (Exception e) {
                 log.error("重规划失败：planId={}，原因：{}", plan.getId(), e.getMessage(), e);
             }

@@ -88,7 +88,6 @@ public class ComplaintReplannerServiceImpl implements ComplaintReplannerService 
 
         complaintEscalationService.savePlan(newPlan);
 
-        // 标记当前计划为 FAILED
         complaintPlanMapper.updateStatus(current.getId(), ComplaintPlanStatus.FAILED, Instant.now());
 
         log.info("重规划完成：旧 planId={}，新 planId={}，新责任方={}，replanCount={}",

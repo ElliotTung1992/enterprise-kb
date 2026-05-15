@@ -4,8 +4,10 @@ import com.alibaba.cloud.ai.graph.CompileConfig;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
+import com.enterprise.kb.common.constants.CompensationType;
 import com.enterprise.kb.common.constants.ComplaintPlanStatus;
 import com.enterprise.kb.common.constants.ComplaintStatus;
+import com.enterprise.kb.common.constants.ResponsibleParty;
 import com.enterprise.kb.common.exception.KbException;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.ComplaintExecutionResult;
@@ -155,20 +157,20 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
     private String mockNotifyParty(NotifyPartyInput input) {
         log.info("【Mock】通知责任方：partyType={}，caseId={}，deadline={}",
                 input.partyType(), input.caseId(), input.deadline());
-        return switch (input.partyType().toUpperCase()) {
-            case "MERCHANT" -> "商家已收到投诉通知，要求在 " + input.deadline() + " 内回复处理结果。";
-            case "LOGISTICS" -> "物流公司已收到索赔通知，等待核查结果。";
-            case "PLATFORM" -> "平台内部处理工单已创建，将优先跟进。";
+        return switch (input.partyType()) {
+            case MERCHANT -> "商家已收到投诉通知，要求在 " + input.deadline() + " 内回复处理结果。";
+            case LOGISTICS -> "物流公司已收到索赔通知，等待核查结果。";
+            case PLATFORM -> "平台内部处理工单已创建，将优先跟进。";
             default -> "已通知 " + input.partyType() + "，等待处理。";
         };
     }
 
     private String mockExecuteCompensation(ExecuteCompensationInput input) {
         log.info("【Mock】执行补偿：type={}，orderId={}，amount={}", input.compensationType(), input.orderId(), input.amount());
-        return switch (input.compensationType().toUpperCase()) {
-            case "REFUND" -> "退款 ¥" + input.amount() + " 已发起，预计 3-5 个工作日到账。";
-            case "COUPON" -> "补偿优惠券 ¥" + input.amount() + " 已发放至用户账户。";
-            case "REFUND_AND_COUPON" -> "退款 ¥" + input.amount() + " 已发起，同时发放 ¥50 补偿优惠券。";
+        return switch (input.compensationType()) {
+            case REFUND -> "退款 ¥" + input.amount() + " 已发起，预计 3-5 个工作日到账。";
+            case COUPON -> "补偿优惠券 ¥" + input.amount() + " 已发放至用户账户。";
+            case REFUND_AND_COUPON -> "退款 ¥" + input.amount() + " 已发起，同时发放 ¥50 补偿优惠券。";
             default -> "补偿方案 " + input.compensationType() + " 已执行。";
         };
     }
@@ -209,9 +211,9 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
 
     // ---- 工具输入 DTO（内部使用） ----
 
-    record NotifyPartyInput(String partyType, String caseId, String deadline) {}
+    record NotifyPartyInput(ResponsibleParty partyType, String caseId, String deadline) {}
 
-    record ExecuteCompensationInput(String compensationType, String orderId, String userId, String amount) {}
+    record ExecuteCompensationInput(CompensationType compensationType, String orderId, String userId, String amount) {}
 
     record RecordResolutionInput(String caseId, String outcome) {}
 

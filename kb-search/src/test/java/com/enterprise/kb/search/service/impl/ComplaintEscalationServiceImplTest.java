@@ -4,7 +4,9 @@ import com.enterprise.kb.common.constants.CompensationType;
 import com.enterprise.kb.common.constants.ComplaintPlanStatus;
 import com.enterprise.kb.common.constants.ComplaintStatus;
 import com.enterprise.kb.common.constants.ResponsibleParty;
+import com.enterprise.kb.common.exception.KbException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
+import com.enterprise.kb.search.dto.ComplaintPlanModifyRequest;
 import com.enterprise.kb.search.mapper.ComplaintMapper;
 import com.enterprise.kb.search.mapper.ComplaintPlanMapper;
 import com.enterprise.kb.search.model.Complaint;
@@ -25,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -133,5 +137,130 @@ class ComplaintEscalationServiceImplTest {
         List<ComplaintPlan> result = service.listPlans(complaintId);
 
         assertThat(result).containsExactly(plan);
+    }
+
+    // ---- Phase 3: HITL 审批 ----
+
+    @Test
+    void approvePlan_transitionsPendingReviewToApproved() {
+        UUID planId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        ComplaintPlan result = service.approvePlan(planId, UUID.randomUUID(), null);
+
+        verify(complaintPlanMapper).updateStatus(eq(planId), eq(ComplaintPlanStatus.APPROVED), any());
+        assertThat(result.getStatus()).isEqualTo(ComplaintPlanStatus.APPROVED);
+    }
+
+    @Test
+    void approvePlan_throwsWhenPlanIsNotPendingReview() {
+        UUID planId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        plan.setStatus(ComplaintPlanStatus.APPROVED);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        assertThatThrownBy(() -> service.approvePlan(planId, UUID.randomUUID(), null))
+                .isInstanceOf(KbException.class)
+                .hasMessageContaining("PENDING_REVIEW");
+
+        verify(complaintPlanMapper, never()).updateStatus(any(), eq(ComplaintPlanStatus.APPROVED), any());
+    }
+
+    @Test
+    void rejectPlan_transitionsToPendingReviewToRejectedAndCloseComplaint() {
+        UUID planId = UUID.randomUUID();
+        UUID complaintId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        plan.setComplaintId(complaintId);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        ComplaintPlan result = service.rejectPlan(planId, UUID.randomUUID(), "审批不通过");
+
+        verify(complaintPlanMapper).updateStatus(eq(planId), eq(ComplaintPlanStatus.REJECTED), any());
+        verify(complaintMapper).updateStatus(eq(complaintId), eq(ComplaintStatus.CLOSED), any());
+        assertThat(result.getStatus()).isEqualTo(ComplaintPlanStatus.REJECTED);
+    }
+
+    @Test
+    void rejectPlan_throwsWhenPlanIsNotPendingReview() {
+        UUID planId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        plan.setStatus(ComplaintPlanStatus.REJECTED);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        assertThatThrownBy(() -> service.rejectPlan(planId, UUID.randomUUID(), null))
+                .isInstanceOf(KbException.class)
+                .hasMessageContaining("PENDING_REVIEW");
+    }
+
+    @Test
+    void modifyAndApprovePlan_appliesNonNullFieldsAndTransitionsToApproved() {
+        UUID planId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        plan.setResponsibleParty(ResponsibleParty.MERCHANT);
+        plan.setCompensationType(CompensationType.NONE);
+        plan.setCompensationAmount(BigDecimal.ZERO);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        ComplaintPlanModifyRequest req = new ComplaintPlanModifyRequest(
+                ResponsibleParty.PLATFORM,
+                CompensationType.REFUND,
+                new BigDecimal("300"),
+                "平台承担"
+        );
+
+        ComplaintPlan result = service.modifyAndApprovePlan(planId, UUID.randomUUID(), req);
+
+        verify(complaintPlanMapper).updateFields(
+                eq(planId),
+                eq(ResponsibleParty.PLATFORM),
+                eq(CompensationType.REFUND),
+                eq(new BigDecimal("300")),
+                any());
+        verify(complaintPlanMapper).updateStatus(eq(planId), eq(ComplaintPlanStatus.APPROVED), any());
+        assertThat(result.getStatus()).isEqualTo(ComplaintPlanStatus.APPROVED);
+        assertThat(result.getResponsibleParty()).isEqualTo(ResponsibleParty.PLATFORM);
+        assertThat(result.getCompensationType()).isEqualTo(CompensationType.REFUND);
+        assertThat(result.getCompensationAmount()).isEqualByComparingTo("300");
+    }
+
+    @Test
+    void modifyAndApprovePlan_nullFieldsPassedThroughToMapperButNotAppliedToReturnedPlan() {
+        UUID planId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        plan.setResponsibleParty(ResponsibleParty.MERCHANT);
+        plan.setCompensationType(CompensationType.COUPON);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        ComplaintPlanModifyRequest req = new ComplaintPlanModifyRequest(null, null, null, "只改备注");
+
+        ComplaintPlan result = service.modifyAndApprovePlan(planId, UUID.randomUUID(), req);
+
+        verify(complaintPlanMapper).updateFields(eq(planId), isNull(), isNull(), isNull(), any());
+        assertThat(result.getResponsibleParty()).isEqualTo(ResponsibleParty.MERCHANT);
+        assertThat(result.getCompensationType()).isEqualTo(CompensationType.COUPON);
+    }
+
+    @Test
+    void modifyAndApprovePlan_throwsWhenPlanIsNotPendingReview() {
+        UUID planId = UUID.randomUUID();
+        ComplaintPlan plan = pendingPlan(planId);
+        plan.setStatus(ComplaintPlanStatus.EXECUTING);
+        when(complaintPlanMapper.findById(planId)).thenReturn(Optional.of(plan));
+
+        ComplaintPlanModifyRequest req = new ComplaintPlanModifyRequest(null, null, null, null);
+
+        assertThatThrownBy(() -> service.modifyAndApprovePlan(planId, UUID.randomUUID(), req))
+                .isInstanceOf(KbException.class)
+                .hasMessageContaining("PENDING_REVIEW");
+    }
+
+    private ComplaintPlan pendingPlan(UUID planId) {
+        ComplaintPlan plan = new ComplaintPlan();
+        plan.setId(planId);
+        plan.setComplaintId(UUID.randomUUID());
+        plan.setStatus(ComplaintPlanStatus.PENDING_REVIEW);
+        return plan;
     }
 }

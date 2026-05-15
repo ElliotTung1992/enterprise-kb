@@ -42,6 +42,16 @@ public interface ComplaintEscalationService {
     ComplaintPlan savePlan(ComplaintPlan plan);
 
     /**
+     * 插入工作流 shell 计划（AWAITING_RESPONSIBILITY）。
+     * <p>与 {@link #savePlan} 不同，此方法不更新投诉案件状态，
+     * 仅在 DB 中占位，供 DISPUTED 路径的 {@code findPlanById} 使用。</p>
+     *
+     * @param planId      计划 ID（即 StateGraph threadId）
+     * @param complaintId 关联投诉案件 ID
+     */
+    void insertShellPlan(UUID planId, UUID complaintId);
+
+    /**
      * 根据 ID 查询投诉处理计划
      *
      * @param id 计划 ID

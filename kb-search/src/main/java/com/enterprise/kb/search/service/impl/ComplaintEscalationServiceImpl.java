@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.common.constants.CompensationType;
 import com.enterprise.kb.common.constants.ComplaintPlanStatus;
+import com.enterprise.kb.common.constants.ResponsibleParty;
 import com.enterprise.kb.common.constants.ComplaintStatus;
 import com.enterprise.kb.common.exception.KbException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
@@ -106,6 +107,31 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
      * {@inheritDoc}
      */
     @Override
+    @Transactional
+    public void insertShellPlan(UUID planId, UUID complaintId) {
+        Instant now = Instant.now();
+        ComplaintPlan shell = new ComplaintPlan();
+        shell.setId(planId);
+        shell.setComplaintId(complaintId);
+        shell.setResponsibleParty(ResponsibleParty.DISPUTED);
+        shell.setResponsibilityReason("责任方待人工判定");
+        shell.setCompensationType(CompensationType.NONE);
+        shell.setCompensationAmount(BigDecimal.ZERO);
+        shell.setContactSequence(EMPTY_JSON_ARRAY);
+        shell.setTimeouts(EMPTY_JSON_OBJECT);
+        shell.setFallbackPlan(EMPTY_JSON_ARRAY);
+        shell.setReplanCount(0);
+        shell.setStatus(ComplaintPlanStatus.AWAITING_RESPONSIBILITY);
+        shell.setCreatedAt(now);
+        shell.setUpdatedAt(now);
+        complaintPlanMapper.insert(shell);
+        // 不更新投诉案件状态，由 collectData 节点负责置 PLANNING
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     @Transactional(readOnly = true)
     public ComplaintPlan findPlanById(UUID id) {
         return complaintPlanMapper.findById(id)
@@ -160,7 +186,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         requirePendingReview(plan);
         complaintPlanMapper.updateStatus(planId, ComplaintPlanStatus.APPROVED, Instant.now());
         plan.setStatus(ComplaintPlanStatus.APPROVED);
-        log.info("投诉计划审批通过：planId={}，reviewerId={}", planId, reviewerId);
+        log.info("投诉计划审批通过：planId={}，reviewerId={}，意见={}", planId, reviewerId, comment);
         return plan;
     }
 
@@ -177,7 +203,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         complaintPlanMapper.updateStatus(planId, ComplaintPlanStatus.REJECTED, now);
         complaintMapper.updateStatus(plan.getComplaintId(), ComplaintStatus.CLOSED, now);
         plan.setStatus(ComplaintPlanStatus.REJECTED);
-        log.info("投诉计划审批拒绝：planId={}，reviewerId={}", planId, reviewerId);
+        log.info("投诉计划审批拒绝：planId={}，reviewerId={}，意见={}", planId, reviewerId, comment);
         return plan;
     }
 
@@ -211,7 +237,7 @@ public class ComplaintEscalationServiceImpl implements ComplaintEscalationServic
         if (req.responsibleParty() != null) plan.setResponsibleParty(req.responsibleParty());
         if (req.compensationType() != null) plan.setCompensationType(req.compensationType());
         if (req.compensationAmount() != null) plan.setCompensationAmount(req.compensationAmount());
-        log.info("投诉计划修改后审批通过：planId={}，reviewerId={}", planId, reviewerId);
+        log.info("投诉计划修改后审批通过：planId={}，reviewerId={}，意见={}", planId, reviewerId, req.comment());
         return plan;
     }
 

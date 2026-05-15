@@ -6,6 +6,7 @@
     <resultMap id="ComplaintPlanResultMap" type="com.enterprise.kb.search.model.ComplaintPlan">
         <id property="id" column="id"/>
         <result property="complaintId" column="complaint_id"/>
+        <result property="orderId" column="order_id"/>
         <result property="responsibleParty" column="responsible_party"/>
         <result property="responsibilityReason" column="responsibility_reason"/>
         <result property="compensationType" column="compensation_type"/>
@@ -53,6 +54,17 @@
             #{createdAt},
             #{updatedAt}
         )
+        ON CONFLICT (id) DO UPDATE SET
+            responsible_party     = EXCLUDED.responsible_party,
+            responsibility_reason = EXCLUDED.responsibility_reason,
+            compensation_type     = EXCLUDED.compensation_type,
+            compensation_amount   = EXCLUDED.compensation_amount,
+            contact_sequence      = EXCLUDED.contact_sequence,
+            timeouts              = EXCLUDED.timeouts,
+            fallback_plan         = EXCLUDED.fallback_plan,
+            replan_count          = EXCLUDED.replan_count,
+            status                = EXCLUDED.status,
+            updated_at            = EXCLUDED.updated_at
     </insert>
 
     <update id="updateStatus">
@@ -90,12 +102,13 @@
     </update>
 
     <select id="findByStatus" resultMap="ComplaintPlanResultMap">
-        SELECT *
-        FROM complaint_plans
+        SELECT cp.*, c.order_id
+        FROM complaint_plans cp
+        LEFT JOIN complaints c ON c.id = cp.complaint_id
         <where>
-            <if test="status != null">status = #{status}</if>
+            <if test="status != null">cp.status = #{status}</if>
         </where>
-        ORDER BY created_at DESC
+        ORDER BY cp.created_at DESC
     </select>
 
 </mapper>

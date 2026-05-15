@@ -114,17 +114,7 @@ public class ComplaintPlannerServiceImpl implements ComplaintPlannerService {
                 "merchantResponseDeadline", "48h",
                 "onTimeout", "TRIGGER_REPLANNER"
         )));
-        plan.setFallbackPlan(toJson(List.of(
-                Map.of(
-                        "responsibleParty", ResponsibleParty.PLATFORM.name(),
-                        "compensation", Map.of("amount", 200, "type", CompensationType.REFUND.name()),
-                        "reason", "责任方拒绝承担或超时未响应时，平台先行兜底"
-                ),
-                Map.of(
-                        "action", "ESCALATE_TO_SENIOR",
-                        "reason", "两次方案均失败，升级高级专员介入"
-                )
-        )));
+        plan.setFallbackPlan(toJson(buildFallbackPlan(decision.responsibleParty())));
         plan.setReplanCount(0);
         plan.setStatus(ComplaintPlanStatus.PENDING_REVIEW);
         return plan;
@@ -202,6 +192,22 @@ public class ComplaintPlannerServiceImpl implements ComplaintPlannerService {
         } catch (JsonProcessingException e) {
             throw new KbException("生成投诉计划 JSON 失败", HttpStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private List<Object> buildFallbackPlan(ResponsibleParty primary) {
+        if (primary == ResponsibleParty.PLATFORM) {
+            // PLATFORM is already the primary; a PLATFORM fallback would be circular
+            return List.of(Map.of("action", "ESCALATE_TO_SENIOR",
+                    "reason", "平台已为首要责任方，两次协商失败，升级高级专员介入"));
+        }
+        return List.of(
+                Map.of(
+                        "responsibleParty", ResponsibleParty.PLATFORM.name(),
+                        "compensation", Map.of("amount", 200, "type", CompensationType.REFUND.name()),
+                        "reason", "责任方拒绝承担或超时未响应时，平台先行兜底"
+                ),
+                Map.of("action", "ESCALATE_TO_SENIOR", "reason", "两次方案均失败，升级高级专员介入")
+        );
     }
 
     private boolean containsAny(String text, String... keywords) {

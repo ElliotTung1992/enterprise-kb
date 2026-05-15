@@ -4,14 +4,12 @@ import com.enterprise.kb.common.constants.ComplaintPlanStatus;
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.dto.ComplaintApprovalRequest;
-import com.enterprise.kb.search.dto.ComplaintExecutionResult;
+import com.enterprise.kb.search.dto.ComplaintPartyAssignmentRequest;
 import com.enterprise.kb.search.dto.ComplaintPlanModifyRequest;
 import com.enterprise.kb.search.model.Complaint;
 import com.enterprise.kb.search.model.ComplaintPlan;
 import com.enterprise.kb.search.service.ComplaintEscalationService;
-import com.enterprise.kb.search.service.ComplaintExecutorService;
-import com.enterprise.kb.search.service.ComplaintPlannerService;
-import com.enterprise.kb.search.service.ComplaintReplannerService;
+import com.enterprise.kb.search.service.ComplaintWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +19,8 @@ import java.util.UUID;
 
 /**
  * 投诉升级控制器。
- * <p>提供投诉案件创建、计划生成、审批、执行等接口。</p>
+ * <p>提供投诉案件创建、工作流规划、HITL 审批、重规划等接口。
+ * 规划与执行由 {@link ComplaintWorkflowService} 通过 StateGraph 工作流编排。</p>
  */
 @RestController
 @RequestMapping("/api/v1/complaints")
@@ -29,11 +28,20 @@ import java.util.UUID;
 public class ComplaintController {
 
     private final ComplaintEscalationService complaintEscalationService;
-    private final ComplaintPlannerService complaintPlannerService;
-    private final ComplaintExecutorService complaintExecutorService;
-    private final ComplaintReplannerService complaintReplannerService;
+    private final ComplaintWorkflowService complaintWorkflowService;
 
-    // ---- 投诉案件 ----
+    /**
+     * 查询投诉案件详情
+     *
+     * @param complaintId 投诉案件 ID
+     * @return 投诉案件
+     */
+    @GetMapping("/{complaintId}")
+    public ResponseEntity<ApiResponse<Complaint>> getComplaint(
+            @PathVariable UUID complaintId) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                complaintEscalationService.findComplaintById(complaintId)));
+    }
 
     /**
      * 创建投诉升级案件
@@ -52,19 +60,20 @@ public class ComplaintController {
     }
 
     /**
-     * 为投诉案件生成 AI 处理计划
+     * 启动投诉处理工作流（AI 规划 + 等待审批）。
+     * <p>工作流按 collectData → applyRules → [llmInference →] savePlan 顺序执行。
+     * 若 LLM 判定为 DISPUTED，在 humanAssignParty 节点暂停，返回 AWAITING_RESPONSIBILITY 计划；
+     * 否则在 applyDecision 节点暂停，返回 PENDING_REVIEW 计划，等待人工审批。</p>
      *
      * @param complaintId 投诉案件 ID
      * @return 生成的处理计划（状态为 PENDING_REVIEW）
      */
     @PostMapping("/{complaintId}/plan")
-    public ResponseEntity<ApiResponse<ComplaintPlan>> generatePlan(
+    public ResponseEntity<ApiResponse<ComplaintPlan>> startWorkflow(
             @PathVariable UUID complaintId) {
         return ResponseEntity.ok(ApiResponse.ok(
-                complaintPlannerService.generatePlan(complaintId)));
+                complaintWorkflowService.startPlanning(complaintId)));
     }
-
-    // ---- 处理计划审批 ----
 
     /**
      * 查询处理计划列表（按状态过滤）
@@ -93,11 +102,28 @@ public class ComplaintController {
     }
 
     /**
-     * 审批通过处理计划
+     * LLM 判定为 DISPUTED 后，人工指定责任方并恢复工作流。
+     * <p>工作流从 humanAssignParty 节点继续，经 savePlan 生成完整计划后再次暂停于 applyDecision。</p>
+     *
+     * @param planId 计划 ID
+     * @param req    责任方与判责理由
+     * @return 已生成的处理计划（状态为 PENDING_REVIEW）
+     */
+    @PostMapping("/plans/{planId}/assign-party")
+    public ResponseEntity<ApiResponse<ComplaintPlan>> assignParty(
+            @PathVariable UUID planId,
+            @RequestBody ComplaintPartyAssignmentRequest req) {
+        UUID assignerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.ok(
+                complaintWorkflowService.resumeWithPartyAssignment(planId, assignerId, req.responsibleParty(), req.reason())));
+    }
+
+    /**
+     * 审批通过处理计划，工作流自动恢复并执行补偿方案。
      *
      * @param planId 计划 ID
      * @param req    审批意见（可选）
-     * @return 更新后的计划
+     * @return 执行后的计划
      */
     @PostMapping("/plans/{planId}/approve")
     public ResponseEntity<ApiResponse<ComplaintPlan>> approvePlan(
@@ -106,15 +132,15 @@ public class ComplaintController {
         UUID reviewerId = SecurityUtils.getCurrentUserId();
         String comment = req != null ? req.comment() : null;
         return ResponseEntity.ok(ApiResponse.ok(
-                complaintEscalationService.approvePlan(planId, reviewerId, comment)));
+                complaintWorkflowService.resumeApproved(planId, reviewerId, comment)));
     }
 
     /**
-     * 拒绝处理计划
+     * 拒绝处理计划，工作流恢复并关闭投诉案件。
      *
      * @param planId 计划 ID
      * @param req    拒绝原因（可选）
-     * @return 更新后的计划
+     * @return 拒绝后的计划
      */
     @PostMapping("/plans/{planId}/reject")
     public ResponseEntity<ApiResponse<ComplaintPlan>> rejectPlan(
@@ -123,17 +149,15 @@ public class ComplaintController {
         UUID reviewerId = SecurityUtils.getCurrentUserId();
         String comment = req != null ? req.comment() : null;
         return ResponseEntity.ok(ApiResponse.ok(
-                complaintEscalationService.rejectPlan(planId, reviewerId, comment)));
+                complaintWorkflowService.resumeRejected(planId, reviewerId, comment)));
     }
 
     /**
-     * 修改处理计划后审批通过。
-     * <p>允许审批员调整责任方、补偿类型、补偿金额再批准，请求体中为 null 的字段保持原值。
-     * 仅 PENDING_REVIEW 状态的计划可操作。</p>
+     * 修改处理计划字段后审批通过，工作流自动恢复并执行修改后的方案。
      *
      * @param planId 计划 ID
      * @param req    修改内容
-     * @return 修改并审批后的计划
+     * @return 执行后的计划
      */
     @PostMapping("/plans/{planId}/modify-and-approve")
     public ResponseEntity<ApiResponse<ComplaintPlan>> modifyAndApprovePlan(
@@ -141,30 +165,12 @@ public class ComplaintController {
             @RequestBody ComplaintPlanModifyRequest req) {
         UUID reviewerId = SecurityUtils.getCurrentUserId();
         return ResponseEntity.ok(ApiResponse.ok(
-                complaintEscalationService.modifyAndApprovePlan(planId, reviewerId, req)));
+                complaintWorkflowService.resumeModified(planId, reviewerId, req)));
     }
 
-    // ---- 执行 ----
-
     /**
-     * 执行审批通过的处理计划。
-     * <p>仅 APPROVED 状态的计划可执行。执行成功后投诉状态变为 RESOLVED。</p>
-     *
-     * @param planId 计划 ID
-     * @return 执行结果摘要
-     */
-    @PostMapping("/plans/{planId}/execute")
-    public ResponseEntity<ApiResponse<ComplaintExecutionResult>> executePlan(
-            @PathVariable UUID planId) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                complaintExecutorService.execute(planId)));
-    }
-
-    // ---- 超时与重规划 ----
-
-    /**
-     * 手动触发计划超时重规划（测试用）。
-     * <p>模拟商家超时或拒绝响应，从 fallback 取下一方案重新进入审批；
+     * 手动触发计划超时重规划。
+     * <p>从 fallback 列表取下一方案创建新计划并进入审批；
      * 若已达最大重规划次数则升级至高级专员。</p>
      *
      * @param planId 计划 ID
@@ -173,7 +179,7 @@ public class ComplaintController {
     @PostMapping("/plans/{planId}/trigger-timeout")
     public ResponseEntity<ApiResponse<Void>> triggerTimeout(
             @PathVariable UUID planId) {
-        complaintReplannerService.replan(planId);
+        complaintWorkflowService.triggerReplan(planId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }

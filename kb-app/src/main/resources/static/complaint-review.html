@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>投诉升级审核 — 企业平台</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<link href="/assets/css/app.css" rel="stylesheet">
+<style>
+body { visibility: hidden }
+.status-tabs { display:flex; gap:.25rem; }
+.status-tab {
+  padding:.3rem .85rem; border-radius:99px; font-size:.8rem; font-weight:500;
+  cursor:pointer; border:1px solid #e2e8f0; background:#fff; color:#64748b; transition:all .15s;
+}
+.status-tab.active { background:#4f46e5; border-color:#4f46e5; color:#fff; }
+.plan-table { width:100%; border-collapse:separate; border-spacing:0; }
+.plan-table th {
+  font-size:.75rem; font-weight:600; color:#64748b; text-transform:uppercase;
+  letter-spacing:.04em; padding:.65rem 1rem; background:#f8fafc;
+  border-bottom:1px solid #e2e8f0; white-space:nowrap;
+}
+.plan-table td { padding:.75rem 1rem; border-bottom:1px solid #f1f5f9; vertical-align:middle; font-size:.875rem; }
+.plan-table tr:last-child td { border-bottom:none; }
+.plan-table tbody tr.main-row { cursor:pointer; transition:background .1s; }
+.plan-table tbody tr.main-row:hover { background:#f8fafc; }
+.plan-table tbody tr.main-row.expanded { background:#f0f5ff; }
+.detail-row { display:none; }
+.detail-row.open { display:table-row; }
+.detail-cell { padding:0!important; border-bottom:1px solid #e2e8f0!important; }
+.detail-inner { padding:1.25rem 1.5rem 1.5rem; background:#f8fafc; border-top:1px solid #e2e8f0; }
+.reason-box {
+  background:#fff; border:1px solid #e2e8f0; border-radius:8px;
+  padding:.75rem 1rem; font-size:.875rem; color:#334155; line-height:1.6;
+}
+.fallback-item {
+  background:#fff; border:1px solid #e2e8f0; border-radius:6px;
+  padding:.6rem .9rem; font-size:.82rem; margin-bottom:.4rem;
+}
+.fallback-item:last-child { margin-bottom:0; }
+.badge-party { font-size:.72rem; font-weight:600; padding:.2rem .55rem; border-radius:4px; }
+.party-merchant  { background:#fef3c7; color:#92400e; }
+.party-logistics { background:#dbeafe; color:#1e40af; }
+.party-platform  { background:#f3e8ff; color:#7c3aed; }
+.party-disputed  { background:#fee2e2; color:#991b1b; }
+.status-badge { font-size:.72rem; font-weight:600; padding:.2rem .55rem; border-radius:4px; }
+.status-pending  { background:#fef3c7; color:#92400e; }
+.status-approved { background:#dcfce7; color:#166534; }
+.status-rejected { background:#fee2e2; color:#991b1b; }
+.status-executing { background:#dbeafe; color:#1e40af; }
+.status-completed { background:#dcfce7; color:#166534; }
+.status-failed   { background:#fee2e2; color:#991b1b; }
+.empty-state { text-align:center; padding:3rem; color:#94a3b8; }
+.empty-state i { font-size:2.5rem; display:block; margin-bottom:.5rem; }
+.section-label { font-size:.75rem; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.5rem; }
+</style>
+</head>
+<body>
+
+<nav class="kb-sidebar">
+  <div class="brand"><i class="bi bi-headset me-2"></i>商城客服</div>
+  <ul class="nav flex-column mt-2 flex-grow-1">
+    <li><a class="nav-link" href="/customer.html"><i class="bi bi-headset"></i>客户助手</a></li>
+    <li><a class="nav-link" href="/reviews.html"><i class="bi bi-clipboard2-check"></i>售后审核</a></li>
+    <li><a class="nav-link active" href="/complaint-review.html"><i class="bi bi-exclamation-triangle"></i>投诉升级审核</a></li>
+  </ul>
+  <div class="px-3 pb-2">
+    <a href="/index.html" class="nav-link" style="font-size:.82rem;color:#c7d2fe"><i class="bi bi-house me-1"></i>返回首页</a>
+  </div>
+  <div class="p-3 border-top" style="border-color:#312e81!important">
+    <small class="d-block text-truncate mb-2" id="sidebar-username"></small>
+    <a href="#" onclick="logout()" style="color:#c7d2fe;font-size:.85rem"><i class="bi bi-box-arrow-right me-1"></i>退出</a>
+  </div>
+</nav>
+
+<div class="kb-main">
+  <div class="kb-topbar">
+    <h6 class="mb-0 fw-bold"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>投诉升级审核</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadPlans()">
+      <i class="bi bi-arrow-clockwise me-1"></i>刷新
+    </button>
+  </div>
+
+  <div class="p-4">
+    <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+      <div class="status-tabs">
+        <span class="status-tab active" data-status="PENDING_REVIEW">待审核</span>
+        <span class="status-tab" data-status="AWAITING_RESPONSIBILITY">待判责</span>
+        <span class="status-tab" data-status="APPROVED">已批准</span>
+        <span class="status-tab" data-status="REJECTED">已拒绝</span>
+        <span class="status-tab" data-status="EXECUTING,COMPLETED,FAILED">执行中/完成</span>
+        <span class="status-tab" data-status="">全部</span>
+      </div>
+      <span class="text-muted small ms-auto" id="count-label"></span>
+    </div>
+
+    <div class="kb-card p-0 overflow-hidden">
+      <table class="plan-table">
+        <thead>
+          <tr>
+            <th style="width:36px"></th>
+            <th>案件ID</th>
+            <th>订单号</th>
+            <th style="width:100px">责任方</th>
+            <th style="width:160px">补偿方案</th>
+            <th style="width:90px">计划状态</th>
+            <th style="width:110px">生成时间</th>
+            <th style="width:200px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="plan-tbody">
+          <tr><td colspan="8" class="text-center py-4">
+            <span class="spinner-border spinner-border-sm text-secondary me-2"></span>加载中…
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 批准/拒绝 Modal -->
+<div class="modal fade" id="simple-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold" id="simple-modal-title">审批意见</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label small text-muted mb-1">意见（可选）</label>
+        <textarea class="form-control" id="simple-comment" rows="3" style="resize:none"></textarea>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-sm fw-semibold" id="simple-confirm">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 人工判责 Modal -->
+<div class="modal fade" id="assign-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold"><i class="bi bi-person-check me-2"></i>人工判责</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">LLM 无法确定责任方，请人工指定后工作流将继续生成完整处理计划并进入审批流程。</p>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">责任方 <span class="text-danger">*</span></label>
+          <select class="form-select form-select-sm" id="assign-party">
+            <option value="">— 请选择 —</option>
+            <option value="MERCHANT">MERCHANT（商家）</option>
+            <option value="LOGISTICS">LOGISTICS（物流）</option>
+            <option value="PLATFORM">PLATFORM（平台）</option>
+          </select>
+        </div>
+        <div class="mb-1">
+          <label class="form-label small fw-semibold">判责理由 <span class="text-danger">*</span></label>
+          <textarea class="form-control" id="assign-reason" rows="3" style="resize:none" placeholder="请说明判责依据，供后续审批人参考"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-warning btn-sm fw-semibold" id="assign-confirm">
+          <i class="bi bi-check2 me-1"></i>提交判责
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 修改后批准 Modal -->
+<div class="modal fade" id="modify-modal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h6 class="modal-title fw-bold"><i class="bi bi-pencil me-2"></i>修改后批准</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">不修改的字段留空，系统将保留原值。</p>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">责任方</label>
+            <select class="form-select form-select-sm" id="mod-party">
+              <option value="">— 保持原值 —</option>
+              <option value="MERCHANT">MERCHANT（商家）</option>
+              <option value="LOGISTICS">LOGISTICS（物流）</option>
+              <option value="PLATFORM">PLATFORM（平台）</option>
+              <option value="DISPUTED">DISPUTED（争议）</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">补偿类型</label>
+            <select class="form-select form-select-sm" id="mod-type">
+              <option value="">— 保持原值 —</option>
+              <option value="REFUND">REFUND（退款）</option>
+              <option value="COUPON">COUPON（优惠券）</option>
+              <option value="REFUND_AND_COUPON">REFUND_AND_COUPON（退款+优惠券）</option>
+              <option value="NONE">NONE（无补偿）</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold">补偿金额（¥）</label>
+            <input type="number" class="form-control form-control-sm" id="mod-amount" placeholder="保持原值" min="0" step="0.01">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-semibold">审批意见</label>
+            <textarea class="form-control" id="mod-comment" rows="2" style="resize:none" placeholder="可选"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-success btn-sm fw-semibold" id="mod-confirm">
+          <i class="bi bi-check2 me-1"></i>修改并批准
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/js/api.js"></script>
+<script src="/assets/js/auth.js"></script>
+<script>
+requireAuth();
+document.getElementById('sidebar-username').textContent = localStorage.getItem('username') || '';
+
+const simpleModal  = new bootstrap.Modal(document.getElementById('simple-modal'));
+const modifyModal  = new bootstrap.Modal(document.getElementById('modify-modal'));
+const assignModal  = new bootstrap.Modal(document.getElementById('assign-modal'));
+
+let activeStatus = 'PENDING_REVIEW';
+let pendingAction = null;  // { type: 'approve'|'reject', planId }
+let modifyPlanId = null;
+let assignPlanId = null;
+
+// ── Status tabs ──
+document.querySelectorAll('.status-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.status-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeStatus = tab.dataset.status;
+    loadPlans();
+  });
+});
+
+// ── Render ──
+const PARTY_CLASS   = { MERCHANT:'party-merchant', LOGISTICS:'party-logistics', PLATFORM:'party-platform', DISPUTED:'party-disputed' };
+const PARTY_LABEL   = { MERCHANT:'商家', LOGISTICS:'物流', PLATFORM:'平台', DISPUTED:'争议' };
+const STATUS_CLASS  = { AWAITING_RESPONSIBILITY:'status-pending', PENDING_REVIEW:'status-pending', APPROVED:'status-approved', REJECTED:'status-rejected', EXECUTING:'status-executing', COMPLETED:'status-completed', FAILED:'status-failed' };
+const STATUS_LABEL  = { AWAITING_RESPONSIBILITY:'待判责', PENDING_REVIEW:'待审核', APPROVED:'已批准', REJECTED:'已拒绝', EXECUTING:'执行中', COMPLETED:'已完成', FAILED:'失败' };
+const COMP_LABEL    = { REFUND:'退款', COUPON:'优惠券', REFUND_AND_COUPON:'退款+优惠券' };
+
+function partyBadge(p) {
+  return `<span class="badge-party ${PARTY_CLASS[p]||'party-disputed'}">${PARTY_LABEL[p]||p||'—'}</span>`;
+}
+function statusBadge(s) {
+  return `<span class="status-badge ${STATUS_CLASS[s]||''}">${STATUS_LABEL[s]||s}</span>`;
+}
+function compText(plan) {
+  if (!plan.compensationType || plan.compensationType === 'NONE') return '<span class="text-muted">—</span>';
+  return `${COMP_LABEL[plan.compensationType]||plan.compensationType} ¥${plan.compensationAmount||0}`;
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function renderPlanRow(plan) {
+  let actionBtns;
+  if (plan.status === 'AWAITING_RESPONSIBILITY') {
+    actionBtns = `<button class="btn btn-sm btn-warning py-0 px-2" style="font-size:.8rem;white-space:nowrap" onclick="openAssignParty('${plan.id}',event)"><i class="bi bi-person-check me-1"></i>人工判责</button>`;
+  } else if (plan.status === 'PENDING_REVIEW') {
+    actionBtns = `
+      <button class="btn btn-sm btn-success py-0 px-2 me-1" style="font-size:.8rem" onclick="openApprove('${plan.id}',event)">批准</button>
+      <button class="btn btn-sm btn-outline-secondary py-0 px-2 me-1" style="font-size:.8rem" onclick="openModify('${plan.id}',event)">改后批</button>
+      <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.8rem" onclick="openReject('${plan.id}',event)">拒绝</button>`;
+  } else {
+    actionBtns = `<span class="text-muted small">—</span>`;
+  }
+
+  let fallbackHtml = '';
+  try {
+    const fb = JSON.parse(plan.fallbackPlan || '[]');
+    fallbackHtml = fb.map((f,i) => {
+      if (f.action === 'ESCALATE_TO_SENIOR') {
+        return `<div class="fallback-item"><span class="badge bg-danger me-2">方案${i+1}</span>升级高级专员：${f.reason||''}</div>`;
+      }
+      const comp = f.compensation || {};
+      return `<div class="fallback-item"><span class="badge bg-secondary me-2">方案${i+1}</span>${PARTY_LABEL[f.responsibleParty]||f.responsibleParty||''} — ${COMP_LABEL[comp.type]||comp.type||''} ¥${comp.amount||0}，${f.reason||''}</div>`;
+    }).join('');
+  } catch(e) { fallbackHtml = `<span class="text-muted small">${plan.fallbackPlan||'—'}</span>`; }
+
+  const shortId = plan.complaintId ? plan.complaintId.substring(0,8) + '…' : '—';
+  return `
+    <tr class="main-row" data-plan-id="${plan.id}">
+      <td><i class="bi bi-chevron-right toggle-icon text-muted" style="transition:transform .2s"></i></td>
+      <td><span class="text-muted small font-monospace">${shortId}</span></td>
+      <td><span class="small">${plan.orderId||'—'}</span></td>
+      <td>${partyBadge(plan.responsibleParty)}</td>
+      <td>${compText(plan)}</td>
+      <td>${statusBadge(plan.status)}</td>
+      <td><span class="text-muted small">${fmtTime(plan.createdAt)}</span></td>
+      <td style="white-space:nowrap">${actionBtns}</td>
+    </tr>
+    <tr class="detail-row" id="detail-${plan.id}">
+      <td class="detail-cell" colspan="8">
+        <div class="detail-inner">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="section-label"><i class="bi bi-chat-left-text me-1"></i>投诉内容</div>
+              <div class="reason-box" id="complaint-content-${plan.id}">
+                <span class="text-muted small">加载中…</span>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="section-label"><i class="bi bi-robot me-1"></i>AI 责任认定理由</div>
+              <div class="reason-box">${plan.responsibilityReason || '<span class="text-muted">—</span>'}</div>
+            </div>
+            <div class="col-md-6">
+              <div class="section-label"><i class="bi bi-currency-yen me-1"></i>补偿方案</div>
+              <div class="reason-box">
+                <strong>类型：</strong>${COMP_LABEL[plan.compensationType]||plan.compensationType||'—'}<br>
+                <strong>金额：</strong>¥${plan.compensationAmount||0}<br>
+                <strong>联系顺序：</strong>${formatContactSequence(plan.contactSequence)}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="section-label"><i class="bi bi-diagram-3 me-1"></i>Fallback 备选方案</div>
+              <div>${fallbackHtml || '<span class="text-muted small">—</span>'}</div>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+}
+
+function formatContactSequence(json) {
+  try { return (JSON.parse(json||'[]')).map(p => PARTY_LABEL[p]||p).join(' → ') || '—'; } catch(e) { return json||'—'; }
+}
+
+function addRowListeners() {
+  document.querySelectorAll('.main-row').forEach(row => {
+    row.addEventListener('click', async (e) => {
+      if (e.target.closest('button')) return;
+      const planId = row.dataset.planId;
+      const detailRow = document.getElementById('detail-' + planId);
+      const icon = row.querySelector('.toggle-icon');
+      const isOpen = detailRow.classList.contains('open');
+      document.querySelectorAll('.detail-row.open').forEach(r => r.classList.remove('open'));
+      document.querySelectorAll('.main-row.expanded').forEach(r => r.classList.remove('expanded'));
+      document.querySelectorAll('.toggle-icon').forEach(i => i.style.transform = '');
+      if (!isOpen) {
+        detailRow.classList.add('open');
+        row.classList.add('expanded');
+        icon.style.transform = 'rotate(90deg)';
+        loadComplaintContent(planId, row);
+      }
+    });
+  });
+}
+
+const planComplaintMap = {};
+async function loadComplaintContent(planId, row) {
+  const container = document.getElementById('complaint-content-' + planId);
+  if (!container || container.dataset.loaded) return;
+
+  if (!planComplaintMap[planId]) {
+    container.innerHTML = '<span class="text-muted small">无法加载投诉内容</span>';
+    return;
+  }
+  const complaintId = planComplaintMap[planId];
+  try {
+    const res = await apiFetch(`/complaints/${complaintId}`);
+    if (res.success && res.data) {
+      container.innerHTML = `
+        <div><strong>订单号：</strong>${res.data.orderId||'—'}</div>
+        <div class="mt-1">${res.data.content||'—'}</div>
+      `;
+    }
+    container.dataset.loaded = '1';
+  } catch(e) {
+    container.innerHTML = `<span class="text-danger small">加载失败：${e.message}</span>`;
+  }
+}
+
+// ── Actions ──
+function openApprove(planId, e) {
+  e.stopPropagation();
+  pendingAction = { type:'approve', planId };
+  document.getElementById('simple-modal-title').textContent = '批准处理计划';
+  document.getElementById('simple-comment').value = '';
+  document.getElementById('simple-confirm').className = 'btn btn-success btn-sm fw-semibold';
+  document.getElementById('simple-confirm').textContent = '确认批准';
+  simpleModal.show();
+}
+function openReject(planId, e) {
+  e.stopPropagation();
+  pendingAction = { type:'reject', planId };
+  document.getElementById('simple-modal-title').textContent = '拒绝处理计划';
+  document.getElementById('simple-comment').value = '';
+  document.getElementById('simple-confirm').className = 'btn btn-danger btn-sm fw-semibold';
+  document.getElementById('simple-confirm').textContent = '确认拒绝';
+  simpleModal.show();
+}
+function openModify(planId, e) {
+  e.stopPropagation();
+  modifyPlanId = planId;
+  document.getElementById('mod-party').value = '';
+  document.getElementById('mod-type').value = '';
+  document.getElementById('mod-amount').value = '';
+  document.getElementById('mod-comment').value = '';
+  modifyModal.show();
+}
+function openAssignParty(planId, e) {
+  e.stopPropagation();
+  assignPlanId = planId;
+  document.getElementById('assign-party').value = '';
+  document.getElementById('assign-reason').value = '';
+  assignModal.show();
+}
+
+document.getElementById('simple-confirm').addEventListener('click', async () => {
+  if (!pendingAction) return;
+  const { type, planId } = pendingAction;
+  const comment = document.getElementById('simple-comment').value.trim();
+  const url = `/complaints/plans/${planId}/${type === 'approve' ? 'approve' : 'reject'}`;
+  const btn = document.getElementById('simple-confirm');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>AI 执行中…';
+  try {
+    const res = await apiFetch(url, { method:'POST', body: JSON.stringify({ comment }), headers:{'Content-Type':'application/json'} });
+    simpleModal.hide();
+    if (res.success) { showToast(type === 'approve' ? '已批准，计划执行完成' : '已拒绝', 'success'); loadPlans(); }
+    else showToast(res.message || '操作失败', 'danger');
+  } catch(e) {
+    simpleModal.hide();
+    showToast('请求失败：' + e.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+});
+
+document.getElementById('mod-confirm').addEventListener('click', async () => {
+  if (!modifyPlanId) return;
+  const body = {};
+  const party = document.getElementById('mod-party').value;
+  const type  = document.getElementById('mod-type').value;
+  const amount = document.getElementById('mod-amount').value;
+  const comment = document.getElementById('mod-comment').value.trim();
+  if (party)  body.responsibleParty  = party;
+  if (type)   body.compensationType  = type;
+  if (amount) body.compensationAmount = parseFloat(amount);
+  if (comment) body.comment = comment;
+  const btn = document.getElementById('mod-confirm');
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>AI 执行中…';
+  try {
+    const res = await apiFetch(`/complaints/plans/${modifyPlanId}/modify-and-approve`, {
+      method:'POST', body: JSON.stringify(body), headers:{'Content-Type':'application/json'}
+    });
+    modifyModal.hide();
+    if (res.success) { showToast('已修改并批准，计划执行完成', 'success'); loadPlans(); }
+    else showToast(res.message || '操作失败', 'danger');
+  } catch(e) {
+    modifyModal.hide();
+    showToast('请求失败：' + e.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+  }
+});
+
+document.getElementById('assign-confirm').addEventListener('click', async () => {
+  if (!assignPlanId) return;
+  const party  = document.getElementById('assign-party').value;
+  const reason = document.getElementById('assign-reason').value.trim();
+  if (!party)  { showToast('请选择责任方', 'warning'); return; }
+  if (!reason) { showToast('请填写判责理由', 'warning'); return; }
+  try {
+    const res = await apiFetch(`/complaints/plans/${assignPlanId}/assign-party`, {
+      method:'POST', body: JSON.stringify({ responsibleParty: party, reason }), headers:{'Content-Type':'application/json'}
+    });
+    assignModal.hide();
+    if (res.success) { showToast('已提交判责，计划进入待审核', 'success'); loadPlans(); }
+    else showToast(res.message || '操作失败', 'danger');
+  } catch(e) { assignModal.hide(); showToast('请求失败：' + e.message, 'danger'); }
+});
+
+// ── Toast ──
+function showToast(msg, type='success') {
+  const el = document.createElement('div');
+  el.className = `toast align-items-center text-bg-${type} border-0 show position-fixed bottom-0 end-0 m-3`;
+  el.style.zIndex = 9999;
+  el.innerHTML = `<div class="d-flex"><div class="toast-body">${msg}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ── Load plans ──
+async function loadPlans() {
+  const tbody = document.getElementById('plan-tbody');
+  tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4"><span class="spinner-border spinner-border-sm text-secondary me-2"></span>加载中…</td></tr>`;
+  try {
+    const statuses = activeStatus ? activeStatus.split(',') : [''];
+    const urls = statuses.map(s => s ? `/complaints/plans?status=${s}` : `/complaints/plans`);
+    const results = await Promise.all(urls.map(url => apiFetch(url)));
+    const allPlans = results.flatMap(res => (res?.success ? res.data || [] : []));
+    document.getElementById('count-label').textContent = `共 ${allPlans.length} 条`;
+    if (!allPlans.length) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><i class="bi bi-inbox"></i>暂无数据</div></td></tr>`;
+      return;
+    }
+    allPlans.forEach(p => { planComplaintMap[p.id] = p.complaintId; });
+    tbody.innerHTML = allPlans.map(plan => renderPlanRow(plan)).join('');
+    addRowListeners();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">加载失败：${e.message}</td></tr>`;
+  }
+}
+
+loadPlans();
+</script>
+</body>
+</html>

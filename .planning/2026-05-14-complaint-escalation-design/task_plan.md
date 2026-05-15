@@ -3,151 +3,153 @@
 ## Goal
 设计商城"用户投诉升级"场景的 AI 处理架构，采用 Plan + ReAct 组合模式，实现责任认定、方案制定、多方协商、自动执行的完整闭环。
 
-## Status: Phase 0-5 COMPLETE — Phase 6-7 pending
+## Status: ALL PHASES COMPLETE (Phase 0-8)
 
 ---
 
-## 完整业务流程图
+## 完整业务流程图（Phase 9 — 双 HITL 暂停点版）
 
 ```
-╔══════════════════════════════════════════════════════════════════╗
-║  Phase 7 — 客服入口                                              ║
-║                                                                  ║
-║  用户对话描述投诉                                                 ║
-║       │                                                          ║
-║       ▼                                                          ║
-║  客服助手识别升级投诉？                                           ║
-║       ├── 否 ──→ 正常问答处理（结束）                            ║
-║       │                                                          ║
-║       └── 是 ──→ 多轮对话收集订单号 + 投诉描述                   ║
-║                       │                                          ║
-║                       ▼                                          ║
-║             POST /api/v1/complaints                              ║
-║             创建投诉案件，状态 → OPEN                            ║
-╚══════════════════════════════════════════════════════════════════╝
+╔════════════════════════════════════════════════════════════════════╗
+║  Phase 7 — 客服入口（ReactAgent + escalateComplaint 工具）         ║
+║                                                                    ║
+║    用户对话描述投诉                                                ║
+║         │                                                          ║
+║         ▼                                                          ║
+║    CustomerAssistant（ReactAgent）                                 ║
+║         ├── 普通售后 ──→ checkAfterSalesEligibility               ║
+║         │               → submitAfterSalesReview → HITL           ║
+║         │                                                          ║
+║         └── 识别升级投诉 ──→ escalateComplaint 工具               ║
+║                                  │                                 ║
+║                                  ▼                                 ║
+║                   createComplaint()  投诉状态 → OPEN               ║
+║                                  │                                 ║
+║                                  ▼                                 ║
+║                   complaintWorkflowService.startPlanning()         ║
+╚════════════════════════════════════════════════════════════════════╝
+                           │
+                           ▼
+╔════════════════════════════════════════════════════════════════════╗
+║  Phase 8+9 — StateGraph 工作流（ComplaintWorkflowServiceImpl）     ║
+║                                                                    ║
+║  POST /{complaintId}/plan  →  startPlanning(complaintId)           ║
+║  threadId = planId（每次规划循环独立 Redis checkpoint）             ║
+║  ★ 预插 shell 计划（AWAITING_RESPONSIBILITY）确保任意路径可查询    ║
+║                                                                    ║
+║  ┌─── Node: collectData ────────────────────────────────────────┐  ║
+║  │  加载 Complaint，投诉状态 → PLANNING                          │  ║
+║  │  提取 orderStatus / logisticsDelivered / interrupted 等信号  │  ║
+║  └──────────────────────────────┬─────────────────────────────  ┘  ║
+║                                 │                                   ║
+║  ┌─── Node: applyRules ─────────────────────────────────────────┐  ║
+║  │  已签收+损坏 → MERCHANT  │  物流中断48h → LOGISTICS           │  ║
+║  │  系统异常   → PLATFORM   │  7天内质量   → MERCHANT           │  ║
+║  │  未发货超时 → MERCHANT                                        │  ║
+║  │  命中 → 写 responsibleParty/reason   未命中 → 空 map          │  ║
+║  └──────────────┬──────────────────────────────────────────────  ┘  ║
+║                 │                                                   ║
+║        ┌────────┴────────┐                                          ║
+║      命中              未命中                                        ║
+║        │                 │                                          ║
+║        │  ┌─── Node: llmInference ──────────────────────────────┐  ║
+║        │  │  调 responsibilityInferenceService 推理责任方 + 理由  │  ║
+║        │  └─────────────────────┬──────────────────────────────  ┘  ║
+║        │                        │                                   ║
+║        │               ┌────────┴────────┐                         ║
+║        │           非DISPUTED          DISPUTED                     ║
+║        │               │                 │                         ║
+║        │               │  ┌─── Node: humanAssignParty ──────────┐  ║
+║        │               │  │  日志 + 校验责任方已注入              │  ║
+║        │               │  └─────────────────────────────────────┘  ║
+║        │               │                 │                         ║
+║        │               │  ★ interruptBefore("humanAssignParty") ①  ║
+║        │               │    → 返回 AWAITING_RESPONSIBILITY 计划     ║
+║        │               │    → POST assign-party 注入责任方后恢复   ║
+║        │               │                 │                         ║
+║        └───────────────┴─────────────────┘                         ║
+║                                 │                                   ║
+║  ┌─── Node: savePlan ───────────────────────────────────────────┐  ║
+║  │  构建完整 ComplaintPlan（责任方/补偿/序列/fallback）           │  ║
+║  │  UPSERT 覆写 shell 记录 → 计划状态 PENDING_REVIEW            │  ║
+║  └──────────────────────────────┬─────────────────────────────  ┘  ║
+║                                 │                                   ║
+║          ★ interruptBefore("applyDecision") ②                      ║
+║            → 返回 PENDING_REVIEW 计划；审批员操作后恢复             ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+                           │ 审批员在 complaint-review.html 操作
+                           ▼
+╔════════════════════════════════════════════════════════════════════╗
+║  Phase 3+6+9 — HITL 审批（审核员前端 → 恢复工作流）               ║
+║                                                                    ║
+║  POST /plans/{id}/assign-party        → resumeWithPartyAssignment()║
+║  POST /plans/{id}/approve             → resumeApproved()           ║
+║  POST /plans/{id}/reject              → resumeRejected()           ║
+║  POST /plans/{id}/modify-and-approve  → resumeModified()           ║
+║                                                                    ║
+║  每个方法均执行：                                                  ║
+║    compiledGraph.updateState(config, updates)                      ║
+║    compiledGraph.stream(null, config).blockLast()                  ║
+║    → 从 Redis 恢复 checkpoint，从暂停节点继续执行                  ║
+╚════════════════════════════════════════════════════════════════════╝
                          │
                          ▼
 ╔══════════════════════════════════════════════════════════════════╗
-║  Phase 2 — Planner                                               ║
-║                                                                  ║
-║  POST /{complaintId}/plan                                        ║
-║  投诉状态 → PLANNING                                             ║
-║                                                                  ║
-║  ┌─────────────────── 并行数据收集（mock） ───────────────────┐  ║
-║  │  getComplaintHistory    getOrderDetails    getLogisticsTrace│  ║
-║  │  getMerchantViolationRecord    getCompensationPolicy        │  ║
-║  └──────────────────────────┬──────────────────────────────────┘  ║
-║                             │                                    ║
-║                             ▼                                    ║
-║  ┌──────────────── 规则层（覆盖 ~80% 案例）─────────────────┐   ║
+║  ┌─────── Node: applyDecision ──────────────────────────────┐   ║
+║  │  读取 reviewResult 分三路：                               │   ║
 ║  │                                                           │   ║
-║  │  已签收 + 损坏？        ── 是 ──→ MERCHANT               │   ║
-║  │  物流轨迹中断 48h？     ── 是 ──→ LOGISTICS              │   ║
-║  │  系统订单状态异常？     ── 是 ──→ PLATFORM               │   ║
-║  │  7 天内反馈质量问题？   ── 是 ──→ MERCHANT               │   ║
-║  │  未发货超时？           ── 是 ──→ MERCHANT               │   ║
-║  │  以上均不命中           ──────→ LLM 推理                 │   ║
-║  │                                                           │   ║
-║  └───────────────────────────────────────────────────────────┘   ║
+║  │  "APPROVED"  → approvePlan()  → nextAction = "execute"   │   ║
+║  │  "MODIFIED"  → modifyAndApprovePlan()                     │   ║
+║  │                              → nextAction = "execute"    │   ║
+║  │  "REJECTED"  → rejectPlan()   → nextAction = "close"     │   ║
+║  │               投诉 → CLOSED                               │   ║
+║  └──────────────────────────┬───────────────────────────────┘   ║
 ║                             │                                    ║
 ║              ┌──────────────┴──────────────┐                    ║
+║         "execute"                       "close"                 ║
+║              │                             │                    ║
 ║              ▼                             ▼                    ║
-║       LLM 输出明确责任方             证据不足 / 推理异常          ║
-║       + 推理理由                          │                     ║
-║              │                            ▼                     ║
-║              │                    DISPUTED                      ║
-║              │                    补偿: NONE，联系顺序: 空       ║
-║              │                            │                     ║
-║              └──────────────┬─────────────┘                    ║
-║                             ▼                                    ║
-║            buildPlan()                                           ║
-║            责任方 + 补偿类型/金额 + 联系顺序                     ║
-║            timeouts: { merchantResponseDeadline: 48h,           ║
-║                        onTimeout: TRIGGER_REPLANNER }           ║
-║            fallback: [ 方案B（换责任方）, 方案C（升级专员）]     ║
-║                             │                                    ║
-║                             ▼                                    ║
-║            savePlan()                                            ║
-║            计划状态 → PENDING_REVIEW                             ║
-║            投诉状态 → PENDING_REVIEW                             ║
+║  ┌── Node: executePlan ──┐     ┌── Node: closePlan ──────────┐  ║
+║  │  complaintExecutor    │     │  记录关闭日志，流程结束       │  ║
+║  │  Service.execute()    │     └────────────────────────────┘  ║
+║  │                       │                                      ║
+║  │  ReactAgent 执行：    │                                      ║
+║  │  ① notifyParty        │                                      ║
+║  │  ② executeCompensation│                                      ║
+║  │  ③ recordResolution   │                                      ║
+║  │  ④ sendUserNotification│                                     ║
+║  │                       │                                      ║
+║  │  计划 → COMPLETED     │                                      ║
+║  │  投诉 → RESOLVED      │                                      ║
+║  └───────────┬───────────┘                                      ║
+║              │                                                   ║
+║              ▼                                                   ║
+║            END                                                   ║
 ╚══════════════════════════════════════════════════════════════════╝
-                         │
-                         ▼
-╔══════════════════════════════════════════════════════════════════╗
-║  Phase 3 + 6 — HITL 审批（审核员前端）                           ║
-║                                                                  ║
-║  审核员前端展示：                                                 ║
-║    投诉信息 / 订单与物流摘要 / AI 责任认定 / 推理理由             ║
-║    补偿方案 / fallback 备选                                      ║
-║                                                                  ║
-║  审批操作（仅 PENDING_REVIEW 可操作，否则抛 400）：               ║
-║                                                                  ║
-║    POST /plans/{id}/approve                                      ║
-║    直接批准 ──────────────────────────────┐                     ║
-║                                           │                     ║
-║    POST /plans/{id}/modify-and-approve    ├──→ 计划 → APPROVED  ║
-║    修改责任方 / 补偿类型 / 补偿金额后批准 ─┘                     ║
-║                                                                  ║
-║    POST /plans/{id}/reject                                       ║
-║    拒绝 ──→ 计划 → REJECTED，投诉 → CLOSED（流程结束）           ║
-╚══════════════════════════════════════════════════════════════════╝
-                         │ 计划 APPROVED
-                         ▼
-╔══════════════════════════════════════════════════════════════════╗
-║  Phase 4 — ReAct Executor                                        ║
-║                                                                  ║
-║  POST /plans/{id}/execute                                        ║
-║  （非 APPROVED 状态抛 400）                                      ║
-║  计划状态 → EXECUTING，构建 ReactAgent（recursionLimit=15）       ║
-║                                                                  ║
-║  ReAct 循环（Thought → Action → Observation）：                  ║
-║                                                                  ║
-║    ① notifyParty                                                 ║
-║       按 contactSequence 依次通知各责任方，deadline: 48h         ║
-║       │                                                          ║
-║    ② executeCompensation                                         ║
-║       REFUND / COUPON / REFUND_AND_COUPON                        ║
-║       │                                                          ║
-║    ③ recordResolution                                            ║
-║       写入结案摘要                                               ║
-║       │                                                          ║
-║    ④ sendUserNotification                                        ║
-║       通知用户处理结果                                           ║
-║       │                                                          ║
-║       ├── 成功 ──→ 计划 → COMPLETED，投诉 → RESOLVED（结束）     ║
-║       │                                                          ║
-║       └── GraphRunnerException / KbException                    ║
-║               │                                                  ║
-║               ▼                                                  ║
-║           计划 → FAILED                                          ║
-╚══════════════════════════════════════════════════════════════════╝
-                         │ 计划 FAILED
+                         │ 计划 EXECUTING 超时
                          ▼
 ╔══════════════════════════════════════════════════════════════════╗
 ║  Phase 5 — 超时与 Replanner                                      ║
 ║                                                                  ║
-║  checkDeadline(caseId)                                           ║
-║  定时任务轮询 next_check_at                                      ║
+║  ComplaintDeadlineScheduler（@Scheduled fixedDelay=60s）         ║
+║  扫描 next_check_at 超时的 EXECUTING 计划                        ║
 ║       │                                                          ║
-║       ├── 未超时 ──→ 继续等待，下次轮询                          ║
+║       ▼                                                          ║
+║  complaintWorkflowService.triggerReplan(planId)                  ║
 ║       │                                                          ║
-║       └── 商家超时 / 拒绝                                        ║
+║       └── ComplaintReplannerService.replan()                     ║
 ║               │                                                  ║
-║               ▼                                                  ║
-║         replan_count < 2？                                       ║
+║               ├── replanCount < 2                               ║
+║               │   从 fallbackPlan[replanCount] 取下一方案       ║
+║               │   savePlan() 生成新计划（PENDING_REVIEW）        ║
+║               │   旧计划 → FAILED，replanCount++                ║
+║               │   审核员重新审批新计划（进入 HITL 流程）          ║
 ║               │                                                  ║
-║               ├── 是 ──→ Replanner                              ║
-║               │          从 fallback 取下一方案                  ║
-║               │          只更新责任方 + 补偿金额                 ║
-║               │          replan_count++                         ║
-║               │          回到 PENDING_REVIEW → 重新进入审批      ║
-║               │                                                  ║
-║               └── 否（已达 2 次）                                ║
-║                       │                                          ║
-║                       ▼                                          ║
-║               escalateToSenior()                                 ║
-║               投诉 → ESCALATED                                   ║
-║               移交高级专员（流程结束）                           ║
+║               └── replanCount >= 2 或 ESCALATE_TO_SENIOR       ║
+║                       投诉 → ESCALATED                           ║
+║                       旧计划 → FAILED                            ║
+║                       移交高级专员（流程结束）                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 ```
 
@@ -493,40 +495,132 @@ Phase 5 结果：
 - 编译验证通过。
 
 ### Phase 6: 审核员前端
-**Status**: pending
+**Status**: complete
 
 目标：让审核员能看懂 AI 为什么这么判，并能做审批操作。
 
-页面重点：
-- 投诉基本信息
-- 订单、物流、历史投诉摘要
-- AI 责任认定
-- 推理理由
-- 补偿方案
-- fallback
-- 审批按钮
-- 修改后批准入口
-
-验收标准：
-- 审核员能完成批准、拒绝、修改后批准
-- 展示的是"计划 + 理由"，不是只展示一句结论
-- 状态刷新正确
+Phase 6 结果：
+- 新增 `complaint-review.html`（Bootstrap 5）：
+  - 左侧侧边栏同步新增"投诉升级审核"入口，`reviews.html` / `customer.html` 同步追加侧边栏链接。
+  - 顶部状态 Tab 筛选（PENDING_REVIEW / APPROVED / REJECTED / EXECUTING+COMPLETED+FAILED / 全部）。
+  - 计划列表表格：案件ID、订单号、责任方 badge、补偿方案、计划状态 badge、生成时间、操作列。
+  - 行内展开详情（惰性加载投诉内容、AI 推理理由、补偿明细、fallback 备选列表）。
+  - 操作按钮（仅 PENDING_REVIEW 显示）：批准 / 改后批 / 拒绝。
+  - "直接批准"/ "拒绝"模态框：含审批意见文本框。
+  - "修改后批准"模态框：责任方 select / 补偿类型 select / 补偿金额 number / 意见文本框。
+  - Toast 通知成功/失败。
+- `ComplaintController` 新增 `GET /api/v1/complaints/{complaintId}` 查询投诉详情（供前端惰性加载）。
+- `index.html` 新增"投诉升级审核"入口卡片。
+- 全量编译验证通过。
 
 ### Phase 7: 客服入口与端到端联调
-**Status**: pending
+**Status**: complete
 
 目标：把能力接入客服助手，让用户投诉升级能从对话进入闭环。
 
-实现内容：
-- 客服助手识别升级投诉
-- 收集订单号和投诉描述
-- 创建 `complaint`
-- 调用 Planner
-- 告知用户"已提交升级投诉，等待专员审核"
-- 审批、执行、结案全链路联调
+Phase 7 结果：
+- `CustomerAssistantServiceImpl` 新增 `escalateComplaint` FunctionToolCallback：
+  - 输入：`orderId`（订单号）、`description`（投诉描述）。
+  - 调用链：`complaintEscalationService.createComplaint()` → `complaintWorkflowService.startPlanning()`（Phase 8 后更新）。
+  - 成功后返回中文确认字符串（含投诉 ID），由客服助手反馈给用户。
+  - 参数空值校验抛 KbException(400)，AI 工具链异常透传。
+- 系统提示词更新：加入升级投诉识别指引（多次联系商家无果 / 涉及金额 ≥300 / 多方纠纷 / 用户明确要求升级）、升级流程步骤（多轮收集订单号和描述 → 调用 escalateComplaint → 告知用户已提交等待审核）。
+- 端到端联调路径：用户对话 → 客服助手 escalateComplaint → 投诉落库（OPEN）→ 工作流生成计划（PENDING_REVIEW）→ 审核员在 complaint-review.html 审批 → 工作流自动执行 → RESOLVED 或 ESCALATED。
 
-验收标准：
-- 从用户对话到投诉结案跑通
-- 人工审批不可跳过
-- 计划、审核、执行、通知都有记录
-- 失败路径能进入重规划或高级专员
+### Phase 8: StateGraph 工作流编排重构
+**Status**: complete
+
+目标：将 Phase 2（Planner）+ Phase 3（HITL 审批）+ Phase 4（Executor）+ Phase 5（Replanner 入口）整合进 Spring AI Alibaba `StateGraph` 工作流编排，实现统一的状态机驱动、节点可观测、HITL 暂停/恢复。
+
+**核心变更：**
+
+新增 `ComplaintWorkflowService` 接口 + `ComplaintWorkflowServiceImpl`：
+
+- `StateGraph` 编译为 `CompiledGraph`，`@PostConstruct` 初始化一次，多请求复用；
+- 7 个命名节点：`collectData` → `applyRules` → `[llmInference]` → `savePlan` → `applyDecision` → `executePlan` / `closePlan`；
+- 条件边（`addConditionalEdges`）：
+  - `applyRules` 后：state 有 `responsibleParty` → `savePlan`，无 → `llmInference`；
+  - `applyDecision` 后：`nextAction=="execute"` → `executePlan`，否则 → `closePlan`；
+- `CompileConfig.interruptBefore("applyDecision")`：`savePlan` 完成后自动暂停，状态以 `planId` 为 `threadId` 持久化到 Redis；
+- `startPlanning(complaintId)` 预生成 `planId` → `stream(initialState, config).blockLast()` → 返回 PENDING_REVIEW 计划；
+- `resumeApproved/resumeRejected/resumeModified` → `updateState(config, updates)` + `stream(null, config).blockLast()` 恢复图执行；
+- 所有 state 值均为 `String`（UUID.toString、枚举 name、BigDecimal.toPlainString），确保 RedisSaver 序列化安全；
+- `KeyStrategyFactoryBuilder.defaultStrategy(new ReplaceStrategy())` 统一覆盖写策略。
+
+**同步更新：**
+- `ComplaintController`：注入 `ComplaintWorkflowService`，移除 `ComplaintPlannerService` / `ComplaintExecutorService` / `ComplaintReplannerService` 直接依赖，删除独立的 `POST /plans/{id}/execute` 端点（审批通过即自动执行）；
+- `CustomerAssistantServiceImpl.escalateComplaint()`：改调 `complaintWorkflowService.startPlanning()`；
+- `ComplaintDeadlineScheduler`：改调 `complaintWorkflowService.triggerReplan()`；
+- `ComplaintPlannerService` / `ComplaintExecutorService` 接口及实现保留，不再被 controller 直接注入（graph 节点内部调用 executor，planner 逻辑迁移到 graph 节点）。
+
+**State 键清单：**
+
+| 键 | 写入节点 | 说明 |
+|---|---------|------|
+| `complaintId` | 初始状态 | UUID.toString |
+| `planId` | 初始状态 | UUID.toString，即 threadId |
+| `complaintContent` | collectData | 投诉内容原文 |
+| `orderId` | collectData | 订单号 |
+| `orderAmount` | collectData | "299.00"（mock） |
+| `orderStatus` | collectData | COMPLETED / SYSTEM_ABNORMAL / NOT_SHIPPED_OVERDUE |
+| `logisticsDelivered` | collectData | "true"/"false" |
+| `logisticsInterrupted` | collectData | "true"/"false" |
+| `logisticsWithin7Days` | collectData | "true"/"false" |
+| `responsibleParty` | applyRules / llmInference | 枚举 name |
+| `responsibilityReason` | applyRules / llmInference | 中文理由 |
+| `reviewResult` | HITL（updateState） | "APPROVED" / "REJECTED" / "MODIFIED" |
+| `reviewerId` | HITL（updateState） | UUID.toString |
+| `reviewComment` | HITL（updateState） | 意见文本 |
+| `modifiedParty` | HITL（updateState，可选） | 枚举 name |
+| `modifiedCompType` | HITL（updateState，可选） | 枚举 name |
+| `modifiedAmount` | HITL（updateState，可选） | BigDecimal 字符串 |
+| `nextAction` | applyDecision | "execute" / "close" |
+
+**验收结果：**
+- `mvn install -pl kb-search -am -DskipTests` BUILD SUCCESS；
+- 全部 46 个单元测试通过（0 Failures, 0 Errors）。
+
+### Phase 9: DISPUTED → 第一个 HITL 暂停（人工判责）
+**Status**: complete
+
+**背景**：Phase 8 完成后，`llmInference` 推理为 DISPUTED 时，仍然直接走 `savePlan` 保存零赔付空方案，进入 `applyDecision` HITL。APPROVED 路径会执行一个无意义的空计划；必须 MODIFIED 才能真正修复责任方。设计上不够清晰，且 `startPlanning()` 在 DISPUTED 路径下若图先于 `savePlan` 暂停会导致 `findPlanById` 查不到记录。
+
+**设计方案**：
+```
+applyRules (规则命中) ──────────────────→ savePlan
+applyRules (未命中) → llmInference
+    ├─ 非DISPUTED ──────────────────────→ savePlan
+    └─ DISPUTED → humanAssignParty  ★ interruptBefore 暂停①
+                       ↓ 人工指定责任方 resumeWithPartyAssignment()
+                   savePlan  (UPSERT 覆写 shell 记录)
+                       ↓
+                   applyDecision  ★ interruptBefore 暂停②
+                       ↓
+               executePlan / closePlan
+```
+
+**核心问题与解法**：
+- `startPlanning()` 在 DISPUTED 路径下 `stream().blockLast()` 停在 `humanAssignParty` 前，此时 `savePlan` 节点尚未执行，`findPlanById(planId)` 会报 404。
+- **解法**：`startPlanning()` 在调用 `stream()` 前预插 shell 计划记录（状态 `AWAITING_RESPONSIBILITY`），`savePlan` 节点改为 UPSERT（INSERT ... ON CONFLICT DO UPDATE），保证 `findPlanById` 任何路径均能命中。
+
+**变更清单**：
+- `ComplaintPlanStatus`：新增 `AWAITING_RESPONSIBILITY`
+- `ComplaintPlanMapper.xml`：`insert` 改为 PostgreSQL upsert（ON CONFLICT (id) DO UPDATE）
+- `ComplaintWorkflowService`：新增 `resumeWithPartyAssignment(planId, party, reason)`
+- `ComplaintPartyAssignmentRequest`：新增请求 DTO（record）
+- `ComplaintWorkflowServiceImpl`：
+  - `startPlanning()` 预插 shell 计划
+  - 新增 `humanAssignParty` 节点
+  - `llmInference` 后改为条件边：DISPUTED → `humanAssignParty`，否则 → `savePlan`
+  - 编译时 `interruptBefore("humanAssignParty", "applyDecision")`
+  - 实现 `resumeWithPartyAssignment()`
+- `ComplaintController`：新增 `POST /plans/{planId}/assign-party`
+- `complaint-review.html`：新增 `AWAITING_RESPONSIBILITY` 状态展示与"人工判责"操作模态框
+
+**State 键新增**：无，仍复用 `responsibleParty` / `responsibilityReason`
+
+**验收标准**：
+- 规则命中路径：不受影响，shell 被 UPSERT 覆写
+- 非 DISPUTED LLM 路径：不受影响，shell 被 UPSERT 覆写
+- DISPUTED 路径：`startPlanning()` 返回 AWAITING_RESPONSIBILITY 计划；`assign-party` 恢复后流入 `savePlan` 生成 PENDING_REVIEW；`approve` 后执行
+- 编译通过，单元测试全部通过
