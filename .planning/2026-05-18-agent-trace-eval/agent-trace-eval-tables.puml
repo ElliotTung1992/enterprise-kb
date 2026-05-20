@@ -1,0 +1,158 @@
+@startuml agent-trace-eval-tables
+
+' ────────────────────────────────────────────────────────
+' Agent Trace、离线复现包与评估回放 — 表关系 UML
+' 生成自 db/changelog/025-add-agent-traces-eval.sql
+' ────────────────────────────────────────────────────────
+
+left to right direction
+
+skinparam linetype ortho
+skinparam roundcorner 5
+skinparam shadowing false
+skinparam nodesep 60
+skinparam ranksep 80
+skinparam class {
+    BackgroundColor #FAFAFA
+    BorderColor     #888888
+    ArrowColor      #555555
+    HeaderBackgroundColor #4A90D9
+    HeaderFontColor white
+    FontName Helvetica
+}
+
+entity "agent_traces" as agent_traces {
+    * id                : UUID <<PK>>
+    --
+    * trace_type        : VARCHAR(50)
+      session_id        : UUID
+      space_id          : UUID
+      user_id           : UUID
+      request_id        : VARCHAR(100)
+      model_provider    : VARCHAR(50)
+    * status            : VARCHAR(30)
+      input_text        : TEXT
+      output_text       : TEXT
+      raw_input_json    : JSONB
+      raw_output_json   : JSONB
+      duration_ms       : BIGINT
+      tokens_used       : INTEGER
+      error_type        : VARCHAR(200)
+      error_message     : TEXT
+    * payload_truncated : BOOLEAN
+    * started_at        : TIMESTAMPTZ
+      completed_at      : TIMESTAMPTZ
+    * created_at        : TIMESTAMPTZ
+}
+
+entity "agent_trace_steps" as agent_trace_steps {
+    * id                : UUID <<PK>>
+    --
+    * trace_id          : UUID <<FK>>
+    * step_index        : INTEGER
+    * step_type         : VARCHAR(50)
+      agent_name        : VARCHAR(100)
+      tool_call_id      : VARCHAR(200)
+      tool_name         : VARCHAR(100)
+    * status            : VARCHAR(30)
+      input_json        : JSONB
+      output_json       : JSONB
+      raw_payload_json  : JSONB
+      business_ref_type : VARCHAR(50)
+      business_ref_id   : UUID
+      duration_ms       : BIGINT
+      error_type        : VARCHAR(200)
+      error_message     : TEXT
+    * payload_truncated : BOOLEAN
+    * created_at        : TIMESTAMPTZ
+    --
+    <<UNIQUE (trace_id, step_index)>>
+}
+
+entity "eval_cases" as eval_cases {
+    * id                 : UUID <<PK>>
+    --
+      source_trace_id    : UUID <<FK>>
+    * case_type          : VARCHAR(50)
+    * name               : VARCHAR(200)
+    * dataset            : VARCHAR(100)
+    * input_json         : JSONB
+    * expected_json      : JSONB
+      mock_outputs_json  : JSONB
+    * enabled            : BOOLEAN
+      created_by         : UUID
+    * created_at         : TIMESTAMPTZ
+    * updated_at         : TIMESTAMPTZ
+}
+
+entity "eval_runs" as eval_runs {
+    * id            : UUID <<PK>>
+    --
+    * dataset       : VARCHAR(100)
+    * status        : VARCHAR(30)
+      config_json   : JSONB
+      summary_json  : JSONB
+    * started_at    : TIMESTAMPTZ
+      completed_at  : TIMESTAMPTZ
+    * created_at    : TIMESTAMPTZ
+}
+
+entity "eval_run_results" as eval_run_results {
+    * id                    : UUID <<PK>>
+    --
+    * eval_run_id           : UUID <<FK>>
+    * eval_case_id          : UUID <<FK>>
+    * status                : VARCHAR(30)
+      actual_json           : JSONB
+      assertion_result_json : JSONB
+      failure_reason        : TEXT
+    * created_at            : TIMESTAMPTZ
+    --
+    <<UNIQUE (eval_run_id, eval_case_id)>>
+}
+
+' 外部已存在表：当前迁移未声明外键，仅表达逻辑关联
+entity "users" as users <<external>> {
+    * id : UUID <<PK>>
+}
+
+entity "spaces" as spaces <<external>> {
+    * id : UUID <<PK>>
+}
+
+agent_traces ||--o{ agent_trace_steps : "trace_id"
+agent_traces |o--o{ eval_cases : "source_trace_id"
+eval_runs ||--o{ eval_run_results : "eval_run_id"
+eval_cases ||--o{ eval_run_results : "eval_case_id"
+
+users ||..o{ agent_traces : "user_id"
+users ||..o{ eval_cases : "created_by"
+spaces ||..o{ agent_traces : "space_id"
+
+note right of agent_trace_steps
+business_ref_type + business_ref_id
+逻辑关联业务对象：
+- DOCUMENT
+- REVIEW_REQUEST
+- COMPLAINT
+- COMPLAINT_PLAN
+end note
+
+note bottom of agent_traces
+trace_type 示例：
+- STANDARD_QA
+- AGENTIC_QA
+- CUSTOMER_ASSISTANT
+- AFTER_SALES
+- COMPLAINT
+end note
+
+note bottom of eval_cases
+case_type 示例：
+- ROUTING_TOOL
+- RETRIEVAL
+- ANSWER
+- END_TO_END
+end note
+
+@enduml
