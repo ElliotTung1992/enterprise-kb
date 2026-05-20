@@ -1,30 +1,39 @@
 # Hot Cache
 
-_Last updated: 2026-05-13_
+_Last updated: 2026-05-18_
 
 ## 最近工作焦点
 
-**HITL 售后审核 + 商城客服助手**（Phase 1-6 已完成）
+**客服助手意图识别 — 两层域路由**（Phase 0-3 全部实现，未上线）
 
 ### 关键决策（本轮最重要）
-1. **事务顺序**：`resumeWithFeedback`（LLM）必须先于 `approve/reject`（DB）执行 → [[decisions/adr-005-hitl-transaction-ordering]]
-2. **完全分离**：商城客服从 `AgenticQnAServiceImpl` 彻底剥离，独立服务+独立表 → [[decisions/adr-006-customer-assistant-separation]]
-3. **`@Transactional` 不拦截私有方法**：`CustomerAssistantServiceImpl` 中用 `TransactionTemplate.executeWithoutResult()` 替代
+1. **两层路由**：Tier-1 `DomainRouterService` 分类到业务域，Tier-2 `DomainHandler` 选工具；准确率归属分离 → [[decisions/adr-008-intent-routing-two-tier]]
+2. **路由器只评"域"**：意图识别准确性 = 域路由准确，工具选择是各域 Agent 内部事，独立度量
+3. **few-shot 污染硬切分**：`frozen-testset.jsonl`（永不进 prompt）与 `fewshot-pool.jsonl` 不相交，否则准确率虚高
+4. **awaiting_slot 硬规则**：上轮索要订单号 → 下轮跳过路由，裸槽位回复直接回当前域
+5. **先影子后灰度**：`routing-enabled` kill-switch 默认 false，旧单体路径仍生效
 
 ### 当前文件索引
 | 概念 | 文件 |
 |------|------|
-| HITL 完整业务流程 | [[features/hitl-after-sales]] |
-| HumanInTheLoopHook 机制 | [[ai-rag/hitl-hook]] |
-| 售后 API 端点 | [[api/after-sales]] |
-| 数据表结构 | [[database/entities/after-sales-tables]] |
-| 事务顺序 ADR | [[decisions/adr-005-hitl-transaction-ordering]] |
-| 分离决策 ADR | [[decisions/adr-006-customer-assistant-separation]] |
+| 两层域路由完整功能 | [[features/intent-routing]] |
+| 架构决策（含 grill-me 11 决策点） | [[decisions/adr-008-intent-routing-two-tier]] |
+| 投诉升级（被 ComplaintDomainHandler 包入） | [[features/complaint-escalation]] |
+| 售后 HITL（被 AfterSalesDomainHandler 包入） | [[features/hitl-after-sales]] |
 
 ### 关键代码路径
-- `CustomerAssistantController` → `CustomerAssistantService.chat()` → ReactAgent → HumanInTheLoopHook
-- 审批路径：`findById → resumeWithFeedback → approve/reject`
-- Checkpoint：Redis，`threadId = sessionId.toString()`，Redisson 连接池 4/1
+- 流水线：`CustomerAssistantServiceImpl.routedChat`（攻击守卫 → 状态/硬规则 → `DomainRouterService` → `DomainHandler` 分派 → secondary 反问 → 持久化）
+- 路由器：`DomainRouterServiceImpl`，一次 MINIMAX 调用，输出 `PRIMARY|SECONDARY_CSV|RUNNER_UP|EVIDENCE`，证据判 UNCLEAR
+- 域处理器：`AfterSalesDomainHandler`（2 工具 + HITL）、`ComplaintDomainHandler`（触发投诉 StateGraph）
+- 路由状态：`ConversationStateStore`，Redis `qa:state:{sessionId}`
+- 评估：`kb-search/src/test/resources/intent-eval/` + `DomainRouterEvalTest`（`INTENT_EVAL=true` 门控）
+- kill-switch：`enterprise.kb.customer-assistant.routing-enabled`（默认 false）
 
-### 未完成
-- Phase 7：集成测试 & 联调（需启动完整基础设施）
+### 实现状态
+- Phase 0-3 全部实现，全项目编译通过，76 个单元测试通过
+- 未做：评估集为模板（待运营测试同学标注）、影子数据为空（待部署）、迁移 024 未落库、端到端 & HITL 回归未跑
+- 下一步：标注评估集 → `DomainRouterEvalTest` 达标 → 部署攒影子数据 → 影子达标后开 `routing-enabled` 灰度
+
+## 上一轮焦点
+
+**投诉升级系统**（Phase 0-9 完成）→ [[features/complaint-escalation]] · [[decisions/adr-007-complaint-escalation-stategraph]]

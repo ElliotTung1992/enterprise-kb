@@ -1,0 +1,3 @@
+{"id":"fs-001","note":"售后取消订单","turns":[{"role":"user","content":"我下错单了，想取消订单把钱退给我","expected_domain":"AFTER_SALES"}]}
+{"id":"fs-002","note":"投诉：威胁向监管投诉","turns":[{"role":"user","content":"你们这平台太坑人了，我要去12315投诉你们","expected_domain":"COMPLAINT"}]}
+{"id":"fs-003","note":"营销活动域未接入 HANDOFF","turns":[{"role":"user","content":"满减优惠券在哪里领取呀","expected_domain":"HANDOFF"}]}

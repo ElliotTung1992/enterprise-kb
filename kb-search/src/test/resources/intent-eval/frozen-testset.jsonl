@@ -1,0 +1,8 @@
+{"id":"ft-001","note":"售后退货 happy path + 槽位回填 SKIP","turns":[{"role":"user","content":"我买的杯子收到时有裂痕，想申请退货","expected_domain":"AFTER_SALES"},{"role":"assistant","content":"很抱歉给您带来不便，请提供您的订单号。"},{"role":"user","content":"SO20260510077","expected_domain":"SKIP"}]}
+{"id":"ft-002","note":"投诉升级：多次反映未解决","turns":[{"role":"user","content":"这个问题我前前后后反馈好几回了，一直没人给我处理","expected_domain":"COMPLAINT"}]}
+{"id":"ft-003","note":"域外闲聊 CHITCHAT","turns":[{"role":"user","content":"你们公司一共有多少员工呀","expected_domain":"CHITCHAT"}]}
+{"id":"ft-004","note":"业务内但物流域未接入 HANDOFF","turns":[{"role":"user","content":"我的包裹显示派送中但是一直没收到","expected_domain":"HANDOFF"}]}
+{"id":"ft-005","note":"对话中途意图漂移 售后→投诉","turns":[{"role":"user","content":"我想换一下货","expected_domain":"AFTER_SALES"},{"role":"assistant","content":"好的，请问您要换的是哪个订单的商品？"},{"role":"user","content":"不换了，我要投诉商家虚假宣传","expected_domain":"COMPLAINT"}]}
+{"id":"ft-006","note":"同句复合意图：退款 + 投诉","turns":[{"role":"user","content":"帮我把这个订单退款，另外我要投诉你们发货太慢","expected_domain":"AFTER_SALES","expected_secondary":["COMPLAINT"]}]}
+{"id":"ft-007","note":"售后域内纯情绪宣泄，不应切域","turns":[{"role":"user","content":"我要退款","expected_domain":"AFTER_SALES"},{"role":"assistant","content":"好的，请提供订单号。"},{"role":"user","content":"你们处理问题怎么这么拖沓","expected_domain":"AFTER_SALES"}]}
+{"id":"ft-008","note":"信息不足 UNCLEAR","turns":[{"role":"user","content":"我有个事情想咨询一下","expected_domain":"UNCLEAR"}]}

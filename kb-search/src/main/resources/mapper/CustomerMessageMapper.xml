@@ -4,15 +4,15 @@
 <mapper namespace="com.enterprise.kb.search.mapper.CustomerMessageMapper">
 
     <select id="findBySessionId" resultType="com.enterprise.kb.search.dto.CustomerMessageDto">
-        SELECT id, role, content, created_at AS createdAt
+        SELECT id, role, content, domain, created_at AS createdAt
         FROM customer_messages
         WHERE session_id = #{sessionId,jdbcType=OTHER}
         ORDER BY created_at ASC
     </select>
 
     <insert id="insert">
-        INSERT INTO customer_messages (id, session_id, role, content)
-        VALUES (gen_random_uuid(), #{sessionId,jdbcType=OTHER}, #{role}, #{content})
+        INSERT INTO customer_messages (id, session_id, role, content, domain)
+        VALUES (gen_random_uuid(), #{sessionId,jdbcType=OTHER}, #{role}, #{content}, #{domain})
     </insert>
 
 </mapper>

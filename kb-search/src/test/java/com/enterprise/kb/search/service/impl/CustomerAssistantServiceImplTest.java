@@ -90,8 +90,8 @@ class CustomerAssistantServiceImplTest {
     void getMessagesReturnsDtosForAuthorizedUser() {
         UUID sessionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
-        CustomerMessageDto msg1 = new CustomerMessageDto(UUID.randomUUID(), "user", "你好", Instant.now());
-        CustomerMessageDto msg2 = new CustomerMessageDto(UUID.randomUUID(), "assistant", "您好，请问有什么可以帮您？", Instant.now());
+        CustomerMessageDto msg1 = new CustomerMessageDto(UUID.randomUUID(), "user", "你好", "AFTER_SALES", Instant.now());
+        CustomerMessageDto msg2 = new CustomerMessageDto(UUID.randomUUID(), "assistant", "您好，请问有什么可以帮您？", null, Instant.now());
 
         when(customerSessionMapper.existsByIdAndUserId(sessionId, userId)).thenReturn(true);
         when(customerMessageMapper.findBySessionId(sessionId)).thenReturn(List.of(msg1, msg2));

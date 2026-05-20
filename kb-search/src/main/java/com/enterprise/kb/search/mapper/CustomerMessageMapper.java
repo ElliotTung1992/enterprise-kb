@@ -27,7 +27,8 @@ public interface CustomerMessageMapper {
      * @param sessionId 会话 ID
      * @param role      角色（user / assistant）
      * @param content   消息正文
+     * @param domain    Tier-1 域路由器判定的业务域；非路由消息（如 assistant 回复）传 {@code null}
      */
     void insert(@Param("sessionId") UUID sessionId, @Param("role") String role,
-                @Param("content") String content);
+                @Param("content") String content, @Param("domain") String domain);
 }

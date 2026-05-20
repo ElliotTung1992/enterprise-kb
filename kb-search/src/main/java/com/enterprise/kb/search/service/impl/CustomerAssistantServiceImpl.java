@@ -9,22 +9,32 @@ import com.alibaba.cloud.ai.graph.checkpoint.config.SaverConfig;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.redis.RedisSaver;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.alibaba.cloud.ai.graph.exception.SubGraphInterruptionException;
+import com.enterprise.kb.common.constants.Domain;
 import com.enterprise.kb.common.exception.KbException;
 import com.enterprise.kb.common.util.SecurityUtils;
+import com.enterprise.kb.search.ai.ConversationStateStore;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.AfterSalesCheckInput;
 import com.enterprise.kb.search.dto.AfterSalesSubmitInput;
+import com.enterprise.kb.search.dto.ConversationState;
+import com.enterprise.kb.search.dto.DomainContext;
+import com.enterprise.kb.search.dto.DomainResult;
 import com.enterprise.kb.search.dto.CustomerAssistantRequest;
 import com.enterprise.kb.search.dto.CustomerAssistantResponse;
 import com.enterprise.kb.search.dto.CustomerMessageDto;
 import com.enterprise.kb.search.dto.CustomerSessionDto;
+import com.enterprise.kb.search.dto.GuardResult;
+import com.enterprise.kb.search.dto.RoutingDecision;
 import com.enterprise.kb.search.mapper.CustomerMessageMapper;
 import com.enterprise.kb.search.mapper.CustomerSessionMapper;
 import com.enterprise.kb.search.model.CustomerSession;
+import com.enterprise.kb.search.service.AttackGuardService;
 import com.enterprise.kb.search.service.ComplaintEscalationService;
 import com.enterprise.kb.search.service.ComplaintWorkflowService;
 import com.enterprise.kb.search.service.CustomerAssistantService;
+import com.enterprise.kb.search.service.DomainHandler;
+import com.enterprise.kb.search.service.DomainRouterService;
 import com.enterprise.kb.search.service.ReviewRequestService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,6 +45,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.tool.function.FunctionToolCallback;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * 商城客户助手服务实现。
@@ -64,6 +76,14 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     private static final int MAX_HISTORY_MESSAGES = 20;
     private static final int TITLE_MAX_LENGTH = 50;
 
+    /** 影子模式开关：未启用路由架构时，旁路跑一次 Tier-1 域路由并记录日志，不影响用户响应。 */
+    @Value("${enterprise.kb.customer-assistant.shadow-routing-enabled:true}")
+    private boolean shadowRoutingEnabled;
+
+    /** 路由架构开关（kill-switch）：true 走两层路由流水线，false 回退旧单体路径。 */
+    @Value("${enterprise.kb.customer-assistant.routing-enabled:true}")
+    private boolean routingEnabled;
+
     private final ModelProviderResolver modelProviderResolver;
     private final RedisChatMemory redisChatMemory;
     private final RedisSaver agentCheckpointSaver;
@@ -74,6 +94,11 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     private final CustomerMessageMapper customerMessageMapper;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final DomainRouterService domainRouterService;
+    private final ConversationStateStore conversationStateStore;
+    private final AttackGuardService attackGuardService;
+    private final List<DomainHandler> domainHandlers;
+    private final AfterSalesDomainHandler afterSalesDomainHandler;
 
     // ---- 对话 ----
 
@@ -81,11 +106,20 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     public CustomerAssistantResponse chat(CustomerAssistantRequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
         UUID userId = SecurityUtils.getCurrentUserId();
+        return routingEnabled
+                ? routedChat(req, sessionId, userId)
+                : legacyChat(req, sessionId, userId);
+    }
 
+    /** 旧单体路径：单 ReactAgent + 3 工具，作为路由架构的 kill-switch 回退。 */
+    private CustomerAssistantResponse legacyChat(CustomerAssistantRequest req, UUID sessionId, UUID userId) {
         List<Message> history = redisChatMemory.get(sessionId.toString());
         List<Message> trimmedHistory = history.size() > MAX_HISTORY_MESSAGES
                 ? history.subList(history.size() - MAX_HISTORY_MESSAGES, history.size())
                 : history;
+
+        // 影子模式：旁路跑一次 Tier-1 域路由，仅记录判定结果用于评估对照，不影响用户响应路径
+        shadowRoute(sessionId, history, req.message());
 
         ReactAgent agent = buildAgent(sessionId, req.modelProvider());
 
@@ -142,6 +176,18 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     @Override
     public CustomerAssistantResponse resumeWithFeedback(UUID sessionId,
                                                          InterruptionMetadata interruptionMetadata) {
+        if (routingEnabled) {
+            DomainResult result = afterSalesDomainHandler.resume(sessionId, null, interruptionMetadata);
+            redisChatMemory.add(sessionId.toString(), List.of(new AssistantMessage(result.answer())));
+            persistMessage(sessionId, "assistant", result.answer());
+            return new CustomerAssistantResponse(result.answer(), sessionId);
+        }
+        return legacyResume(sessionId, interruptionMetadata);
+    }
+
+    /** 旧单体路径的 HITL 恢复，作为 kill-switch 回退。 */
+    private CustomerAssistantResponse legacyResume(UUID sessionId,
+                                                   InterruptionMetadata interruptionMetadata) {
         log.info("恢复客户助手 Agent：sessionId={}", sessionId);
 
         ReactAgent agent = buildAgent(sessionId, null);
@@ -164,6 +210,213 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
         redisChatMemory.add(sessionId.toString(), List.of(assistantMessage));
         persistMessage(sessionId, "assistant", answer);
         return new CustomerAssistantResponse(answer, sessionId);
+    }
+
+    // ---- 影子路由（Phase 1：只观察不接管） ----
+
+    /**
+     * 影子模式：旁路执行攻击守卫 + Tier-1 域路由，仅打印 {@code 【SHADOW】} 日志供评估对照。
+     * <p>在虚拟线程上异步执行，不给用户响应路径增加延迟；任何异常都被吞掉，绝不影响正常对话。</p>
+     */
+    private void shadowRoute(UUID sessionId, List<Message> history, String message) {
+        if (!shadowRoutingEnabled) {
+            return;
+        }
+        List<Message> snapshot = List.copyOf(history);
+        Thread.ofVirtual().name("shadow-route-" + sessionId).start(() -> {
+            try {
+                GuardResult guard = attackGuardService.inspect(message);
+                if (guard.blocked()) {
+                    log.info("【SHADOW】攻击守卫命中：sessionId={}，reason={}", sessionId, guard.reason());
+                    return;
+                }
+                ConversationState state = conversationStateStore.load(sessionId.toString());
+                RoutingDecision decision = domainRouterService.route(snapshot, state, message);
+                log.info("【SHADOW】域路由判定：sessionId={}，primary={}，secondary={}，runnerUp={}，emotional={}，evidence={}",
+                        sessionId, decision.primaryDomain(), decision.secondary(),
+                        decision.runnerUp(), decision.emotional(), decision.evidence());
+            } catch (Exception e) {
+                log.warn("【SHADOW】影子路由执行失败：sessionId={}", sessionId, e);
+            }
+        });
+    }
+
+    // ---- 路由架构流水线（Phase 3） ----
+
+    private static final String GUARD_REJECTION =
+            "抱歉，我无法处理这条消息。如需帮助，请就您的订单、退换货或投诉问题向我咨询。";
+    private static final String HANDOFF_MESSAGE =
+            "您的问题需要人工客服进一步协助，我正在为您转接人工，请稍候。";
+    private static final String CHITCHAT_MESSAGE =
+            "我是商城售后客服助手，主要帮您处理订单、退换货和投诉相关问题，请问有什么可以帮您？";
+    private static final String UNCLEAR_MESSAGE =
+            "为了更准确地帮到您，能否再具体说明一下您遇到的问题或想办理的业务？";
+    /** 同一会话累积多少次纯情绪信号后，主动反问是否升级投诉。 */
+    private static final int EMOTION_STRIKE_THRESHOLD = 3;
+    private static final String EMOTION_ESCALATION_OFFER =
+            "\n\n我注意到您可能遇到了不少困扰。如果常规处理仍未能解决，我可以帮您升级为正式投诉、"
+                    + "由专员跟进处理——需要我帮您升级吗？";
+
+    /** 两层路由流水线：攻击守卫 → 域决策 → 域内分派 → 情绪累积/次要反问 → 状态更新 + 持久化。 */
+    private CustomerAssistantResponse routedChat(CustomerAssistantRequest req, UUID sessionId, UUID userId) {
+        GuardResult guard = attackGuardService.inspect(req.message());
+        if (guard.blocked()) {
+            log.info("攻击守卫拦截：sessionId={}，reason={}", sessionId, guard.reason());
+            return finishTurn(sessionId, userId, req.message(), GUARD_REJECTION, null);
+        }
+
+        List<Message> history = redisChatMemory.get(sessionId.toString());
+        List<Message> trimmedHistory = history.size() > MAX_HISTORY_MESSAGES
+                ? history.subList(history.size() - MAX_HISTORY_MESSAGES, history.size())
+                : history;
+        ConversationState state = conversationStateStore.load(sessionId.toString());
+
+        // 域决策：仅当上轮在等槽位、且本轮像是"裸槽位回填"（如纯订单号）时跳过路由；
+        // 含 CJK 等自然语言字符的消息（包括意图漂移"算了不退了，要投诉"）必须走 Tier-1 路由重判，
+        // 否则用户的明确切域诉求会被吞回当前域。
+        Domain domain;
+        RoutingDecision decision = null;
+        if (state.awaitingSlot() && state.currentDomain() != null
+                && looksLikeBareSlotFill(req.message())) {
+            domain = state.currentDomain();
+            log.info("命中 awaiting_slot 硬规则（裸槽位回填），跳过路由：sessionId={}，domain={}",
+                    sessionId, domain);
+        } else {
+            decision = domainRouterService.route(trimmedHistory, state, req.message());
+            domain = decision.primaryDomain();
+            log.info("Tier-1 路由判定：sessionId={}，domain={}，secondary={}，runnerUp={}，emotional={}，evidence={}",
+                    sessionId, domain, decision.secondary(), decision.runnerUp(),
+                    decision.emotional(), decision.evidence());
+        }
+
+        DomainResult result = dispatch(domain, req, sessionId, userId, trimmedHistory);
+
+        // 情绪计数：进入投诉流程则归零；本轮为纯情绪宣泄则累加；否则维持
+        int emotionStrikes;
+        if (domain == Domain.COMPLAINT) {
+            emotionStrikes = 0;
+        } else if (decision != null && decision.emotional()) {
+            emotionStrikes = state.emotionStrikes() + 1;
+        } else {
+            emotionStrikes = state.emotionStrikes();
+        }
+
+        // 主动反问：次要意图优先，其次情绪累积达阈值反问升级；二者择一，且仅在不等槽位时追加。
+        // pendingOffer 写入状态，下一轮作为路由器上下文，使其能识别用户对该提议的回应。
+        String answer = result.answer();
+        Domain pendingOffer = null;
+        if (!result.awaitingSlot()) {
+            if (decision != null && !decision.secondary().isEmpty()) {
+                pendingOffer = decision.secondary().get(0);
+                answer = answer + secondaryFollowUp(decision.secondary());
+            } else if (emotionStrikes >= EMOTION_STRIKE_THRESHOLD) {
+                pendingOffer = Domain.COMPLAINT;
+                answer = answer + EMOTION_ESCALATION_OFFER;
+                emotionStrikes = 0;   // 已主动反问，计数归零，避免后续每轮重复反问
+            }
+        }
+
+        // 业务域才更新 current_domain；HANDOFF/CHITCHAT/UNCLEAR 保留原域
+        Domain stickyDomain = domain.isBusinessDomain() ? domain : state.currentDomain();
+        ConversationState updated = new ConversationState(
+                stickyDomain, result.awaitingSlot(), emotionStrikes, pendingOffer);
+        boolean stateChanged = !updated.equals(state);
+        if (stateChanged) {
+            conversationStateStore.save(sessionId.toString(), updated);
+        }
+
+        // 路由决策汇总：一条 INFO 覆盖本轮所有可观测断言（域 / awaitingSlot / 情绪累积 / 待确认提议 / 状态写入）。
+        // 验收文档 §7-1/§7-8/§7-9 的 STATE 字段都能从这条日志读出，免去逐条 redis-cli 检查。
+        log.info("路由决策汇总：sessionId={}，domain={}，stickyDomain={}，awaitingSlot={}，"
+                        + "emotionStrikes={}（上轮={}），pendingOffer={}（上轮={}），stateChanged={}",
+                sessionId, domain, stickyDomain, result.awaitingSlot(),
+                emotionStrikes, state.emotionStrikes(),
+                pendingOffer, state.pendingOffer(), stateChanged);
+
+        return finishTurn(sessionId, userId, req.message(), answer, domain);
+    }
+
+    /** 按域分派：业务域交 DomainHandler，特殊出口直接返回话术。 */
+    private DomainResult dispatch(Domain domain, CustomerAssistantRequest req,
+                                  UUID sessionId, UUID userId, List<Message> history) {
+        return switch (domain) {
+            case AFTER_SALES, COMPLAINT -> handlerFor(domain).handle(
+                    new DomainContext(sessionId, userId, req.message(), history, req.modelProvider()));
+            case HANDOFF -> DomainResult.terminal(HANDOFF_MESSAGE);
+            case CHITCHAT -> DomainResult.terminal(CHITCHAT_MESSAGE);
+            case UNCLEAR -> DomainResult.terminal(UNCLEAR_MESSAGE);
+        };
+    }
+
+    private DomainHandler handlerFor(Domain domain) {
+        return domainHandlers.stream()
+                .filter(h -> h.domain() == domain)
+                .findFirst()
+                .orElseThrow(() -> new KbException(
+                        "未注册的域处理器：" + domain, HttpStatus.INTERNAL_SERVER_ERROR));
+    }
+
+    private String secondaryFollowUp(List<Domain> secondary) {
+        String names = String.join("、", secondary.stream().map(this::domainLabel).toList());
+        return "\n\n另外，您似乎还提到了" + names + "相关的问题，需要我接着为您处理吗？";
+    }
+
+    private String domainLabel(Domain domain) {
+        return switch (domain) {
+            case AFTER_SALES -> "售后";
+            case COMPLAINT -> "投诉";
+            default -> domain.name();
+        };
+    }
+
+    /** 仅匹配可打印 ASCII（含字母数字、常见标点和空格），不允许任何 CJK 等自然语言字符。 */
+    private static final Pattern BARE_SLOT_FILL_PATTERN = Pattern.compile("^[\\x20-\\x7E]+$");
+
+    /**
+     * 启发式：用户最新消息是否像"裸槽位回填"——典型如纯订单号 {@code SO20260520001}、
+     * 电话号码、订单编码 {@code ORD-2024-001} 等结构化标识。
+     *
+     * <p>判定标准：trim 后非空，长度 ≤ 30，仅含可打印 ASCII（字母/数字/标点/空格），
+     * 且至少含一个字母或数字（排除纯标点）。命中即视为典型槽位补全；否则——尤其是
+     * 含 CJK 字符的中文自然语言消息——一律走 Tier-1 路由重判，让"算了不退了，要投诉"
+     * 这类意图漂移有机会切到正确的域。</p>
+     */
+    static boolean looksLikeBareSlotFill(String message) {
+        if (message == null) {
+            return false;
+        }
+        String trimmed = message.trim();
+        if (trimmed.isEmpty() || trimmed.length() > 30) {
+            return false;
+        }
+        if (!BARE_SLOT_FILL_PATTERN.matcher(trimmed).matches()) {
+            return false;
+        }
+        return trimmed.chars().anyMatch(Character::isLetterOrDigit);
+    }
+
+    /** 写 Redis 历史 + 持久化消息（user 消息带路由域），返回响应。 */
+    private CustomerAssistantResponse finishTurn(UUID sessionId, UUID userId,
+                                                 String question, String answer, Domain domain) {
+        redisChatMemory.add(sessionId.toString(),
+                List.of(new UserMessage(question), new AssistantMessage(answer)));
+        persistRoutedExchange(sessionId, userId, question, answer,
+                domain != null ? domain.name() : null);
+        return new CustomerAssistantResponse(answer, sessionId);
+    }
+
+    private void persistRoutedExchange(UUID sessionId, UUID userId, String question,
+                                       String answer, String routedDomain) {
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                ensureSessionExists(sessionId, userId, question);
+                customerMessageMapper.insert(sessionId, "user", question, routedDomain);
+                customerMessageMapper.insert(sessionId, "assistant", answer, null);
+                customerSessionMapper.updateUpdatedAt(sessionId, Instant.now());
+            });
+        } catch (Exception e) {
+            log.warn("持久化客户助手消息失败：sessionId={}", sessionId, e);
+        }
     }
 
     // ---- 会话管理 ----
@@ -314,8 +567,8 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
             // 多条写入用事务包裹，确保原子性（私有方法不经 Spring AOP，需手动管理事务）
             transactionTemplate.executeWithoutResult(status -> {
                 ensureSessionExists(sessionId, userId, question);
-                customerMessageMapper.insert(sessionId, "user", question);
-                customerMessageMapper.insert(sessionId, "assistant", answer);
+                customerMessageMapper.insert(sessionId, "user", question, null);
+                customerMessageMapper.insert(sessionId, "assistant", answer, null);
                 customerSessionMapper.updateUpdatedAt(sessionId, Instant.now());
             });
         } catch (Exception e) {
@@ -326,7 +579,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     private void persistMessage(UUID sessionId, String role, String content) {
         try {
             transactionTemplate.executeWithoutResult(status -> {
-                customerMessageMapper.insert(sessionId, role, content);
+                customerMessageMapper.insert(sessionId, role, content, null);
                 customerSessionMapper.updateUpdatedAt(sessionId, Instant.now());
             });
         } catch (Exception e) {

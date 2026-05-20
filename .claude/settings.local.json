@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search -Dtest='DomainRouterServiceImplTest,CustomerAssistantRoutingTest,AttackGuardServiceImplTest,ConversationStateStoreTest,*DomainHandlerTest' -q)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search -Dtest='DomainRouterServiceImplTest,CustomerAssistantRoutingTest,AttackGuardServiceImplTest,ConversationStateStoreTest,*DomainHandlerTest')",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search -Dtest='CustomerAssistantRoutingTest,DomainRouterServiceImplTest,AttackGuardServiceImplTest,ConversationStateStoreTest,*DomainHandlerTest')",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search -Dtest='DomainResultTest,CustomerAssistantRoutingTest,*DomainHandlerTest')",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search -Dtest=DomainResultTest)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn install -pl kb-search -am -DskipTests -q)",
+      "Bash(ls -la ~/.m2/repository/com/enterprise/kb/kb-search/*/kb-search-*.jar 2>/dev/null | tail -3)",
+      "Bash(find ~/.m2/repository -name \"kb-search*.jar\" 2>/dev/null | head; find ~/.m2/repository -path \"*kb-search*\" -type d 2>/dev/null | head -3)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn test -pl kb-search -Dtest=ComplaintDomainHandlerTest)",
+      "Bash(jar tf *)",
+      "Bash(grep -n \"execute\\\\|invoke\\\\|run\\\\|async\\\\|CompletableFuture\\\\|supplyAsync\\\\|toolCall\" /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java | head -30)",
+      "Bash(grep -n \"parallelToolExecution\\\\|parallel.*tool\\\\|parallelEnabled\" /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java /tmp/src/com/alibaba/cloud/ai/graph/agent/ReactAgent.java 2>/dev/null | head -20)",
+      "Bash(awk 'NR>=216 && NR<=290' /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java)"
+    ]
+  }
+}

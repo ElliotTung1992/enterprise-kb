@@ -1,5 +1,15 @@
 # Wiki Ingest Log
 
+## 2026-05-18 | save | 客服助手意图识别 — 两层域路由
+- Type: feature
+- Location: wiki/features/intent-routing.md
+- From: grill-me 设计评审 → ADR-008 → 分阶段实施计划 → Phase 0–3 全部实现
+- Pages created:
+  - [[features/intent-routing]]
+- Pages updated:
+  - [[Home]] — 功能导航新增意图路由
+- Key insight: 意图识别准确率拆成"域路由 vs 域内工具"两层独立度量；few-shot 与冻结测试集必须硬切分防污染；`routing-enabled` kill-switch 默认 false，先影子后灰度。
+
 ## 2026-05-13 | ingest | HITL 售后审核 & 商城客服助手
 - Source: `.planning/2026-05-13-hitl-after-sales/` (task_plan.md + findings.md + progress.md)
 - Summary: [[features/hitl-after-sales]]

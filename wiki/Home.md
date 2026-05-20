@@ -13,9 +13,9 @@
 | AI / RAG | [[ai-rag/hybrid-search]] · [[ai-rag/agentic-qa]] · [[ai-rag/providers]] · [[ai-rag/hitl-hook]] |
 | 数据库 | [[database/schema-overview]] · [[database/migrations]] |
 | API 接口 | [[api/qa]] · [[api/documents]] · [[api/search]] · [[api/after-sales]] |
-| 功能 | [[features/document-ingestion]] · [[features/knowledge-graph]] · [[features/hitl-after-sales]] |
+| 功能 | [[features/document-ingestion]] · [[features/knowledge-graph]] · [[features/hitl-after-sales]] · [[features/complaint-escalation]] · [[features/intent-routing]] |
 | 基础设施 | [[infrastructure/docker-compose]] · [[infrastructure/services]] |
-| 架构决策 | [[decisions/adr-001-multi-module-maven]] · [[decisions/adr-005-hitl-transaction-ordering]] · [[decisions/adr-006-customer-assistant-separation]] |
+| 架构决策 | [[decisions/adr-001-multi-module-maven]] · [[decisions/adr-005-hitl-transaction-ordering]] · [[decisions/adr-006-customer-assistant-separation]] · [[decisions/adr-007-complaint-escalation-stategraph]] · [[decisions/adr-008-intent-routing-two-tier]] |
 
 ---
 
