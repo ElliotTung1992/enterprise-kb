@@ -132,6 +132,21 @@ enterprise:
       routing-enabled: ${CUSTOMER_ASSISTANT_ROUTING_ENABLED:true}
       # 影子模式：旧路径下旁路跑一次 Tier-1 域路由，仅记录判定结果用于评估对照
       shadow-routing-enabled: ${CUSTOMER_ASSISTANT_SHADOW_ROUTING_ENABLED:true}
+    trace:
+      # Agent Trace 总开关：true 时记录 trace 外壳和 step；false 时 TraceRecorder 直接跳过
+      enabled: ${AGENT_TRACE_ENABLED:true}
+      # FULL_RAW 模式开关：true 时保存完整 prompt/history/tool input/output 等原始载荷
+      full-raw-enabled: ${AGENT_TRACE_FULL_RAW_ENABLED:true}
+      # Trace 采样率：1.0 表示全量采集，0 表示不采集，0.1 表示约 10% 采样
+      sample-rate: ${AGENT_TRACE_SAMPLE_RATE:1.0}
+      # 单个 JSON payload 最大字节数，超过后写入截断 preview 并标记 payload_truncated=true
+      max-payload-bytes: ${AGENT_TRACE_MAX_PAYLOAD_BYTES:262144}
+      # 是否记录对话历史消息，用于离线复现多轮上下文
+      include-history: ${AGENT_TRACE_INCLUDE_HISTORY:true}
+      # 是否记录 system prompt 和工具描述，用于复现模型输入
+      include-prompts: ${AGENT_TRACE_INCLUDE_PROMPTS:true}
+      # 是否记录检索片段正文，用于评估检索和答案 grounding
+      include-retrieval-excerpts: ${AGENT_TRACE_INCLUDE_RETRIEVAL_EXCERPTS:true}
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
     document:

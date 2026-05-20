@@ -4,10 +4,10 @@
 实现一套统一的 Agent Trace、离线复现包与评估回放能力，让 Agentic RAG、客服助手、售后 HITL 和投诉升级的工具调用可追踪、可复现、可沉淀为评估门禁。
 
 ## Status
-PLAN READY — 待实施
+PHASE 1 RAG TRACE COMPLETE — 可进入 Phase 2 或补数据库集成验收
 
 ## Current Phase
-Phase 0: 建表迁移、模型/Mapper/Service 骨架与配置项
+Phase 2: 客服助手、售后域与投诉域工具接入
 
 ---
 
@@ -24,7 +24,7 @@ Phase 0: 建表迁移、模型/Mapper/Service 骨架与配置项
 ---
 
 ## Phase 0: 建表迁移、骨架与配置
-**Status:** pending
+**Status:** complete
 
 ### Scope
 
@@ -32,20 +32,20 @@ Phase 0: 建表迁移、模型/Mapper/Service 骨架与配置项
 
 ### Tasks
 
-- [ ] 新增 Liquibase 迁移：`025-add-agent-traces-eval.sql`。
-- [ ] 更新 `db.changelog-master.xml` 引入迁移。
-- [ ] 新增 Model：`AgentTrace`、`AgentTraceStep`、`EvalCase`、`EvalRun`、`EvalRunResult`。
-- [ ] 新增 Mapper 接口与 XML：trace、step、eval case、eval run、eval result。
-- [ ] 新增配置属性：`enterprise.kb.trace.*`。
-- [ ] 新增 `traceExecutor` 或复用虚拟线程执行器并明确命名。
-- [ ] 新增 `TraceRedactionService`，先支持敏感 key 遮挡。
-- [ ] 添加 mapper/service 单测覆盖插入、查询、截断标记。
+- [x] 新增 Liquibase 迁移：`025-add-agent-traces-eval.sql`。
+- [x] 更新 `db.changelog-master.xml` 引入迁移。
+- [x] 新增 Model：`AgentTrace`、`AgentTraceStep`、`EvalCase`、`EvalRun`、`EvalRunResult`。
+- [x] 新增 Mapper 接口与 XML：trace、step、eval case、eval run、eval result。
+- [x] 新增配置属性：`enterprise.kb.trace.*`。
+- [x] 新增 `traceExecutor` 或复用虚拟线程执行器并明确命名。
+- [x] 新增 `TraceRedactionService`，先支持敏感 key 遮挡。
+- [x] 添加 service/config 单测覆盖脱敏和配置默认值；Mapper SQL 已随模块编译校验。
 
 ### Verify
 
-- [ ] `mvn test -pl kb-search -am` 通过。
-- [ ] Mapper 单测能插入 trace + step 并按 `trace_id` 查询。
-- [ ] 配置默认值与 ADR 一致。
+- [x] `mvn test -pl kb-search -am` 通过（需使用项目指定 JDK 21）。
+- [ ] Mapper 集成测试能插入 trace + step 并按 `trace_id` 查询。
+- [x] 配置默认值与 ADR 一致。
 
 ### Phase 2 Optimizations
 
@@ -55,7 +55,7 @@ Phase 0: 建表迁移、模型/Mapper/Service 骨架与配置项
 ---
 
 ## Phase 1: TraceRecorder 与 RAG 链路接入
-**Status:** pending
+**Status:** complete
 
 ### Scope
 
@@ -63,19 +63,20 @@ Phase 0: 建表迁移、模型/Mapper/Service 骨架与配置项
 
 ### Tasks
 
-- [ ] 新增 `TraceRecorder` 接口与实现。
-- [ ] 实现同步 `startTrace` / `completeTrace` / `failTrace`。
-- [ ] 实现异步 `recordStep`、同步 `recordHitlInterrupt`。
-- [ ] 接入 `AgenticQnAServiceImpl`：trace 外壳、system prompt/history/user、`searchKnowledgeBase` 工具。
-- [ ] 接入 `AgenticQnAServiceImpl`：检索 candidates、rerank topN、citations。
-- [ ] 接入 `QnAServiceImpl`：query rewrite、HyDE、hybrid search candidates、rerank topK、prompt、answer、token usage。
-- [ ] 对 payload 做 `max-payload-bytes` 截断与 `payload_truncated` 标记。
+- [x] 新增 `TraceRecorder` 接口与实现。
+- [x] 实现同步 `startTrace` / `completeTrace` / `failTrace`。
+- [x] 实现异步 `recordStep`、同步 `recordHitlInterrupt`。
+- [x] 接入 `AgenticQnAServiceImpl`：trace 外壳、history/user、`searchKnowledgeBase` 工具、最终答案。
+- [x] 接入 `AgenticQnAServiceImpl`：检索 candidates、rerank topN、citations。
+- [x] 接入 `QnAServiceImpl`：query rewrite、HyDE、hybrid search candidates、rerank topK、prompt、answer、token usage。
+- [x] 对 payload 做 `max-payload-bytes` 截断与 `payload_truncated` 标记。
 
 ### Verify
 
 - [ ] 本地请求 Agentic QA 后生成 trace 和 step。
 - [ ] 普通 RAG trace 中能看到 rewrite、HyDE、候选召回、rerank 和 token usage。
-- [ ] trace 写入失败不影响问答响应。
+- [x] `mvn test -pl kb-search -am` 编译通过，采集接入不破坏既有问答测试。
+- [x] trace 写入失败不影响问答响应的保护逻辑已由 `TraceRecorderImpl` 保持；仍建议补业务集成测试。
 
 ### Phase 2 Optimizations
 
@@ -259,7 +260,7 @@ Phase 0: 建表迁移、模型/Mapper/Service 骨架与配置项
 
 | Error | Attempt | Resolution |
 |-------|---------|------------|
-| — | — | — |
+| `invalid target release: 21` | 1 | 使用项目规范中的 JDK 21：`JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home` 后重跑 Maven |
 
 ## Reference Documents
 

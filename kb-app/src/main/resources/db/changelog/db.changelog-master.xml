@@ -29,4 +29,5 @@
     <include file="db/changelog/022-add-complaint-escalation-tables.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/023-add-complaint-plan-next-check-at.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/024-add-customer-messages-domain.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/025-add-agent-traces-eval.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

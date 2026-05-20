@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.search.mapper.EvalRunResultMapper">
+
+    <resultMap id="EvalRunResultResultMap" type="com.enterprise.kb.search.model.EvalRunResult">
+        <id property="id" column="id"/>
+        <result property="evalRunId" column="eval_run_id"/>
+        <result property="evalCaseId" column="eval_case_id"/>
+        <result property="status" column="status"/>
+        <result property="actualJson" column="actual_json"/>
+        <result property="assertionResultJson" column="assertion_result_json"/>
+        <result property="failureReason" column="failure_reason"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findByEvalRunId" resultMap="EvalRunResultResultMap">
+        SELECT *
+        FROM eval_run_results
+        WHERE eval_run_id = #{evalRunId,jdbcType=OTHER}
+        ORDER BY created_at ASC
+    </select>
+
+    <insert id="insert">
+        INSERT INTO eval_run_results (
+            id, eval_run_id, eval_case_id, status,
+            actual_json, assertion_result_json,
+            failure_reason, created_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{evalRunId,jdbcType=OTHER},
+            #{evalCaseId,jdbcType=OTHER},
+            #{status},
+            #{actualJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{assertionResultJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{failureReason},
+            #{createdAt}
+        )
+    </insert>
+
+</mapper>

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.search.mapper.EvalCaseMapper">
+
+    <resultMap id="EvalCaseResultMap" type="com.enterprise.kb.search.model.EvalCase">
+        <id property="id" column="id"/>
+        <result property="sourceTraceId" column="source_trace_id"/>
+        <result property="caseType" column="case_type"/>
+        <result property="name" column="name"/>
+        <result property="dataset" column="dataset"/>
+        <result property="inputJson" column="input_json"/>
+        <result property="expectedJson" column="expected_json"/>
+        <result property="mockOutputsJson" column="mock_outputs_json"/>
+        <result property="enabled" column="enabled"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="EvalCaseResultMap">
+        SELECT *
+        FROM eval_cases
+        WHERE id = #{id,jdbcType=OTHER}
+    </select>
+
+    <select id="findEnabledByDataset" resultMap="EvalCaseResultMap">
+        SELECT *
+        FROM eval_cases
+        WHERE dataset = #{dataset}
+          AND enabled = TRUE
+        ORDER BY created_at ASC
+    </select>
+
+    <insert id="insert">
+        INSERT INTO eval_cases (
+            id, source_trace_id, case_type, name, dataset,
+            input_json, expected_json, mock_outputs_json,
+            enabled, created_by, created_at, updated_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{sourceTraceId,jdbcType=OTHER},
+            #{caseType},
+            #{name},
+            #{dataset},
+            #{inputJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{expectedJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{mockOutputsJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{enabled},
+            #{createdBy,jdbcType=OTHER},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE eval_cases
+        SET case_type = #{caseType},
+            name = #{name},
+            dataset = #{dataset},
+            input_json = #{inputJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            expected_json = #{expectedJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            mock_outputs_json = #{mockOutputsJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            enabled = #{enabled},
+            updated_at = #{updatedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+</mapper>

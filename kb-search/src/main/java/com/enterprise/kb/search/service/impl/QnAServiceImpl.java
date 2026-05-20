@@ -7,13 +7,18 @@ import com.enterprise.kb.search.service.HydeService;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.service.RerankService;
+import com.enterprise.kb.search.service.TraceRecorder;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.Citation;
+import com.enterprise.kb.search.dto.TraceCompleteRequest;
 import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
 import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
+import com.enterprise.kb.search.dto.TraceStartRequest;
+import com.enterprise.kb.search.dto.TraceStepRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -23,9 +28,13 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -48,6 +57,8 @@ public class QnAServiceImpl implements QnAService {
     private final RerankService rerankService;
     private final RedisChatMemory redisChatMemory;
     private final QaChatSessionService qaChatSessionService;
+    private final TraceRecorder traceRecorder;
+    private final ObjectMapper objectMapper;
 
     /**
      * 同步 RAG 问答。
@@ -59,26 +70,76 @@ public class QnAServiceImpl implements QnAService {
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+        Instant startedAt = Instant.now();
+        Optional<UUID> traceId = traceRecorder.startTrace(new TraceStartRequest(
+                "STANDARD_QA",
+                sessionId,
+                spaceId,
+                currentUserIdOrNull(),
+                null,
+                req.modelProvider(),
+                req.question(),
+                jsonOf(traceMap(
+                        "question", req.question(),
+                        "sessionId", sessionId,
+                        "spaceId", spaceId,
+                        "modelProvider", req.modelProvider(),
+                        "topK", req.topK()))
+        ));
 
+        try {
+            return askWithTrace(spaceId, req, sessionId, traceId, startedAt);
+        } catch (RuntimeException e) {
+            traceId.ifPresent(id -> traceRecorder.failTrace(id, e, elapsedMs(startedAt)));
+            throw e;
+        }
+    }
+
+    private QnAResponse askWithTrace(UUID spaceId, QnARequest req, UUID sessionId,
+                                     Optional<UUID> traceId, Instant startedAt) {
         // Pre-retrieval 阶段：查询改写 + HyDE 假设文档生成，两者并行提升检索质量
         String retrievalQuery = queryRewriteService.rewrite(req.question());
+        traceId.ifPresent(id -> traceRecorder.recordStep(id, new TraceStepRequest(
+                1, "QUERY_REWRITE", "standard-rag", null, null, "SUCCEEDED",
+                jsonOf(traceMap("question", req.question())),
+                jsonOf(traceMap("retrievalQuery", retrievalQuery)),
+                null, null, null, null, null, null)));
+
         // HyDE：用假设文档向量做语义检索；关键词检索仍使用改写后的 retrievalQuery
         String hypotheticalDoc = hydeService.generateHypotheticalDocument(retrievalQuery);
+        traceId.ifPresent(id -> traceRecorder.recordStep(id, new TraceStepRequest(
+                2, "HYDE", "standard-rag", null, null, "SUCCEEDED",
+                jsonOf(traceMap("retrievalQuery", retrievalQuery)),
+                jsonOf(traceMap("hypotheticalDocument", hypotheticalDoc)),
+                null, null, null, null, null, null)));
+
         // 混合检索：语义路用假设文档(semanticQuery)，关键词路用改写查询(query)；召回量扩大供 Rerank 精排
         int recallSize = req.topK() * RECALL_MULTIPLIER;
         List<SearchHit> candidates = hybridSearchService.search(spaceId,
                 new SearchRequest(retrievalQuery, recallSize, req.modelProvider(), null, hypotheticalDoc)).hits();
+        traceId.ifPresent(id -> traceRecorder.recordStep(id, new TraceStepRequest(
+                3, "RETRIEVAL", "standard-rag", null, null, "SUCCEEDED",
+                jsonOf(traceMap("query", retrievalQuery, "recallSize", recallSize)),
+                jsonOf(traceMap("candidates", candidates)),
+                null, null, null, null, null, null)));
+
         // Post-retrieval：Rerank 精排，从候选中取最相关的 topK 条
         List<SearchHit> hits = rerankService.rerank(req.question(), candidates, req.topK());
+        traceId.ifPresent(id -> traceRecorder.recordStep(id, new TraceStepRequest(
+                4, "RERANK", "standard-rag", null, null, "SUCCEEDED",
+                jsonOf(traceMap("question", req.question(), "candidateCount", candidates.size(), "topK", req.topK())),
+                jsonOf(traceMap("hits", hits)),
+                null, null, null, null, null, null)));
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         // 按 sessionId 加载/保存多轮对话历史；MessageChatMemoryAdvisor 在请求前注入历史，在响应后自动存储
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(redisChatMemory)
                 .conversationId(sessionId.toString()).build();
 
+        String systemPrompt = buildSystemPrompt(hits);
         ChatResponse chatResponse = chatClient.prompt()
                 .advisors(memoryAdvisor)
-                .system(buildSystemPrompt(hits))
+                .system(systemPrompt)
                 .user(req.question())
                 .call().chatResponse();
 
@@ -89,6 +150,13 @@ public class QnAServiceImpl implements QnAService {
             Usage usage = chatResponse.getMetadata().getUsage();
             if (usage != null) tokensUsed = (int) usage.getTotalTokens();
         }
+        int finalTokensUsed = tokensUsed;
+        traceId.ifPresent(id -> traceRecorder.recordStep(id, new TraceStepRequest(
+                5, "MODEL_CALL", "standard-rag", null, null, "SUCCEEDED",
+                jsonOf(traceMap("systemPrompt", systemPrompt, "user", req.question())),
+                jsonOf(traceMap("answer", answer, "tokensUsed", finalTokensUsed)),
+                null, null, null, null, null, null)));
+
         // citations 直接从检索结果映射，无需再查数据库
         List<Citation> citations = IntStream.range(0, hits.size())
                 .mapToObj(i -> {
@@ -98,6 +166,12 @@ public class QnAServiceImpl implements QnAService {
                 })
                 .toList();
         QnAResponse response = new QnAResponse(answer, sessionId, citations, modelUsed, tokensUsed);
+        traceId.ifPresent(id -> traceRecorder.completeTrace(id, new TraceCompleteRequest(
+                answer,
+                jsonOf(traceMap("answer", answer, "citations", citations, "modelUsed", modelUsed)),
+                elapsedMs(startedAt),
+                finalTokensUsed)));
+
         // 异步持久化会话，失败不影响正常响应
         try {
             qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(),
@@ -186,5 +260,34 @@ public class QnAServiceImpl implements QnAService {
                 .replace("</source>", "&lt;/source&gt;")
                 .replace("<content>", "&lt;content&gt;")
                 .replace("</content>", "&lt;/content&gt;");
+    }
+
+    private String jsonOf(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            log.warn("Trace JSON 序列化失败：{}", e.getMessage());
+            return "{}";
+        }
+    }
+
+    private Map<String, Object> traceMap(Object... keyValues) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return map;
+    }
+
+    private UUID currentUserIdOrNull() {
+        try {
+            return SecurityUtils.getCurrentUserId();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private long elapsedMs(Instant startedAt) {
+        return Duration.between(startedAt, Instant.now()).toMillis();
     }
 }

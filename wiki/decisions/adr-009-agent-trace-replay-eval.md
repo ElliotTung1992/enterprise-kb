@@ -153,6 +153,20 @@ Trace 粒度为 **turn 级 trace + step/tool_call 级事件**：
 - `eval_cases` / `eval_runs` / `eval_run_results` 表，便于后台管理和报表。
 - JSONL 导入/导出，便于进 Git、跑 CI、冻结测试集。
 
+三张表的职责边界：
+
+- `eval_cases` 是**评估题库**：保存一条可回放用例的输入、期望结果、断言和副作用工具 mock 输出。
+- `eval_runs` 是**一次评估任务**：保存某次运行使用的数据集、配置、状态、开始/结束时间和汇总指标。
+- `eval_run_results` 是**一次评估中的逐题结果**：保存某个 eval case 在某次 eval run 中的实际输出、断言结果和失败原因。
+
+关系为：
+
+```text
+eval_runs 1 ── N eval_run_results N ── 1 eval_cases
+```
+
+因此同一个 `eval_case` 可以在不同模型、不同 prompt、不同代码版本下被多次运行；每次运行生成一条 `eval_runs` 汇总记录，并为每个参与评估的 case 生成一条 `eval_run_results`。
+
 推荐流程：
 
 1. 从 `agent_traces` 导出失败、低置信、HITL、投诉升级、无答案、高频问题等样本。
@@ -160,6 +174,21 @@ Trace 粒度为 **turn 级 trace + step/tool_call 级事件**：
 3. 人工补标真值。
 4. 冻结为 smoke/frozen eval set。
 5. CI 或本地命令跑评估，三类指标过阈值才算通过。
+
+示例：
+
+```text
+eval_cases
+- case-001: 用户要求投诉，期望 domain=COMPLAINT，必须调用 escalateComplaint
+- case-002: 退款规则问题，期望指定 chunk 出现在 rerank topK
+
+eval_runs
+- run-20260520-smoke: dataset=smoke，status=SUCCEEDED，summary={"passRate":0.96,"passed":48,"failed":2}
+
+eval_run_results
+- run-20260520-smoke + case-001: PASSED
+- run-20260520-smoke + case-002: FAILED，failure_reason="required chunk 未命中"
+```
 
 ### 10. 最小后台页面
 
@@ -252,7 +281,47 @@ Trace 粒度为 **turn 级 trace + step/tool_call 级事件**：
 
 ### `eval_runs` / `eval_run_results`
 
-`eval_runs` 记录一次评估任务的配置、状态、汇总指标；`eval_run_results` 记录每个 case 的通过/失败、实际输出、断言失败原因。
+`eval_runs` 记录一次评估任务的配置、状态、汇总指标；`eval_run_results` 记录每个 case 在该次任务中的通过/失败、实际输出、断言失败原因。
+
+概念上：
+
+- `eval_cases` = 题库。
+- `eval_runs` = 一次考试。
+- `eval_run_results` = 这次考试每道题的答题结果。
+
+#### `eval_runs`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | UUID PK | 评估运行 ID |
+| `dataset` | VARCHAR(100) | 本次运行的数据集，如 `smoke` / `frozen` / `regression` |
+| `status` | VARCHAR(30) | `RUNNING` / `SUCCEEDED` / `FAILED` |
+| `config_json` | JSONB NULL | 本次评估配置，如模型、prompt 版本、阈值、代码版本 |
+| `summary_json` | JSONB NULL | 汇总指标，如通过率、失败数、路由准确率、检索命中率 |
+| `started_at` | TIMESTAMPTZ | 开始时间 |
+| `completed_at` | TIMESTAMPTZ NULL | 完成时间 |
+| `created_at` | TIMESTAMPTZ | 创建时间 |
+
+#### `eval_run_results`
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | UUID PK | 逐 case 结果 ID |
+| `eval_run_id` | UUID FK | 所属评估运行，关联 `eval_runs.id` |
+| `eval_case_id` | UUID FK | 被评估用例，关联 `eval_cases.id` |
+| `status` | VARCHAR(30) | `PASSED` / `FAILED` / `SKIPPED` |
+| `actual_json` | JSONB NULL | 本次回放得到的实际输出，如 domain、tool calls、retrieval hits、answer |
+| `assertion_result_json` | JSONB NULL | 各断言项的逐项结果 |
+| `failure_reason` | TEXT NULL | 失败摘要，供后台列表快速定位 |
+| `created_at` | TIMESTAMPTZ | 创建时间 |
+
+`eval_run_results` 使用 `(eval_run_id, eval_case_id)` 唯一约束，保证同一次评估中每个 case 只有一条结果。
+
+典型查询：
+
+- 查看一次评估的汇总：查 `eval_runs.summary_json`。
+- 查看一次评估的失败用例：按 `eval_run_id` 查询 `eval_run_results WHERE status='FAILED'`。
+- 对比同一 case 在不同模型/版本下的表现：按 `eval_case_id` 查询多次 `eval_run_results` 并关联 `eval_runs.config_json`。
 
 ## 后果
 

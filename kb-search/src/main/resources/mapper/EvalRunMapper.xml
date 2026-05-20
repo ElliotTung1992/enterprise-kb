@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.search.mapper.EvalRunMapper">
+
+    <resultMap id="EvalRunResultMap" type="com.enterprise.kb.search.model.EvalRun">
+        <id property="id" column="id"/>
+        <result property="dataset" column="dataset"/>
+        <result property="status" column="status"/>
+        <result property="configJson" column="config_json"/>
+        <result property="summaryJson" column="summary_json"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="completedAt" column="completed_at"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findById" resultMap="EvalRunResultMap">
+        SELECT *
+        FROM eval_runs
+        WHERE id = #{id,jdbcType=OTHER}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO eval_runs (
+            id, dataset, status, config_json, summary_json,
+            started_at, completed_at, created_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{dataset},
+            #{status},
+            #{configJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{summaryJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{startedAt},
+            #{completedAt},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="complete">
+        UPDATE eval_runs
+        SET status = #{status},
+            summary_json = #{summaryJson,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            completed_at = #{completedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+</mapper>
