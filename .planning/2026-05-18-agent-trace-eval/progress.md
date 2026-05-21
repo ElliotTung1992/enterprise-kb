@@ -198,3 +198,53 @@
 | What's the goal? | Ensure trace data is actually produced from production QA paths, not only available as an unused recorder |
 | What have I learned? | The first implementation missed production callers for `TraceRecorder.startTrace(...)`; both RAG entry points now call it |
 | What have I done? | Wired standard RAG and Agentic RAG to start/step/complete/fail trace calls and verified `kb-search` tests pass |
+
+## Session: 2026-05-20 Continued
+
+### Phase 2-6: 最小闭环实现
+
+- **Status:** complete for minimal code; pending runtime DB/API/browser acceptance
+- Actions taken:
+  - Added customer assistant trace envelope for routed and legacy paths.
+  - Added routed guard/router/final-answer trace steps.
+  - Passed trace context into domain handlers.
+  - Added after-sales tool/HITL trace recording.
+  - Added complaint escalation tool and complaint business-ref trace recording.
+  - Added admin trace APIs: list, detail, replay export, create eval case draft.
+  - Added eval case APIs: list, detail, create, update, JSONL import/export.
+  - Added minimal eval replay service and eval run APIs.
+  - Added static admin pages `traces.html` and `evals.html`.
+  - Added `NoopTraceRecorder` for direct-constructor unit test compatibility.
+- Files created/modified:
+  - `kb-search/src/main/java/com/enterprise/kb/search/dto/DomainContext.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/CustomerAssistantServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/AfterSalesDomainHandler.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/ComplaintDomainHandler.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/NoopTraceRecorder.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/controller/AgentTraceController.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/controller/EvalCaseController.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/controller/EvalRunController.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/EvalReplayService.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/EvalReplayServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/EvalCaseService.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/EvalCaseServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/EvalRunService.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/EvalRunServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/mapper/EvalCaseMapper.java`
+  - `kb-search/src/main/resources/mapper/EvalCaseMapper.xml`
+  - `kb-app/src/main/resources/static/traces.html`
+  - `kb-app/src/main/resources/static/evals.html`
+  - `.planning/2026-05-18-agent-trace-eval/task_plan.md`
+  - `.planning/2026-05-18-agent-trace-eval/acceptance_report.md`
+- Verification:
+  - `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin:$PATH mvn test -pl kb-search -am`
+  - Result: 105 tests run, 0 failures, 0 errors, 1 skipped.
+  - `JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home PATH=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin:$PATH mvn test -pl kb-app -am`
+  - Result: reactor build success.
+
+### Phase 2-6 Error Log Update
+
+| Timestamp | Error | Attempt | Resolution |
+|-----------|-------|---------|------------|
+| 2026-05-20 | 新增 `TraceRecorder` 构造参数导致旧单测直接构造服务失败 | 1 | 新增 `NoopTraceRecorder` 和兼容构造器 |
+| 2026-05-20 | `AfterSalesDomainHandlerTest` 覆写 `buildAgent(String)` 的测试 seam 被双参数方法绕过 | 1 | 恢复单参数 `buildAgent(String)` 调用，并用 `ThreadLocal` 传递生产 traceId |

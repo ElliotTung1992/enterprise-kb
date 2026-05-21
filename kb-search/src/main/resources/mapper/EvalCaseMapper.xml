@@ -32,6 +32,24 @@
         ORDER BY created_at ASC
     </select>
 
+    <select id="findByFilters" resultMap="EvalCaseResultMap">
+        SELECT *
+        FROM eval_cases
+        <where>
+            <if test="dataset != null and dataset != ''">
+                AND dataset = #{dataset}
+            </if>
+            <if test="caseType != null and caseType != ''">
+                AND case_type = #{caseType}
+            </if>
+            <if test="enabled != null">
+                AND enabled = #{enabled}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+
     <insert id="insert">
         INSERT INTO eval_cases (
             id, source_trace_id, case_type, name, dataset,

@@ -7,6 +7,8 @@ tags: [adr, architecture, observability, agent-trace, replay, eval]
 
 **状态**：提议中（待实施）
 
+> 接入解耦补充：本 ADR 定义“采集什么、如何存储、如何回放评估”。由于第一版显式埋点导致 RAG 业务代码与 trace DTO/JSON/stepIndex 耦合过重，后续接入方式按 [ADR-010：Trace 接入解耦与 Spring AI Alibaba 原生采集重构](./adr-010-trace-instrumentation-decoupling.md) 优化。
+
 ## 背景
 
 系统当前已经有文档摄入、普通 RAG、Agentic RAG、商城客服助手、售后 HITL、投诉升级 StateGraph 等能力，但运行期观测数据不足：
@@ -83,9 +85,9 @@ Trace 粒度为 **turn 级 trace + step/tool_call 级事件**：
 
 任何 trace 细节写入失败只记录 WARN，不影响用户响应。
 
-### 5. 接入方式：显式 `TraceRecorder`，不做 AOP
+### 5. 接入方式：由 ADR-010 修正为“原生拦截器 + Trace Facade”
 
-第一版手工显式埋点：
+本节原始结论是第一版为了快速闭环采用手工显式埋点：
 
 - `TraceRecorder.startTrace(...)`
 - `TraceRecorder.recordModelCall(...)`
@@ -96,7 +98,15 @@ Trace 粒度为 **turn 级 trace + step/tool_call 级事件**：
 
 工具构建处用 helper 包装 lambda，例如 `traceTool(traceId, "searchKnowledgeBase", input -> executeSearch(...))`。
 
-不采用 AOP 或框架级拦截。原因是工具目前分散在 `FunctionToolCallback.builder(...)` 中，显式包装最容易拿到 `sessionId`、`spaceId`、`userId`、`domain`、`toolName`、业务对象 ID 和 step 顺序。
+后续设计评审发现：项目使用的 Spring AI Alibaba Agent Framework 已经提供 `ToolInterceptor`、`ModelInterceptor`、`AgentHook` / `ModelHook`，比 Spring AOP 更适合采集 ReactAgent 内部模型调用和工具调用。因此接入方式以 [ADR-010](./adr-010-trace-instrumentation-decoupling.md) 为准：
+
+- ReactAgent 工具调用优先通过 Spring AI Alibaba `ToolInterceptor` 采集。
+- ReactAgent 模型调用优先通过 `ModelInterceptor` / `ModelHook` 采集。
+- 普通 `ChatClient` RAG 模型调用通过 Spring AI Advisor 采集。
+- 检索、rerank、citation、业务对象 ID 通过项目内 `RagTrace` / `CustomerAssistantTrace` 补充。
+- Spring AOP 只用于 turn 级 `start / complete / fail` 生命周期兜底。
+
+原始显式 `TraceRecorder` 接入仅视为第一版技术债，不作为后续扩展方向。
 
 ### 6. 模型原始请求边界：应用层完整记录，不做 provider HTTP 抓包
 

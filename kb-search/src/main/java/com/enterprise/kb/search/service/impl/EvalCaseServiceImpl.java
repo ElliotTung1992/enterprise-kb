@@ -19,6 +19,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EvalCaseServiceImpl implements EvalCaseService {
 
+    private static final int DEFAULT_LIMIT = 100;
+    private static final int MAX_LIMIT = 500;
+
     private final EvalCaseMapper evalCaseMapper;
 
     /**
@@ -37,6 +40,16 @@ public class EvalCaseServiceImpl implements EvalCaseService {
     @Transactional(readOnly = true)
     public List<EvalCase> listEnabledByDataset(String dataset) {
         return evalCaseMapper.findEnabledByDataset(dataset);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<EvalCase> listCases(String dataset, String caseType, Boolean enabled, int limit) {
+        int safeLimit = limit <= 0 ? DEFAULT_LIMIT : Math.min(limit, MAX_LIMIT);
+        return evalCaseMapper.findByFilters(dataset, caseType, enabled, safeLimit);
     }
 
     /**

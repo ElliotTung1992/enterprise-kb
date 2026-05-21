@@ -31,6 +31,20 @@ public interface EvalCaseMapper {
     List<EvalCase> findEnabledByDataset(@Param("dataset") String dataset);
 
     /**
+     * 按条件查询评估用例。
+     *
+     * @param dataset  数据集，可为空
+     * @param caseType 用例类型，可为空
+     * @param enabled  是否启用，可为空
+     * @param limit    返回条数
+     * @return 用例列表
+     */
+    List<EvalCase> findByFilters(@Param("dataset") String dataset,
+                                 @Param("caseType") String caseType,
+                                 @Param("enabled") Boolean enabled,
+                                 @Param("limit") int limit);
+
+    /**
      * 插入评估用例。
      *
      * @param evalCase 用例实体

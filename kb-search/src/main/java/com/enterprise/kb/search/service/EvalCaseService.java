@@ -28,6 +28,17 @@ public interface EvalCaseService {
     List<EvalCase> listEnabledByDataset(String dataset);
 
     /**
+     * 按条件查询评估用例。
+     *
+     * @param dataset  数据集，可为空
+     * @param caseType 用例类型，可为空
+     * @param enabled  是否启用，可为空
+     * @param limit    返回条数
+     * @return 用例列表
+     */
+    List<EvalCase> listCases(String dataset, String caseType, Boolean enabled, int limit);
+
+    /**
      * 创建评估用例。
      *
      * @param evalCase 用例实体

@@ -4,6 +4,7 @@ import com.alibaba.cloud.ai.graph.CompileConfig;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
+import com.alibaba.cloud.ai.graph.agent.Builder;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.Citation;
@@ -18,12 +19,13 @@ import com.enterprise.kb.search.service.AgenticTokenBudgetService;
 import com.enterprise.kb.search.service.HybridSearchService;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.RerankService;
-import com.enterprise.kb.search.service.TraceRecorder;
-import com.enterprise.kb.search.dto.TraceCompleteRequest;
-import com.enterprise.kb.search.dto.TraceStartRequest;
-import com.enterprise.kb.search.dto.TraceStepRequest;
 import com.enterprise.kb.common.exception.KbException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.enterprise.kb.search.trace.TraceContextHolder;
+import com.enterprise.kb.search.trace.TraceEvent;
+import com.enterprise.kb.search.trace.TracePayload;
+import com.enterprise.kb.search.trace.TraceScope;
+import com.enterprise.kb.search.trace.agent.TraceReactAgentFactory;
+import com.enterprise.kb.search.trace.aop.TraceTurn;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingType;
 import lombok.RequiredArgsConstructor;
@@ -36,15 +38,12 @@ import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -85,8 +84,7 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
     private final RedisChatMemory redisChatMemory;
     private final QaChatSessionService qaChatSessionService;
     private final AgenticTokenBudgetService tokenBudget;
-    private final TraceRecorder traceRecorder;
-    private final ObjectMapper objectMapper;
+    private final TraceReactAgentFactory traceReactAgentFactory;
 
     /** CL100K 编码器，用于精确统计 token 数，与 GPT 系列模型一致 */
     private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
@@ -109,42 +107,24 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
      * @return 含答案文本和引用列表的问答响应
      */
     @Override
+    @TraceTurn(traceType = "AGENTIC_QA", agentName = "kb-search-agent")
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
-        Instant startedAt = Instant.now();
 
         // 从 Redis 加载历史并按 token 预算截断，原始历史不受影响
         List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
         AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
         List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
-
-        Optional<UUID> traceId = traceRecorder.startTrace(new TraceStartRequest(
-                "AGENTIC_QA",
-                sessionId,
-                spaceId,
-                currentUserIdOrNull(),
-                null,
-                req.modelProvider(),
-                req.question(),
-                jsonOf(traceMap(
-                        "question", req.question(),
-                        "sessionId", sessionId,
-                        "spaceId", spaceId,
-                        "modelProvider", req.modelProvider(),
-                        "rawHistory", messageSnapshots(rawHistory),
-                        "trimmedHistory", messageSnapshots(trimmedHistory),
-                        "historyBudgetTokens", budget.historyTokensMax(),
-                        "retrievalSpaceTokens", budget.retrievalSpace()))
-        ));
+        TraceScope trace = TraceContextHolder.currentScopeOrNoop();
 
         // SearchAccumulator 在闭包中被工具捕获，跨多轮工具调用累积引用和去重状态
         SearchAccumulator acc = new SearchAccumulator();
 
-        FunctionToolCallback<KnowledgeSearchInput, String> searchTool = buildSearchTool(spaceId, budget, acc, traceId);
+        FunctionToolCallback<KnowledgeSearchInput, String> searchTool = buildSearchTool(spaceId, budget, acc, trace);
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        ReactAgent reactAgent = ReactAgent.builder()
-                .name("kb-search-agent")
+        Builder agentBuilder = traceReactAgentFactory.builder("kb-search-agent", trace.context());
+        ReactAgent reactAgent = agentBuilder
                 .chatClient(chatClient)
                 .systemPrompt(AgenticTokenBudgetService.AGENT_SYSTEM_PROMPT)
                 .tools(searchTool)
@@ -160,18 +140,18 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                 .build();
 
         AssistantMessage assistantMessage;
-        try {
+        try (AutoCloseable ignored = TraceContextHolder.bind(trace)) {
             assistantMessage = reactAgent.call(messages, runnableConfig);
         } catch (GraphRunnerException e) {
             log.error("Agentic RAG 执行失败：sessionId={}", sessionId, e);
-            traceId.ifPresent(id -> traceRecorder.failTrace(id, e, elapsedMs(startedAt)));
             throw new KbException("Agent 执行失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (RuntimeException e) {
-            traceId.ifPresent(id -> traceRecorder.failTrace(id, e, elapsedMs(startedAt)));
             throw e;
+        } catch (Exception e) {
+            throw new KbException("Agent Trace 上下文关闭失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
-        return buildResponse(req, sessionId, spaceId, assistantMessage, acc, traceId, startedAt);
+        return buildResponse(req, sessionId, spaceId, assistantMessage, acc, trace);
     }
 
     // ---- 工具构建 ----
@@ -183,10 +163,10 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
      */
     private FunctionToolCallback<KnowledgeSearchInput, String> buildSearchTool(
             UUID spaceId, AgenticTokenBudgetService.Budget budget,
-            SearchAccumulator acc, Optional<UUID> traceId) {
+            SearchAccumulator acc, TraceScope trace) {
         return FunctionToolCallback.builder(
                         "searchKnowledgeBase",
-                        (KnowledgeSearchInput input) -> executeSearch(input.query(), spaceId, budget, acc, traceId))
+                        (KnowledgeSearchInput input) -> executeSearch(input.query(), spaceId, budget, acc, trace))
                 .description("""
                         根据精准关键词在知识库中检索相关文档片段。
                         query 必须是简洁的名词短语或核心概念，不要包含问句或完整句子。
@@ -211,7 +191,7 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
      */
     private QnAResponse buildResponse(QnARequest req, UUID sessionId, UUID spaceId,
                                        AssistantMessage assistantMessage, SearchAccumulator acc,
-                                       Optional<UUID> traceId, Instant startedAt) {
+                                       TraceScope trace) {
         String answer = assistantMessage.getText();
 
         redisChatMemory.add(sessionId.toString(),
@@ -230,24 +210,10 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         log.info("Agentic RAG 完成：sessionId={}，引用文档块数={}", sessionId, citations.size());
         QnAResponse response = new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
-        traceId.ifPresent(id -> {
-            traceRecorder.recordStep(id, new TraceStepRequest(
-                    acc.nextStepIndex.getAndIncrement(),
-                    "MODEL_CALL",
-                    "kb-search-agent",
-                    null,
-                    null,
-                    "SUCCEEDED",
-                    jsonOf(traceMap("question", req.question())),
-                    jsonOf(traceMap("answer", answer, "hasToolCalls", assistantMessage.hasToolCalls())),
-                    null, null, null, null, null, null));
-            traceRecorder.completeTrace(id, new TraceCompleteRequest(
-                    answer,
-                    jsonOf(traceMap("answer", answer, "citations", citations,
-                            "modelUsed", req.modelProvider() != null ? req.modelProvider() : "DEFAULT")),
-                    elapsedMs(startedAt),
-                    0));
-        });
+        trace.event(new TraceEvent("AGENT_FINAL", "final-answer", "SUCCEEDED",
+                TracePayload.map("question", req.question()),
+                TracePayload.map("answer", answer, "hasToolCalls", assistantMessage.hasToolCalls()),
+                null, null, null, null, null, null));
 
         try {
             qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(),
@@ -278,23 +244,15 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
      */
     private String executeSearch(String query, UUID spaceId,
                                   AgenticTokenBudgetService.Budget budget, SearchAccumulator acc,
-                                  Optional<UUID> traceId) {
-        Instant startedAt = Instant.now();
-        int stepIndex = acc.nextStepIndex.getAndIncrement();
+                                  TraceScope trace) {
         if (acc.toolCallCount.incrementAndGet() > MAX_TOOL_CALLS) {
             log.warn("已达到最大工具调用次数 {}，强制停止检索", MAX_TOOL_CALLS);
-            String output = "已达到最大检索次数，请根据已有内容作答。";
-            recordSearchStep(traceId, stepIndex, query, "SKIPPED", null, null, null,
-                    output, elapsedMs(startedAt), null);
-            return output;
+            return "已达到最大检索次数，请根据已有内容作答。";
         }
 
         if (!acc.searchedQueries.add(query)) {
             log.debug("重复 query 已跳过：\"{}\"", query);
-            String output = "该关键词已检索过，请换用不同关键词或根据已有内容作答。";
-            recordSearchStep(traceId, stepIndex, query, "SKIPPED", null, null, null,
-                    output, elapsedMs(startedAt), null);
-            return output;
+            return "该关键词已检索过，请换用不同关键词或根据已有内容作答。";
         }
 
         List<SearchHit> candidates;
@@ -325,8 +283,9 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                 totalTokens += hitTokens;
             }
         } catch (RuntimeException e) {
-            recordSearchStep(traceId, stepIndex, query, "FAILED", null, null, null,
-                    null, elapsedMs(startedAt), e);
+            trace.event(new TraceEvent("RETRIEVAL", "searchKnowledgeBase.retrieval", "FAILED",
+                    TracePayload.map("query", query, "topK", TOOL_RECALL_SIZE),
+                    null, null, null, null, null, null, e));
             throw e;
         }
 
@@ -346,8 +305,14 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         if (hasHighQuality) {
             result += "\n[已找到高相关性内容，可直接作答]";
         }
-        recordSearchStep(traceId, stepIndex, query, "SUCCEEDED", candidates, reranked, withinBudget,
-                result, elapsedMs(startedAt), null);
+        trace.event(new TraceEvent("RETRIEVAL", "searchKnowledgeBase.retrieval", "SUCCEEDED",
+                TracePayload.map("query", query, "topK", TOOL_RECALL_SIZE),
+                TracePayload.map(
+                        "candidates", candidates,
+                        "reranked", reranked,
+                        "withinBudget", withinBudget,
+                        "output", result),
+                null, null, null, null, null, null));
         return result;
     }
 
@@ -388,68 +353,8 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         final LinkedHashMap<String, SearchHit> bestHitByChunkId = new LinkedHashMap<>();
         final Map<String, Integer> numByChunkId = new HashMap<>();
         final AtomicInteger nextNum = new AtomicInteger(1);
-        final AtomicInteger nextStepIndex = new AtomicInteger(1);
         final AtomicInteger toolCallCount = new AtomicInteger(0);
         final Set<String> searchedQueries = new HashSet<>();
     }
 
-    private void recordSearchStep(Optional<UUID> traceId, int stepIndex, String query, String status,
-                                  List<SearchHit> candidates, List<SearchHit> reranked,
-                                  List<SearchHit> withinBudget, String output,
-                                  Long durationMs, Throwable error) {
-        traceId.ifPresent(id -> traceRecorder.recordStep(id, new TraceStepRequest(
-                stepIndex,
-                "TOOL_CALL",
-                "kb-search-agent",
-                null,
-                "searchKnowledgeBase",
-                status,
-                jsonOf(traceMap("query", query, "topK", TOOL_RECALL_SIZE)),
-                jsonOf(traceMap(
-                        "candidates", candidates,
-                        "reranked", reranked,
-                        "withinBudget", withinBudget,
-                        "output", output)),
-                null,
-                null,
-                null,
-                durationMs,
-                error != null ? error.getClass().getName() : null,
-                error != null ? error.getMessage() : null)));
-    }
-
-    private String jsonOf(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            log.warn("Trace JSON 序列化失败：{}", e.getMessage());
-            return "{}";
-        }
-    }
-
-    private List<Map<String, Object>> messageSnapshots(List<Message> messages) {
-        return messages.stream()
-                .map(m -> traceMap("type", m.getMessageType(), "text", m.getText()))
-                .toList();
-    }
-
-    private Map<String, Object> traceMap(Object... keyValues) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        for (int i = 0; i + 1 < keyValues.length; i += 2) {
-            map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
-        }
-        return map;
-    }
-
-    private UUID currentUserIdOrNull() {
-        try {
-            return SecurityUtils.getCurrentUserId();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private long elapsedMs(Instant startedAt) {
-        return Duration.between(startedAt, Instant.now()).toMillis();
-    }
 }

@@ -2,6 +2,9 @@ package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.search.dto.GuardResult;
 import com.enterprise.kb.search.service.AttackGuardService;
+import com.enterprise.kb.search.trace.TraceContextHolder;
+import com.enterprise.kb.search.trace.TraceEvent;
+import com.enterprise.kb.search.trace.TracePayload;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -39,18 +42,35 @@ public class AttackGuardServiceImpl implements AttackGuardService {
 
     @Override
     public GuardResult inspect(String message) {
+        GuardResult result;
         if (message == null || message.isBlank()) {
-            return GuardResult.pass();
+            result = GuardResult.pass();
+            recordGuardEvent(message, result);
+            return result;
         }
         if (matchesAny(message, INJECTION_PATTERNS)) {
             log.warn("攻击守卫拦截：疑似提示词注入，message={}", truncate(message));
-            return GuardResult.block("PROMPT_INJECTION");
+            result = GuardResult.block("PROMPT_INJECTION");
+            recordGuardEvent(message, result);
+            return result;
         }
         if (matchesAny(message, ROLEPLAY_PATTERNS)) {
             log.warn("攻击守卫拦截：疑似角色扮演越狱，message={}", truncate(message));
-            return GuardResult.block("ROLEPLAY_JAILBREAK");
+            result = GuardResult.block("ROLEPLAY_JAILBREAK");
+            recordGuardEvent(message, result);
+            return result;
         }
-        return GuardResult.pass();
+        result = GuardResult.pass();
+        recordGuardEvent(message, result);
+        return result;
+    }
+
+    private void recordGuardEvent(String message, GuardResult result) {
+        TraceContextHolder.currentScopeOrNoop().event(new TraceEvent("GUARD", "attack-guard",
+                result.blocked() ? "SKIPPED" : "SUCCEEDED",
+                TracePayload.map("message", message),
+                TracePayload.map("blocked", result.blocked(), "reason", result.reason()),
+                null, null, null, null, null, null));
     }
 
     private boolean matchesAny(String message, List<Pattern> patterns) {

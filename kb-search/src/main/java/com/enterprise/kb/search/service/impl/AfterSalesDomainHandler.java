@@ -18,6 +18,14 @@ import com.enterprise.kb.search.dto.DomainContext;
 import com.enterprise.kb.search.dto.DomainResult;
 import com.enterprise.kb.search.service.DomainHandler;
 import com.enterprise.kb.search.service.ReviewRequestService;
+import com.enterprise.kb.search.trace.NoopTraceFacade;
+import com.enterprise.kb.search.trace.TraceContextHolder;
+import com.enterprise.kb.search.trace.TraceEvent;
+import com.enterprise.kb.search.trace.TracePayload;
+import com.enterprise.kb.search.trace.agent.TraceModelInterceptor;
+import com.enterprise.kb.search.trace.agent.TraceReactAgentFactory;
+import com.enterprise.kb.search.trace.agent.TraceReactAgentFactoryImpl;
+import com.enterprise.kb.search.trace.agent.TraceToolInterceptor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +35,7 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.tool.function.FunctionToolCallback;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -49,7 +58,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class AfterSalesDomainHandler implements DomainHandler {
 
     private static final String SUBMIT_REVIEW_TOOL = "submitAfterSalesReview";
@@ -62,6 +71,15 @@ public class AfterSalesDomainHandler implements DomainHandler {
     private final RedisSaver agentCheckpointSaver;
     private final ReviewRequestService reviewRequestService;
     private final ObjectMapper objectMapper;
+    private final TraceReactAgentFactory traceReactAgentFactory;
+
+    public AfterSalesDomainHandler(ModelProviderResolver modelProviderResolver,
+                                   RedisSaver agentCheckpointSaver,
+                                   ReviewRequestService reviewRequestService,
+                                   ObjectMapper objectMapper) {
+        this(modelProviderResolver, agentCheckpointSaver, reviewRequestService,
+                objectMapper, noopTraceReactAgentFactory(objectMapper));
+    }
 
     @Override
     public Domain domain() {
@@ -181,8 +199,7 @@ public class AfterSalesDomainHandler implements DomainHandler {
                 .build();
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(modelProvider);
-        return ReactAgent.builder()
-                .name("after-sales-domain-agent")
+        return traceReactAgentFactory.builder("after-sales-domain-agent", TraceContextHolder.currentOrNoop())
                 .chatClient(chatClient)
                 .systemPrompt(SYSTEM_PROMPT)
                 .tools(checkTool, submitTool)
@@ -228,6 +245,11 @@ public class AfterSalesDomainHandler implements DomainHandler {
             reviewRequestService.createPending(ctx.sessionId(), null, ctx.userId(),
                     orderId, reason, conversationSnapshot, orderDetailsJson,
                     toolCallId, toolCallName);
+            TraceContextHolder.currentScopeOrNoop().event(new TraceEvent(
+                    "HITL_INTERRUPT", toolCallName, "INTERRUPTED",
+                    toolArgs,
+                    TracePayload.map("status", "PENDING_REVIEW", "orderId", orderId, "reason", reason),
+                    null, toolCallId, "REVIEW_REQUEST", null, null, null));
         } catch (Exception e) {
             log.warn("写入 review_requests 失败：sessionId={}", ctx.sessionId(), e);
         }
@@ -285,6 +307,12 @@ public class AfterSalesDomainHandler implements DomainHandler {
             log.warn("序列化消息列表失败", e);
             return "[]";
         }
+    }
+
+    private static TraceReactAgentFactory noopTraceReactAgentFactory(ObjectMapper objectMapper) {
+        return new TraceReactAgentFactoryImpl(
+                new TraceToolInterceptor(NoopTraceFacade.INSTANCE),
+                new TraceModelInterceptor(NoopTraceFacade.INSTANCE));
     }
 
     private static final String SYSTEM_PROMPT = """

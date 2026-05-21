@@ -43,4 +43,13 @@ public interface EvalRunService {
      * @return 已保存的结果
      */
     EvalRunResult saveResult(EvalRunResult result);
+
+    /**
+     * 标记评估运行完成。
+     *
+     * @param id          运行 ID
+     * @param status      完成状态
+     * @param summaryJson 汇总 JSON
+     */
+    void complete(UUID id, String status, String summaryJson);
 }

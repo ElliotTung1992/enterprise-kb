@@ -71,4 +71,13 @@ public class EvalRunServiceImpl implements EvalRunService {
         evalRunResultMapper.insert(result);
         return result;
     }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @Transactional
+    public void complete(UUID id, String status, String summaryJson) {
+        evalRunMapper.complete(id, status, summaryJson, Instant.now());
+    }
 }

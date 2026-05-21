@@ -14,7 +14,11 @@
       "Bash(jar tf *)",
       "Bash(grep -n \"execute\\\\|invoke\\\\|run\\\\|async\\\\|CompletableFuture\\\\|supplyAsync\\\\|toolCall\" /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java | head -30)",
       "Bash(grep -n \"parallelToolExecution\\\\|parallel.*tool\\\\|parallelEnabled\" /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java /tmp/src/com/alibaba/cloud/ai/graph/agent/ReactAgent.java 2>/dev/null | head -20)",
-      "Bash(awk 'NR>=216 && NR<=290' /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java)"
+      "Bash(awk 'NR>=216 && NR<=290' /tmp/src/com/alibaba/cloud/ai/graph/agent/node/AgentToolNode.java)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search compile -q)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search compile)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search -o clean compile)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search -o test-compile)"
     ]
   }
 }

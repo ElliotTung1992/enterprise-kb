@@ -1,7 +1,16 @@
 package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.search.dto.GuardResult;
+import com.enterprise.kb.search.trace.TraceContext;
+import com.enterprise.kb.search.trace.TraceContextHolder;
+import com.enterprise.kb.search.trace.TraceEvent;
+import com.enterprise.kb.search.trace.TraceScope;
 import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,5 +51,61 @@ class AttackGuardServiceImplTest {
     void passesBlankMessage() {
         assertThat(service.inspect("  ").blocked()).isFalse();
         assertThat(service.inspect(null).blocked()).isFalse();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void recordsGuardTraceEventInsideInspect() throws Exception {
+        RecordingTraceScope scope = new RecordingTraceScope();
+
+        try (AutoCloseable ignored = TraceContextHolder.bind(scope)) {
+            service.inspect("我要退款，订单号是 SO20260510001");
+        }
+
+        assertThat(scope.events).hasSize(1);
+        TraceEvent event = scope.events.get(0);
+        assertThat(event.stepType()).isEqualTo("GUARD");
+        assertThat(event.name()).isEqualTo("attack-guard");
+        assertThat(event.status()).isEqualTo("SUCCEEDED");
+        assertThat((Map<String, Object>) event.output())
+                .containsEntry("blocked", false)
+                .containsEntry("reason", null);
+    }
+
+    private static final class RecordingTraceScope implements TraceScope {
+        private final List<TraceEvent> events = new ArrayList<>();
+
+        @Override
+        public UUID traceId() {
+            return UUID.fromString("00000000-0000-0000-0000-000000000001");
+        }
+
+        @Override
+        public boolean enabled() {
+            return true;
+        }
+
+        @Override
+        public TraceContext context() {
+            return new TraceContext(traceId(), "CUSTOMER_ASSISTANT", "customer-assistant",
+                    null, null, null, true);
+        }
+
+        @Override
+        public void event(TraceEvent event) {
+            events.add(event);
+        }
+
+        @Override
+        public void complete(Object output, Integer tokensUsed) {
+        }
+
+        @Override
+        public void fail(Throwable error) {
+        }
+
+        @Override
+        public void close() {
+        }
     }
 }

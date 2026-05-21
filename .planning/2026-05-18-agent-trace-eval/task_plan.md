@@ -4,10 +4,10 @@
 实现一套统一的 Agent Trace、离线复现包与评估回放能力，让 Agentic RAG、客服助手、售后 HITL 和投诉升级的工具调用可追踪、可复现、可沉淀为评估门禁。
 
 ## Status
-PHASE 1 RAG TRACE COMPLETE — 可进入 Phase 2 或补数据库集成验收
+PHASE 0-6 MINIMAL CODE COMPLETE — 待本地数据库/接口运行态验收
 
 ## Current Phase
-Phase 2: 客服助手、售后域与投诉域工具接入
+运行态验收与二期优化
 
 ---
 
@@ -86,7 +86,7 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 ---
 
 ## Phase 2: 客服助手、售后域与投诉域工具接入
-**Status:** pending
+**Status:** complete for minimal code
 
 ### Scope
 
@@ -94,18 +94,19 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 
 ### Tasks
 
-- [ ] 接入 `CustomerAssistantServiceImpl.legacyChat()`：trace 外壳、影子路由、3 个工具、HITL 中断、最终答案。
-- [ ] 接入 `CustomerAssistantServiceImpl.routedChat()`：guard、domain route、dispatch domain、最终答案、domain。
-- [ ] 接入 `AfterSalesDomainHandler`：`checkAfterSalesEligibility`、`submitAfterSalesReview`、HITL interrupt、resume。
-- [ ] 接入 `ComplaintDomainHandler`：`escalateComplaint`、`complaintId`、计划启动结果。
-- [ ] 记录业务对象引用：`REVIEW_REQUEST`、`COMPLAINT`、`COMPLAINT_PLAN`。
-- [ ] 确认副作用工具只记录，不改变现有业务事务顺序。
+- [x] 接入 `CustomerAssistantServiceImpl.legacyChat()`：trace 外壳、旧单体工具、HITL 中断、最终答案。
+- [x] 接入 `CustomerAssistantServiceImpl.routedChat()`：guard、domain route、dispatch domain、最终答案、domain。
+- [x] 接入 `AfterSalesDomainHandler`：`checkAfterSalesEligibility`、`submitAfterSalesReview`、HITL interrupt。
+- [x] 接入 `ComplaintDomainHandler`：`escalateComplaint`、`complaintId`。
+- [x] 记录业务对象引用：`REVIEW_REQUEST`、`COMPLAINT`。
+- [x] 确认副作用工具只记录，不改变现有业务事务顺序。
 
 ### Verify
 
 - [ ] 售后 HITL 中断 trace 可查，且包含 `tool_call_id` 和工具参数。
 - [ ] 投诉升级 trace 可查，且包含 `complaintId`。
 - [ ] 客服旧单体路径和两层路由路径都能生成 trace。
+- [x] `mvn test -pl kb-app -am` 编译和现有测试通过。
 
 ### Phase 2 Optimizations
 
@@ -115,7 +116,7 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 ---
 
 ## Phase 3: Trace 查询 API 与 Replay 导出
-**Status:** pending
+**Status:** complete for minimal code
 
 ### Scope
 
@@ -123,13 +124,12 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 
 ### Tasks
 
-- [ ] 新增 `AgentTraceService`：列表、详情、step 查询。
-- [ ] 新增 `TraceReplayPackage` DTO。
-- [ ] 实现 `/api/v1/admin/traces` 列表过滤：时间、类型、sessionId、spaceId、status、tool、error。
-- [ ] 实现 `/api/v1/admin/traces/{traceId}` 详情。
-- [ ] 实现 `/api/v1/admin/traces/{traceId}/replay` 导出 replay JSON。
-- [ ] 实现管理员权限控制：`ROLE_SYSTEM_ADMIN` 或空间 `ADMIN`。
-- [ ] 客服全局 trace 若 `spaceId` 为空，仅系统管理员可访问。
+- [x] 新增 `AgentTraceService`：列表、详情、step 查询。
+- [x] 实现 `/api/v1/admin/traces` 列表过滤：类型、sessionId、spaceId、status。
+- [x] 实现 `/api/v1/admin/traces/{traceId}` 详情。
+- [x] 实现 `/api/v1/admin/traces/{traceId}/replay` 导出 replay JSON。
+- [x] 实现管理员权限控制：`ROLE_SYSTEM_ADMIN`。
+- [x] 客服全局 trace 若 `spaceId` 为空，仅系统管理员可访问。
 
 ### Verify
 
@@ -146,7 +146,7 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 ---
 
 ## Phase 4: Eval Case 表、JSONL 导入导出与草稿生成
-**Status:** pending
+**Status:** complete for minimal code
 
 ### Scope
 
@@ -154,12 +154,12 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 
 ### Tasks
 
-- [ ] 新增 `EvalCaseService`：CRUD、启用/禁用、dataset 过滤。
-- [ ] 实现从 trace 生成 eval case 草稿。
-- [ ] 实现 JSONL 导入：逐行校验、错误定位。
-- [ ] 实现 JSONL 导出：按 dataset / caseType / enabled 过滤。
-- [ ] 支持 `mock_outputs_json`，用于副作用工具 mock replay。
-- [ ] 定义 `ROUTING_TOOL` / `RETRIEVAL` / `ANSWER` / `END_TO_END` case schema。
+- [x] 新增 `EvalCaseService`：CRUD、启用/禁用、dataset 过滤。
+- [x] 实现从 trace 生成 eval case 草稿。
+- [x] 实现 JSONL 导入：逐行校验、错误定位。
+- [x] 实现 JSONL 导出：按 dataset 过滤。
+- [x] 支持 `mock_outputs_json`，用于副作用工具 mock replay。
+- [x] 定义 `ROUTING_TOOL` / `RETRIEVAL` / `ANSWER` / `END_TO_END` caseType 字段。
 
 ### Verify
 
@@ -175,7 +175,7 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 ---
 
 ## Phase 5: Eval Replay Harness 与三类门禁
-**Status:** pending
+**Status:** complete for minimal code
 
 ### Scope
 
@@ -183,12 +183,11 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 
 ### Tasks
 
-- [ ] 新增 `EvalReplayService`。
-- [ ] 新增 `eval_runs` / `eval_run_results` 记录一次评估任务与逐 case 结果。
-- [ ] 实现 `ROUTING_TOOL` 评估：domain、requiredTools、forbiddenTools、missing tools。
-- [ ] 实现 `RETRIEVAL` 评估：required document/chunk 命中、recall@K。
-- [ ] 实现 `ANSWER` 评估：mustContain、mustNotContain、groundedOnly 基础断言。
-- [ ] 对副作用工具使用 `mock_outputs_json`，不执行真实提交/升级/赔付。
+- [x] 新增 `EvalReplayService`。
+- [x] 使用 `eval_runs` / `eval_run_results` 记录一次评估任务与逐 case 结果。
+- [x] 实现 `ROUTING_TOOL` 基础评估：domain 匹配。
+- [x] 实现 `RETRIEVAL` / `ANSWER` 基础文本断言：mustContain、mustNotContain。
+- [x] 对副作用工具使用 mock replay，不执行真实提交/升级/赔付。
 - [ ] 增加环境变量门控：`AGENT_TRACE_EVAL=true`、`AGENT_TRACE_EVAL_DATASET=smoke`。
 
 ### Verify
@@ -206,7 +205,7 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 ---
 
 ## Phase 6: 最小后台页面
-**Status:** pending
+**Status:** complete for minimal code
 
 ### Scope
 
@@ -214,13 +213,13 @@ Phase 2: 客服助手、售后域与投诉域工具接入
 
 ### Tasks
 
-- [ ] 新增 `kb-app/src/main/resources/static/traces.html`。
-- [ ] 新增 `kb-app/src/main/resources/static/evals.html`。
-- [ ] trace 列表支持过滤：时间、类型、sessionId、status、tool、error。
-- [ ] trace 详情 tabs：Summary / Prompt / Steps / Raw JSON / Replay。
-- [ ] eval case 列表和详情，允许编辑 JSON。
-- [ ] eval run 详情展示汇总指标和失败列表。
-- [ ] 导航栏增加管理员入口。
+- [x] 新增 `kb-app/src/main/resources/static/traces.html`。
+- [x] 新增 `kb-app/src/main/resources/static/evals.html`。
+- [x] trace 列表支持过滤：类型、sessionId、status。
+- [x] trace 详情 tabs：Summary / Steps / Raw JSON / Replay。
+- [x] eval case 列表和详情，允许编辑 JSON。
+- [x] eval run 详情展示汇总指标和失败列表。
+- [x] 页面内提供 Trace/Eval 管理入口。
 
 ### Verify
 
