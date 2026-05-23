@@ -1,8 +1,9 @@
 package com.enterprise.kb.document.service.impl;
 
-import com.enterprise.kb.document.service.ChunkMetadataService;
+import com.enterprise.kb.common.constants.ChunkContentType;
 import com.enterprise.kb.document.mapper.DocumentChunkMapper;
 import com.enterprise.kb.document.model.DocumentChunk;
+import com.enterprise.kb.document.service.ChunkMetadataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -48,6 +49,10 @@ public class ChunkMetadataServiceImpl implements ChunkMetadataService {
             entity.setChunkIndex(i);
             entity.setContent(chunk.getText());
             entity.setEmbeddingModel(embeddingModel);
+            entity.setContentType(parseContentType(chunk.getMetadata().get("contentType")));
+            entity.setAssetId(parseUuid(chunk.getMetadata().get("assetId")));
+            entity.setSection(parseString(chunk.getMetadata().get("section")));
+            entity.setAnchorChunkIndex(parseInteger(chunk.getMetadata().get("anchorChunkIndex")));
             Object pageNum = chunk.getMetadata().get("page_number");
             if (pageNum != null) entity.setPageNumber(Integer.parseInt(pageNum.toString()));
             entities.add(entity);
@@ -65,5 +70,25 @@ public class ChunkMetadataServiceImpl implements ChunkMetadataService {
     @Transactional
     public void deleteByDocumentId(UUID documentId) {
         chunkMapper.deleteByDocumentId(documentId);
+    }
+
+    private ChunkContentType parseContentType(Object value) {
+        if (value == null) return ChunkContentType.TEXT;
+        return ChunkContentType.valueOf(value.toString());
+    }
+
+    private UUID parseUuid(Object value) {
+        if (value == null || value.toString().isBlank()) return null;
+        return UUID.fromString(value.toString());
+    }
+
+    private Integer parseInteger(Object value) {
+        if (value == null || value.toString().isBlank()) return null;
+        return Integer.parseInt(value.toString());
+    }
+
+    private String parseString(Object value) {
+        if (value == null || value.toString().isBlank()) return null;
+        return value.toString();
     }
 }

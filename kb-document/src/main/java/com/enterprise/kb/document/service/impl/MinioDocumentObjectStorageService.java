@@ -1,0 +1,59 @@
+package com.enterprise.kb.document.service.impl;
+
+import com.enterprise.kb.document.service.DocumentObjectStorageService;
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.UploadObjectArgs;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.nio.file.Path;
+
+/**
+ * 基于 MinIO 的文档对象存储实现。
+ */
+@Slf4j
+@Service
+public class MinioDocumentObjectStorageService implements DocumentObjectStorageService {
+
+    private final MinioClient minioClient;
+    private final String bucket;
+
+    public MinioDocumentObjectStorageService(
+            @Value("${enterprise.kb.storage.minio.endpoint:http://localhost:9000}") String endpoint,
+            @Value("${enterprise.kb.storage.minio.access-key:minioadmin}") String accessKey,
+            @Value("${enterprise.kb.storage.minio.secret-key:minioadmin123}") String secretKey,
+            @Value("${enterprise.kb.storage.minio.bucket:kb-assets}") String bucket) {
+        this.minioClient = MinioClient.builder()
+                .endpoint(endpoint)
+                .credentials(accessKey, secretKey)
+                .build();
+        this.bucket = bucket;
+    }
+
+    @Override
+    public String uploadFile(String objectKey, Path file, String contentType) {
+        try {
+            ensureBucket();
+            minioClient.uploadObject(UploadObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectKey)
+                    .filename(file.toString())
+                    .contentType(contentType)
+                    .build());
+            return objectKey;
+        } catch (Exception e) {
+            throw new IllegalStateException("上传对象到 MinIO 失败: " + objectKey, e);
+        }
+    }
+
+    private void ensureBucket() throws Exception {
+        boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+        if (!exists) {
+            minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+            log.info("Created MinIO bucket {}", bucket);
+        }
+    }
+}

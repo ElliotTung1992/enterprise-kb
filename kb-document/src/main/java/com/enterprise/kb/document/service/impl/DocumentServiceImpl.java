@@ -9,6 +9,7 @@ import com.enterprise.kb.common.constants.DocumentStatus;
 import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.document.dto.DocumentDto;
+import com.enterprise.kb.document.mapper.DocumentAssetMapper;
 import com.enterprise.kb.document.mapper.DocumentChunkMapper;
 import com.enterprise.kb.document.mapper.DocumentMapper;
 import com.enterprise.kb.document.mapper.DocumentRelationMapper;
@@ -48,6 +49,7 @@ public class DocumentServiceImpl implements DocumentService {
     private final DocumentMapper documentMapper;
     private final DocumentRelationMapper documentRelationMapper;
     private final DocumentChunkMapper documentChunkMapper;
+    private final DocumentAssetMapper documentAssetMapper;
     private final DocumentIngestionPipeline ingestionPipeline;
     private final VectorStoreService vectorStoreService;
     private final ChunkMetadataService chunkMetadataService;
@@ -66,6 +68,7 @@ public class DocumentServiceImpl implements DocumentService {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
             "text/markdown", "text/x-markdown",
+            "application/zip", "application/x-zip-compressed",
             "text/plain",
             "text/html"
     );
@@ -163,6 +166,7 @@ public class DocumentServiceImpl implements DocumentService {
         documentRelationMapper.deleteByDocumentId(docId);
         vectorStoreService.deleteByDocumentId(docId);
         chunkMetadataService.deleteByDocumentId(docId);
+        documentAssetMapper.deleteByDocumentId(docId);
         eventPublisher.publishEvent(new DocumentDeletedEvent(docId));
     }
 
@@ -181,6 +185,7 @@ public class DocumentServiceImpl implements DocumentService {
         }
         documentRelationMapper.deleteBySpaceId(spaceId);
         documentChunkMapper.deleteBySpaceId(spaceId);
+        documentAssetMapper.deleteBySpaceId(spaceId);
         documentMapper.softDeleteBySpaceId(spaceId);
     }
 
@@ -220,15 +225,19 @@ public class DocumentServiceImpl implements DocumentService {
 
     private String detectMimeType(MultipartFile file) {
         String contentType = file.getContentType();
-        if (contentType != null && !contentType.isBlank()) return contentType;
         String name = file.getOriginalFilename();
+        if (contentType != null && !contentType.isBlank() && !"application/octet-stream".equals(contentType)) {
+            return contentType;
+        }
         if (name != null) {
-            if (name.endsWith(".md") || name.endsWith(".markdown")) return "text/markdown";
-            if (name.endsWith(".pdf")) return "application/pdf";
-            if (name.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            if (name.endsWith(".doc")) return "application/msword";
-            if (name.endsWith(".txt")) return "text/plain";
-            if (name.endsWith(".html") || name.endsWith(".htm")) return "text/html";
+            String lowerName = name.toLowerCase();
+            if (lowerName.endsWith(".md") || lowerName.endsWith(".markdown")) return "text/markdown";
+            if (lowerName.endsWith(".zip")) return "application/zip";
+            if (lowerName.endsWith(".pdf")) return "application/pdf";
+            if (lowerName.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            if (lowerName.endsWith(".doc")) return "application/msword";
+            if (lowerName.endsWith(".txt")) return "text/plain";
+            if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) return "text/html";
         }
         return "application/octet-stream";
     }

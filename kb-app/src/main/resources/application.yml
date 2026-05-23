@@ -149,6 +149,11 @@ enterprise:
       include-retrieval-excerpts: ${AGENT_TRACE_INCLUDE_RETRIEVAL_EXCERPTS:true}
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
+      minio:
+        endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+        access-key: ${MINIO_ACCESS_KEY:minioadmin}
+        secret-key: ${MINIO_SECRET_KEY:minioadmin123}
+        bucket: ${MINIO_ASSET_BUCKET:kb-assets}
     document:
       allowed-mime-types:
         - application/pdf
@@ -156,9 +161,16 @@ enterprise:
         - application/msword
         - text/markdown
         - text/x-markdown
+        - application/zip
+        - application/x-zip-compressed
         - text/plain
         - text/html
       max-file-size-mb: 100
+      markdown-archive:
+        max-file-count: ${MARKDOWN_ARCHIVE_MAX_FILE_COUNT:200}
+        max-extracted-size-mb: ${MARKDOWN_ARCHIVE_MAX_EXTRACTED_SIZE_MB:200}
+        max-image-count: ${MARKDOWN_ARCHIVE_MAX_IMAGE_COUNT:100}
+        max-image-size-mb: ${MARKDOWN_ARCHIVE_MAX_IMAGE_SIZE_MB:20}
     chunking:
       chunk-size: 512
       overlap-tokens: 100

@@ -6,12 +6,16 @@
     <resultMap id="DocumentChunkResultMap" type="com.enterprise.kb.document.model.DocumentChunk">
         <id property="id" column="id"/>
         <result property="documentId" column="document_id"/>
+        <result property="contentType" column="content_type"/>
+        <result property="assetId" column="asset_id"/>
         <result property="chunkIndex" column="chunk_index"/>
         <result property="content" column="content"/>
         <result property="tokenCount" column="token_count"/>
         <result property="milvusId" column="milvus_id"/>
         <result property="embeddingModel" column="embedding_model"/>
         <result property="pageNumber" column="page_number"/>
+        <result property="section" column="section"/>
+        <result property="anchorChunkIndex" column="anchor_chunk_index"/>
         <result property="charStart" column="char_start"/>
         <result property="charEnd" column="char_end"/>
         <result property="createdAt" column="created_at"/>
@@ -25,17 +29,22 @@
 
     <insert id="insert" useGeneratedKeys="false">
         INSERT INTO document_chunks (
-            id, document_id, chunk_index, content, token_count,
-            milvus_id, embedding_model, page_number, char_start, char_end, created_at
+            id, document_id, content_type, asset_id, chunk_index, content, token_count,
+            milvus_id, embedding_model, page_number, section, anchor_chunk_index,
+            char_start, char_end, created_at
         ) VALUES (
             #{id,jdbcType=OTHER},
             #{documentId,jdbcType=OTHER},
+            #{contentType},
+            #{assetId,jdbcType=OTHER},
             #{chunkIndex},
             #{content},
             #{tokenCount},
             #{milvusId},
             #{embeddingModel},
             #{pageNumber},
+            #{section},
+            #{anchorChunkIndex},
             #{charStart},
             #{charEnd},
             #{createdAt}
@@ -44,19 +53,24 @@
 
     <insert id="insertBatch" useGeneratedKeys="false">
         INSERT INTO document_chunks (
-            id, document_id, chunk_index, content, token_count,
-            milvus_id, embedding_model, page_number, char_start, char_end, created_at
+            id, document_id, content_type, asset_id, chunk_index, content, token_count,
+            milvus_id, embedding_model, page_number, section, anchor_chunk_index,
+            char_start, char_end, created_at
         ) VALUES
         <foreach collection="chunks" item="chunk" separator=",">
         (
             #{chunk.id,jdbcType=OTHER},
             #{chunk.documentId,jdbcType=OTHER},
+            #{chunk.contentType},
+            #{chunk.assetId,jdbcType=OTHER},
             #{chunk.chunkIndex},
             #{chunk.content},
             #{chunk.tokenCount},
             #{chunk.milvusId},
             #{chunk.embeddingModel},
             #{chunk.pageNumber},
+            #{chunk.section},
+            #{chunk.anchorChunkIndex},
             #{chunk.charStart},
             #{chunk.charEnd},
             #{chunk.createdAt}

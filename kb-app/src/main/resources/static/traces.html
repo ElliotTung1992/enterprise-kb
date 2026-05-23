@@ -25,7 +25,6 @@ body { visibility: hidden; }
   <ul class="nav flex-column mt-2 flex-grow-1">
     <li><a class="nav-link active" href="/traces.html"><i class="bi bi-list-nested"></i>Trace</a></li>
     <li><a class="nav-link" href="/evals.html"><i class="bi bi-clipboard-data"></i>Eval</a></li>
-    <li><a class="nav-link" href="/reviews.html"><i class="bi bi-clipboard2-check"></i>审核中心</a></li>
   </ul>
   <div class="px-3 pb-2"><a href="/index.html" class="nav-link" style="font-size:.82rem;color:#c7d2fe"><i class="bi bi-house me-1"></i>返回首页</a></div>
   <div class="p-3 border-top" style="border-color:#312e81!important">
@@ -36,18 +35,23 @@ body { visibility: hidden; }
 <main class="kb-main">
   <div class="kb-topbar">
     <h6 class="mb-0 fw-bold"><i class="bi bi-activity me-2 text-primary"></i>Trace 管理</h6>
-    <button class="btn btn-sm btn-primary" onclick="loadTraces()"><i class="bi bi-arrow-clockwise"></i></button>
+    <button class="btn btn-sm btn-primary" id="btn-refresh" onclick="loadTraces(this)" title="刷新 Trace 列表"><i class="bi bi-arrow-clockwise me-1"></i>刷新</button>
   </div>
   <section class="p-4">
     <div class="filter-bar mb-3">
       <input class="form-control form-control-sm" id="trace-type" placeholder="traceType" style="max-width:180px">
       <input class="form-control form-control-sm" id="trace-status" placeholder="status" style="max-width:140px">
       <input class="form-control form-control-sm" id="trace-session" placeholder="sessionId" style="max-width:260px">
-      <button class="btn btn-sm btn-outline-primary" onclick="loadTraces()"><i class="bi bi-search"></i></button>
+      <button class="btn btn-sm btn-outline-primary" id="btn-search" onclick="loadTraces(this)" title="按条件查询"><i class="bi bi-search me-1"></i>查询</button>
     </div>
     <div class="trace-grid">
       <div class="trace-list" id="trace-list"></div>
       <div>
+        <div class="d-flex justify-content-end gap-2 mb-2 d-none" id="detail-actions">
+          <button class="btn btn-sm btn-outline-secondary" id="btn-copy" onclick="copyJson(this)" title="复制当前标签页的 JSON"><i class="bi bi-clipboard me-1"></i>复制</button>
+          <button class="btn btn-sm btn-outline-secondary" id="btn-download" onclick="downloadReplay(this)" title="下载离线复现包(JSON 文件)"><i class="bi bi-download me-1"></i>Replay 包</button>
+          <button class="btn btn-sm btn-outline-primary" id="btn-evalcase" onclick="createEvalCase(this)" title="从该 Trace 生成评估用例草稿"><i class="bi bi-clipboard-plus me-1"></i>生成 Eval Case</button>
+        </div>
         <ul class="nav nav-tabs mb-2">
           <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#summary">Summary</button></li>
           <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#steps">Steps</button></li>
@@ -58,7 +62,7 @@ body { visibility: hidden; }
           <div class="tab-pane fade show active" id="summary"><pre class="json-box" id="summary-box">{}</pre></div>
           <div class="tab-pane fade" id="steps"><div class="table-responsive"><table class="table step-table"><tbody id="steps-box"></tbody></table></div></div>
           <div class="tab-pane fade" id="raw"><pre class="json-box" id="raw-box">{}</pre></div>
-          <div class="tab-pane fade" id="replay"><button class="btn btn-sm btn-outline-primary mb-2" onclick="createEvalCase()">生成 Eval Case</button><pre class="json-box" id="replay-box">{}</pre></div>
+          <div class="tab-pane fade" id="replay"><pre class="json-box" id="replay-box">{}</pre></div>
         </div>
       </div>
     </div>
@@ -71,23 +75,41 @@ body { visibility: hidden; }
 requireAuth();
 document.getElementById('sidebar-username').textContent = localStorage.getItem('username') || '';
 let selectedTraceId = null;
+let currentReplay = null;
 
-async function loadTraces() {
-  const params = new URLSearchParams();
-  const type = document.getElementById('trace-type').value.trim();
-  const status = document.getElementById('trace-status').value.trim();
-  const sessionId = document.getElementById('trace-session').value.trim();
-  if (type) params.set('traceType', type);
-  if (status) params.set('status', status);
-  if (sessionId) params.set('sessionId', sessionId);
-  const res = await apiFetch('/admin/traces?' + params.toString());
-  renderList(res.data || []);
+// 给按钮包裹加载态：执行期间显示 spinner 并禁用，结束后恢复原内容
+async function withLoading(btn, fn) {
+  if (!btn) return fn();
+  const html = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    return await fn();
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = html;
+  }
+}
+
+async function loadTraces(btn) {
+  return withLoading(btn, async () => {
+    const params = new URLSearchParams();
+    const type = document.getElementById('trace-type').value.trim();
+    const status = document.getElementById('trace-status').value.trim();
+    const sessionId = document.getElementById('trace-session').value.trim();
+    if (type) params.set('traceType', type);
+    if (status) params.set('status', status);
+    if (sessionId) params.set('sessionId', sessionId);
+    document.getElementById('trace-list').innerHTML = '<div class="p-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>加载中…</div>';
+    const res = await apiFetch('/admin/traces?' + params.toString());
+    renderList(res.data || []);
+  });
 }
 
 function renderList(items) {
   const el = document.getElementById('trace-list');
   el.innerHTML = items.map(t => `
-    <div class="trace-row" onclick="loadDetail('${t.id}')">
+    <div class="trace-row" data-id="${t.id}" onclick="loadDetail('${t.id}')">
       <div class="fw-semibold">${t.traceType} <span class="badge text-bg-light">${t.status}</span></div>
       <div class="trace-meta">${t.id}</div>
       <div class="trace-meta">${t.inputText || ''}</div>
@@ -96,21 +118,49 @@ function renderList(items) {
 
 async function loadDetail(id) {
   selectedTraceId = id;
+  document.querySelectorAll('.trace-row').forEach(r => r.classList.toggle('active', r.dataset.id === id));
   const detail = await apiFetch('/admin/traces/' + id);
   const replay = await apiFetch('/admin/traces/' + id + '/replay');
   const trace = detail.data.trace;
+  currentReplay = replay.data;
   document.getElementById('summary-box').textContent = JSON.stringify(trace, null, 2);
   document.getElementById('raw-box').textContent = JSON.stringify({ input: trace.rawInputJson, output: trace.rawOutputJson }, null, 2);
   document.getElementById('replay-box').textContent = JSON.stringify(replay.data, null, 2);
   document.getElementById('steps-box').innerHTML = (detail.data.steps || []).map(s => `
     <tr><td>${s.stepIndex}</td><td>${s.stepType}</td><td>${s.toolName || ''}</td><td>${s.status}</td><td><code>${escapeHtml(s.inputJson || '')}</code></td></tr>
-  `).join('');
+  `).join('') || '<tr><td colspan="5" class="text-muted">无步骤</td></tr>';
+  document.getElementById('detail-actions').classList.remove('d-none');
 }
 
-async function createEvalCase() {
-  if (!selectedTraceId) return;
-  await apiFetch('/admin/traces/' + selectedTraceId + '/eval-case', { method:'POST', body: JSON.stringify({ dataset:'draft' }) });
-  showToast('已生成 Eval Case 草稿');
+// 复制当前激活标签页内的 JSON 文本
+async function copyJson(btn) {
+  const pre = document.querySelector('.tab-content .tab-pane.active pre');
+  if (!pre) { showToast('当前标签页没有可复制的 JSON', 'error'); return; }
+  await withLoading(btn, async () => {
+    await navigator.clipboard.writeText(pre.textContent);
+    showToast('已复制到剪贴板');
+  });
+}
+
+// 把离线复现包(replay JSON)导出为本地文件
+function downloadReplay(btn) {
+  if (!currentReplay) { showToast('请先选择一个 Trace', 'error'); return; }
+  const blob = new Blob([JSON.stringify(currentReplay, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'trace-' + (selectedTraceId || 'replay') + '-replay.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('已下载 Replay 离线包');
+}
+
+async function createEvalCase(btn) {
+  if (!selectedTraceId) { showToast('请先选择一个 Trace', 'error'); return; }
+  await withLoading(btn, async () => {
+    await apiFetch('/admin/traces/' + selectedTraceId + '/eval-case', { method:'POST', body: JSON.stringify({ dataset:'draft' }) });
+    showToast('已生成 Eval Case 草稿');
+  });
 }
 
 function escapeHtml(s) {

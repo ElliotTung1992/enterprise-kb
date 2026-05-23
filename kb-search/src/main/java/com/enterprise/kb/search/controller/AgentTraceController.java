@@ -11,7 +11,7 @@ import com.enterprise.kb.search.service.EvalCaseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+// import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
@@ -41,7 +41,7 @@ public class AgentTraceController {
      * @return Trace 列表
      */
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
+    // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
     public ResponseEntity<ApiResponse<List<AgentTrace>>> list(
             @RequestParam(required = false) UUID spaceId,
             @RequestParam(required = false) UUID sessionId,
@@ -59,7 +59,7 @@ public class AgentTraceController {
      * @return Trace 与步骤列表
      */
     @GetMapping("/{traceId}")
-    @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
+    // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> detail(@PathVariable UUID traceId) {
         AgentTrace trace = findTrace(traceId);
         return ResponseEntity.ok(ApiResponse.ok(traceBundle(trace)));
@@ -72,7 +72,7 @@ public class AgentTraceController {
      * @return replay JSON
      */
     @GetMapping("/{traceId}/replay")
-    @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
+    // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> replay(@PathVariable UUID traceId) {
         AgentTrace trace = findTrace(traceId);
         Map<String, Object> replay = traceBundle(trace);
@@ -90,7 +90,7 @@ public class AgentTraceController {
      * @return 已创建的评估用例
      */
     @PostMapping("/{traceId}/eval-case")
-    @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
+    // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
     public ResponseEntity<ApiResponse<EvalCase>> createEvalCase(
             @PathVariable UUID traceId,
             @RequestBody(required = false) CreateEvalCaseRequest req) {

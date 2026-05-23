@@ -18,7 +18,11 @@
       "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search compile -q)",
       "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search compile)",
       "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search -o clean compile)",
-      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search -o test-compile)"
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home mvn -pl kb-search -o test-compile)",
+      "Bash(grep -E \"\\\\.java$\")",
+      "Bash(export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home)",
+      "Bash(mvn -q install -pl kb-search -am -DskipTests)",
+      "Bash(docker exec *)"
     ]
   }
 }

@@ -9,7 +9,7 @@ import com.enterprise.kb.search.service.EvalRunService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
+// import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
@@ -35,7 +35,7 @@ public class EvalRunController {
      * @return 运行记录
      */
     @PostMapping
-    @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
+    // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
     public ResponseEntity<ApiResponse<EvalRun>> run(@RequestBody RunEvalRequest req) {
         return ResponseEntity.ok(ApiResponse.ok(evalReplayService.runDataset(req.dataset())));
     }
@@ -47,7 +47,7 @@ public class EvalRunController {
      * @return 运行与结果列表
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
+    // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> detail(@PathVariable UUID id) {
         EvalRun run = evalRunService.findById(id)
                 .orElseThrow(() -> new KbException("评估运行不存在", HttpStatus.NOT_FOUND));

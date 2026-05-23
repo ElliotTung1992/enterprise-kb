@@ -30,4 +30,5 @@
     <include file="db/changelog/023-add-complaint-plan-next-check-at.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/024-add-customer-messages-domain.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/025-add-agent-traces-eval.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/026-add-document-visual-assets.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

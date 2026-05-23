@@ -17,6 +17,12 @@
 
 最大文件大小：**100MB**
 
+## Markdown 图文扩展规划
+
+Markdown 中的图片、Mermaid 和 PlantUML 流程图将按 L2 图文 RAG 方案处理：图片和渲染图存 MinIO，OCR/caption 结果以文本 chunk 进入现有 RAG 检索链路，并支持 asset 级引用。
+
+详见 [[features/markdown-visual-rag-l2]]。
+
 ## 分块策略
 
 `SentenceAwareChunkingServiceImpl`（句子边界感知）：
