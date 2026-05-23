@@ -82,6 +82,12 @@
         SELECT COUNT(*) FROM document_chunks WHERE document_id = #{documentId,jdbcType=OTHER}
     </select>
 
+    <select id="findMaxChunkIndexByDocumentId" resultType="int">
+        SELECT COALESCE(MAX(chunk_index), -1)
+        FROM document_chunks
+        WHERE document_id = #{documentId,jdbcType=OTHER}
+    </select>
+
     <delete id="deleteByDocumentId">
         DELETE FROM document_chunks WHERE document_id = #{documentId,jdbcType=OTHER}
     </delete>

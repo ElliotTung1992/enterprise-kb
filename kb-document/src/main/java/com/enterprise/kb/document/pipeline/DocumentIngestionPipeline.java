@@ -87,7 +87,9 @@ public class DocumentIngestionPipeline {
 
             // Mark READY
             doc.setChunkCount(allChunks.size());
-            doc.setStatus(DocumentStatus.READY);
+            doc.setStatus(visualResult.assets().isEmpty()
+                    ? DocumentStatus.READY
+                    : DocumentStatus.READY_WITH_PENDING_ASSETS);
             doc.setErrorMessage(null);
             doc.setUpdatedAt(Instant.now());
             documentMapper.update(doc);

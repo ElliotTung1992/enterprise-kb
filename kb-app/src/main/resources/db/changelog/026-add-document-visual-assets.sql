@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS document_assets (
     ocr_text             TEXT,
     caption              TEXT,
     summary              TEXT,
+    entities             TEXT,
     manual_caption       TEXT,
     manual_summary       TEXT,
     status               VARCHAR(30) NOT NULL DEFAULT 'PENDING',

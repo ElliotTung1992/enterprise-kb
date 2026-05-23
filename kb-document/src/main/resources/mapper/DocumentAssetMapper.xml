@@ -22,6 +22,7 @@
         <result property="ocrText" column="ocr_text"/>
         <result property="caption" column="caption"/>
         <result property="summary" column="summary"/>
+        <result property="entities" column="entities"/>
         <result property="manualCaption" column="manual_caption"/>
         <result property="manualSummary" column="manual_summary"/>
         <result property="status" column="status"/>
@@ -40,7 +41,7 @@
             id, document_id, asset_type, diagram_type, asset_index,
             original_path, object_key, thumbnail_object_key, mime_type, file_size,
             section, anchor_chunk_index, alt_text, title, source_code,
-            ocr_text, caption, summary, manual_caption, manual_summary,
+            ocr_text, caption, summary, entities, manual_caption, manual_summary,
             status, retry_count, next_retry_at, last_error, content_hash,
             metadata, created_at, updated_at
         ) VALUES
@@ -64,6 +65,7 @@
             #{asset.ocrText},
             #{asset.caption},
             #{asset.summary},
+            #{asset.entities},
             #{asset.manualCaption},
             #{asset.manualSummary},
             #{asset.status},
@@ -83,6 +85,67 @@
         WHERE document_id = #{documentId,jdbcType=OTHER}
         ORDER BY asset_index ASC
     </select>
+
+    <select id="findPendingForProcessing" resultMap="DocumentAssetResultMap">
+        SELECT * FROM document_assets
+        WHERE status = 'PENDING'
+          AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
+        ORDER BY created_at ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findById" resultMap="DocumentAssetResultMap">
+        SELECT * FROM document_assets WHERE id = #{id,jdbcType=OTHER} LIMIT 1
+    </select>
+
+    <select id="countByDocumentIdAndStatuses" resultType="long">
+        SELECT COUNT(*) FROM document_assets
+        WHERE document_id = #{documentId,jdbcType=OTHER}
+          AND status IN
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+    </select>
+
+    <update id="markProcessing">
+        UPDATE document_assets
+        SET status = 'PROCESSING',
+            updated_at = NOW()
+        WHERE id = #{id,jdbcType=OTHER}
+          AND status = 'PENDING'
+    </update>
+
+    <update id="updateUnderstanding">
+        UPDATE document_assets
+        SET ocr_text = #{asset.ocrText},
+            caption = #{asset.caption},
+            summary = #{asset.summary},
+            entities = #{asset.entities},
+            status = #{asset.status},
+            next_retry_at = NULL,
+            last_error = #{asset.lastError},
+            updated_at = #{asset.updatedAt}
+        WHERE id = #{asset.id,jdbcType=OTHER}
+    </update>
+
+    <update id="markRetry">
+        UPDATE document_assets
+        SET status = 'PENDING',
+            retry_count = retry_count + 1,
+            next_retry_at = #{nextRetryAt},
+            last_error = #{lastError},
+            updated_at = NOW()
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+    <update id="markFailed">
+        UPDATE document_assets
+        SET status = 'FAILED',
+            retry_count = retry_count + 1,
+            last_error = #{lastError},
+            updated_at = NOW()
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
 
     <delete id="deleteByDocumentId">
         DELETE FROM document_assets WHERE document_id = #{documentId,jdbcType=OTHER}

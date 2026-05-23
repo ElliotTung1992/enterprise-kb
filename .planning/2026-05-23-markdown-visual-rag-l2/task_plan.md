@@ -23,16 +23,16 @@ Phase 2
 - **状态：** complete
 
 ### Phase 2：异步视觉理解
-- [ ] 增加文档状态 `READY_WITH_PENDING_ASSETS` 和 `READY_WITH_ASSET_ERRORS`。
-- [ ] 增加资产状态：`PENDING`、`PROCESSING`、`READY`、`FAILED`、`REINDEX_PENDING`、`REINDEXING`。
-- [ ] 实现基于数据库轮询的资产处理 worker，用于处理待处理和可重试资产。
-- [ ] 在 `VisualUnderstandingService` 后面抽象 OCR 与 caption provider。
+- [x] 增加文档状态 `READY_WITH_PENDING_ASSETS` 和 `READY_WITH_ASSET_ERRORS`。
+- [x] 增加资产状态：`PENDING`、`PROCESSING`、`READY`、`FAILED`、`REINDEX_PENDING`、`REINDEXING`。
+- [x] 实现基于数据库轮询的资产处理 worker，用于处理待处理和可重试资产。
+- [x] 在 `VisualUnderstandingService` 后面抽象 OCR 与 caption provider。
 - [ ] 分别配置 OCR 与 caption 的并发数、超时时间和重试策略。
-- [ ] 将 OCR、caption、summary、entities 结果保存到 `document_assets`。
-- [ ] 按固定模板生成 `IMAGE_CAPTION` 和 `DIAGRAM_SUMMARY` chunk。
-- [ ] 将视觉语义 chunk 追加到 `document_chunks` 和现有 Milvus collection。
-- [ ] 根据资产状态重新计算文档状态。
-- **状态：** pending
+- [x] 将 OCR、caption、summary、entities 结果保存到 `document_assets`。
+- [x] 按固定模板生成 `IMAGE_CAPTION` 和 `DIAGRAM_SUMMARY` chunk。
+- [x] 将视觉语义 chunk 追加到 `document_chunks` 和现有 Milvus collection。
+- [x] 根据资产状态重新计算文档状态。
+- **状态：** in_progress
 
 ### Phase 3：资产引用与人工修正
 - [ ] 扩展 `Citation`，支持资产级引用。

@@ -44,6 +44,14 @@ public interface DocumentChunkMapper {
     long countByDocumentId(@Param("documentId") UUID documentId);
 
     /**
+     * 查询文档当前最大的分块序号。
+     *
+     * @param documentId 文档 ID
+     * @return 最大 chunk_index，无分块时返回 -1
+     */
+    int findMaxChunkIndexByDocumentId(@Param("documentId") UUID documentId);
+
+    /**
      * 删除文档的所有分块
      *
      * @param documentId 文档 ID

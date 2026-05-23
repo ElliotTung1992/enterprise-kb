@@ -60,11 +60,31 @@
   - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/DocumentServiceImpl.java`
 
 ### Phase 2：异步视觉理解
-- **状态：** pending
+- **状态：** in_progress
 - 已完成动作：
-  -
+  - 增加文档状态 `READY_WITH_PENDING_ASSETS`、`READY_WITH_ASSET_ERRORS`。
+  - 为 `document_assets` 增加 `entities` 字段，并补充视觉理解结果更新 SQL。
+  - 新增 `VisualUnderstandingService` 和 `VisualUnderstandingResult`，默认 `NoopVisualUnderstandingService` 先打通链路。
+  - 新增 `VisualAssetWorkerServiceImpl`，通过 `@Scheduled` 数据库轮询处理 `PENDING` 资产。
+  - worker 支持 `PENDING -> PROCESSING -> READY/FAILED` 状态流转和失败重试。
+  - worker 生成 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY` chunk，并追加写入 Milvus 与 `document_chunks`。
+  - worker 根据资产状态回写文档状态，并刷新文档 chunkCount。
+  - 文档入库完成时，如存在视觉资产，状态改为 `READY_WITH_PENDING_ASSETS`。
 - 创建/修改文件：
-  -
+  - `kb-common/src/main/java/com/enterprise/kb/common/constants/DocumentStatus.java`
+  - `kb-app/src/main/resources/db/changelog/026-add-document-visual-assets.sql`
+  - `kb-app/src/main/resources/application.yml`
+  - `kb-document/src/main/java/com/enterprise/kb/document/model/DocumentAsset.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/mapper/DocumentAssetMapper.java`
+  - `kb-document/src/main/resources/mapper/DocumentAssetMapper.xml`
+  - `kb-document/src/main/java/com/enterprise/kb/document/mapper/DocumentChunkMapper.java`
+  - `kb-document/src/main/resources/mapper/DocumentChunkMapper.xml`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/VisualUnderstandingService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/VisualUnderstandingResult.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/VisualAssetWorkerService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/NoopVisualUnderstandingService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/VisualAssetWorkerServiceImpl.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/pipeline/DocumentIngestionPipeline.java`
 
 ### Phase 3：资产引用与人工修正
 - **状态：** pending
@@ -96,6 +116,7 @@
 | 详细设计笔记创建 | 用户要求详细记录沟通过程和未来优化点 | 详细笔记文档存在，并从 feature/ADR 文档链接 | 已创建 `wiki/features/markdown-visual-rag-l2-design-notes.md` | Pass |
 | `.planning` 文件中文化 | 用户要求 `.planning` 下新增文件改为中文 | 计划、发现、进度文件主体为中文 | 已将三个新增计划文件改为中文，技术标识保持原样 | Pass |
 | Phase 1 编译验证 | 实现资产基础设施和 Markdown zip 视觉入库 | `kb-document` 及依赖模块可编译 | `mvn -pl kb-document -am -DskipTests compile` 通过 | Pass |
+| Phase 2 编译验证 | 实现异步视觉理解 worker 基础链路 | 应用及依赖模块可编译 | `mvn -pl kb-app -am -DskipTests compile` 通过 | Pass |
 
 ## 错误日志
 | 时间 | 问题 | 尝试 | 处理结果 |

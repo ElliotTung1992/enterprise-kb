@@ -53,6 +53,8 @@ public class DocumentAsset {
     private String caption;
     /** 模型生成的检索摘要 */
     private String summary;
+    /** 模型抽取的关键实体 */
+    private String entities;
     /** 人工覆盖描述 */
     private String manualCaption;
     /** 人工覆盖摘要 */
