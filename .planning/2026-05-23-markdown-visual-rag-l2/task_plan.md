@@ -4,7 +4,7 @@
 设计并实现一套可用于生产环境的 Markdown 可视化入库链路，使 Markdown 文档中的文本、图片、流程图能够被解析、索引、检索并在现有 RAG 系统中被引用。
 
 ## 当前阶段
-Phase 4
+Phase 6
 
 ## 阶段拆分
 
@@ -44,7 +44,7 @@ Phase 4
 - [x] 人工修正后将资产标记为 `REINDEX_PENDING`。
 - [x] worker 删除旧的资产视觉 chunk/vector，并基于人工修正内容重建。
 - [ ] 增加基于 `documentId + section + anchor_chunk_index` 的检索上下文扩展。
-- [ ] 按 `assetId` 合并引用，优先使用 caption/summary chunk，弱化 reference/source chunk。
+- [x] 按 `assetId` 合并引用，优先使用 caption/summary chunk，弱化 reference/source chunk。
 - **状态：** in_progress
 
 ### Phase 4：验证与评估
@@ -57,12 +57,20 @@ Phase 4
 - **状态：** complete
 
 ### Phase 5：文档与上线
-- [ ] 补充 Markdown zip 上传行为说明。
-- [ ] 补充视觉资产状态和重试行为说明。
-- [ ] 补充能力边界：本方案是 L2 文本投影，不是 L3 多模态图片检索。
-- [ ] 补充 MinIO 清理、视觉模型失败、重建索引任务等运维说明。
-- [ ] 更新资产接口和扩展引用结构的 API 文档。
-- **状态：** pending
+- [x] 补充 Markdown zip 上传行为说明。
+- [x] 补充视觉资产状态和重试行为说明。
+- [x] 补充能力边界：本方案是 L2 文本投影，不是 L3 多模态图片检索。
+- [x] 补充 MinIO 清理、视觉模型失败、重建索引任务等运维说明。
+- [x] 更新资产接口和扩展引用结构的 API 文档。
+- **状态：** complete
+
+### Phase 6：引用质量增强
+- [x] 增加统一 citation 组装器，普通 RAG 和 Agentic RAG 共用资产级引用去重规则。
+- [x] 同一 `assetId` 命中多条视觉 chunk 时，只输出一条引用。
+- [x] 同一资产优先保留 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY`，弱化 `IMAGE_REFERENCE` / `DIAGRAM_SOURCE`。
+- [x] Agentic RAG 工具调用期间按 citation key 分配引用编号，避免多轮检索重复暴露同一视觉资产。
+- [x] 增加 citation 去重和优先级单元测试。
+- **状态：** complete
 
 ## 关键问题
 1. 首个生产环境优先接入哪个外部 OCR provider 和 caption/VLM provider？

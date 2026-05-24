@@ -1,6 +1,6 @@
 # Markdown 图文 RAG L2 方案
 
-> 状态：设计方案 / 实施计划  
+> 状态：已实现至 Phase 5 / 后续保留 L3 扩展  
 > 关联计划：`.planning/2026-05-23-markdown-visual-rag-l2/`
 > 架构决策：[[decisions/adr-011-markdown-visual-rag-l2]]
 > 沟通纪要：[[features/markdown-visual-rag-l2-design-notes]]
@@ -76,7 +76,7 @@ MinIO = 二进制对象存储
 
 ### `document_assets`
 
-建议新增表：
+已新增表：
 
 | 字段 | 说明 |
 |------|------|
@@ -108,7 +108,7 @@ MinIO = 二进制对象存储
 
 ### `document_chunks` 扩展
 
-建议新增字段：
+已新增字段：
 
 | 字段 | 说明 |
 |------|------|
@@ -131,7 +131,7 @@ Milvus metadata 同步写入：
 
 ## 文档状态
 
-新增文档状态：
+已新增文档状态：
 
 | 状态 | 含义 |
 |------|------|
@@ -159,7 +159,7 @@ Milvus metadata 同步写入：
 
 ## 资产状态
 
-建议状态：
+已新增状态：
 
 ```text
 PENDING
@@ -170,7 +170,7 @@ REINDEX_PENDING
 REINDEXING
 ```
 
-处理失败不拖垮正文。缺失图片会生成 `IMAGE_REFERENCE` chunk，并把 asset 标记为 `FAILED`。
+处理失败不拖垮正文。当前实现中缺失图片会被跳过并记录 WARN；已成功抽取的图片/流程图如果视觉理解失败，会进入重试或 `FAILED`。
 
 ## Markdown zip 上传
 
@@ -222,33 +222,13 @@ Asset Worker 轮询 PENDING assets
   -> 重算 document.status
 ```
 
-OCR 和 caption 分开配置：
-
-```yaml
-enterprise:
-  kb:
-    visual:
-      worker:
-        poll-interval-seconds: 30
-        batch-size: 10
-        max-processing-seconds: 300
-      ocr:
-        enabled: true
-        concurrency: 4
-        timeout-seconds: 30
-        max-retries: 3
-      caption:
-        enabled: true
-        concurrency: 2
-        timeout-seconds: 60
-        max-retries: 3
-```
+当前实现先提供 `VisualUnderstandingService` 抽象和默认 Noop provider，真实 OCR/caption/VLM provider 可在该接口后替换。worker 已支持批量轮询、失败重试、重试耗尽和人工修正后的重建索引；OCR 与 caption 的独立并发、超时配置保留为后续增强。
 
 ### Phase 3：引用与人工修正
 
 ```text
 RAG 检索命中 IMAGE_CAPTION / DIAGRAM_SUMMARY
-  -> citation 返回 assetId / assetType / title / thumbnailUrl / originalUrl
+  -> citation 返回 assetId / contentType / section / anchorChunkIndex
   -> 前端显示“来源：图片/流程图”
 
 用户人工修正 caption/summary
@@ -269,10 +249,10 @@ documentId + section + anchor_chunk_index
 
 规则：
 
-- 命中图片/流程图 chunk 时，补充同文档、同章节、anchor 附近的正文 chunk。
-- 命中正文 chunk 时，可补充同文档、同章节、anchor 接近的视觉 chunk。
-- 多个命中属于同一 `asset_id` 时，引用层合并。
-- 优先展示 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY`，回退到 `IMAGE_REFERENCE` / `DIAGRAM_SOURCE`。
+- 已实现：语义检索、关键词检索、混合检索和问答 citation 透传 `contentType`、`assetId`、`section`、`anchorChunkIndex`。
+- 已实现：普通 RAG 和 Agentic RAG 按 `assetId` 合并视觉资产引用，并优先保留 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY`。
+- 待增强：命中图片/流程图 chunk 时，补充同文档、同章节、anchor 附近的正文 chunk。
+- 待增强：命中正文 chunk 时，补充同文档、同章节、anchor 接近的视觉 chunk。
 
 未来可升级为显式关系图：
 
@@ -336,42 +316,36 @@ OCR文字：{ocrText}
 [/流程图说明]
 ```
 
-## API 草案
+## 已实现 API
 
 ```text
-GET   /api/v1/documents/{documentId}/assets
-GET   /api/v1/documents/{documentId}/assets/{assetId}
-GET   /api/v1/documents/{documentId}/assets/{assetId}/content
-GET   /api/v1/documents/{documentId}/assets/{assetId}/thumbnail
-PATCH /api/v1/documents/{documentId}/assets/{assetId}/caption
-POST  /api/v1/documents/{documentId}/assets/{assetId}/reprocess
+GET   /api/v1/spaces/{spaceId}/documents/{documentId}/assets
+GET   /api/v1/spaces/{spaceId}/documents/{documentId}/assets/{assetId}
+GET   /api/v1/spaces/{spaceId}/documents/{documentId}/assets/{assetId}/content
+PATCH /api/v1/spaces/{spaceId}/documents/{documentId}/assets/{assetId}/correction
 ```
 
 授权：
 
-- Asset 复用文档所属 space 的 `VIEWER` 权限。
+- 资产列表、详情、内容 URL 复用文档所属 space 的 `VIEWER` 权限。
+- 人工修正接口需要文档所属 space 的 `EDITOR` 权限。
 - 后端校验权限后生成短期 MinIO presigned URL。
 
 ## Citation 扩展
 
-建议响应：
+已扩展字段：
 
 ```json
 {
-  "num": 2,
+  "citationNumber": 2,
   "chunkId": "...",
   "documentId": "...",
   "documentTitle": "...",
   "excerpt": "该图展示退款流程...",
   "contentType": "IMAGE_CAPTION",
-  "asset": {
-    "assetId": "...",
-    "assetType": "IMAGE",
-    "title": "退款流程图",
-    "section": "退款流程",
-    "thumbnailUrl": "...",
-    "originalUrl": "..."
-  }
+  "assetId": "...",
+  "section": "退款流程",
+  "anchorChunkIndex": 3
 }
 ```
 

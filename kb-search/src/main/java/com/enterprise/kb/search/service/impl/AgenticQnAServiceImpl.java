@@ -197,16 +197,12 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
         redisChatMemory.add(sessionId.toString(),
                 List.of(new UserMessage(req.question()), assistantMessage));
 
-        // 按引用编号升序排列，保持答案中 [1][2][3] 的顺序
-        List<Citation> citations = acc.numByChunkId.entrySet().stream()
+        // SearchAccumulator 已按 citation key 去重，引用编号与工具返回给 LLM 的编号保持一致
+        List<SearchHit> orderedHits = acc.numByCitationKey.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue())
-                .map(e -> {
-                    SearchHit h = acc.bestHitByChunkId.get(e.getKey());
-                    return new Citation(e.getValue(), h.chunkId(), h.documentId(),
-                            h.documentTitle(), h.excerpt(), h.pageNumber(), h.score(),
-                            h.contentType(), h.assetId(), h.section(), h.anchorChunkIndex());
-                })
+                .map(e -> acc.bestHitByCitationKey.get(e.getKey()))
                 .toList();
+        List<Citation> citations = CitationAssembler.fromHits(orderedHits);
 
         log.info("Agentic RAG 完成：sessionId={}，引用文档块数={}", sessionId, citations.size());
         QnAResponse response = new QnAResponse(answer, sessionId, citations,
@@ -290,14 +286,12 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
             throw e;
         }
 
-        // 分配引用编号：同一文档块在多轮检索中编号不变；相同块出现时保留更高分数的版本
+        // 分配引用编号：同一视觉资产或文档块在多轮检索中编号不变；相同引用保留更优版本
         List<Integer> assignedNums = new ArrayList<>();
         for (SearchHit hit : withinBudget) {
-            String key = hit.chunkId() != null ? hit.chunkId()
-                    : String.valueOf(hit.excerpt().hashCode());
-            int num = acc.numByChunkId.computeIfAbsent(key, k -> acc.nextNum.getAndIncrement());
-            acc.bestHitByChunkId.merge(key, hit,
-                    (old, newer) -> newer.score() > old.score() ? newer : old);
+            String key = CitationAssembler.citationKey(hit);
+            int num = acc.numByCitationKey.computeIfAbsent(key, k -> acc.nextNum.getAndIncrement());
+            acc.bestHitByCitationKey.merge(key, hit, CitationAssembler::betterHit);
             assignedNums.add(num);
         }
 
@@ -343,16 +337,16 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
      * 单次 ask() 调用期间的检索状态，通过闭包在多轮工具调用间共享。
      *
      * <ul>
-     *   <li>{@code bestHitByChunkId}：chunkId → 当前最优 hit（保留最高 rerank 分数）</li>
-     *   <li>{@code numByChunkId}：chunkId → 引用编号（首次出现时按顺序分配，后续不变）</li>
+     *   <li>{@code bestHitByCitationKey}：引用 key → 当前最优 hit</li>
+     *   <li>{@code numByCitationKey}：引用 key → 引用编号（首次出现时按顺序分配，后续不变）</li>
      *   <li>{@code nextNum}：引用编号计数器，从 1 开始</li>
      *   <li>{@code toolCallCount}：工具调用计数，超过 MAX_TOOL_CALLS 时强制停止</li>
      *   <li>{@code searchedQueries}：已检索过的 query 集合，防止 LLM 重复搜索相同关键词</li>
      * </ul>
      */
     private static final class SearchAccumulator {
-        final LinkedHashMap<String, SearchHit> bestHitByChunkId = new LinkedHashMap<>();
-        final Map<String, Integer> numByChunkId = new HashMap<>();
+        final LinkedHashMap<String, SearchHit> bestHitByCitationKey = new LinkedHashMap<>();
+        final Map<String, Integer> numByCitationKey = new HashMap<>();
         final AtomicInteger nextNum = new AtomicInteger(1);
         final AtomicInteger toolCallCount = new AtomicInteger(0);
         final Set<String> searchedQueries = new HashSet<>();

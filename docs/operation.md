@@ -285,10 +285,20 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId} \
 | Word (.docx) | application/vnd.openxmlformats-officedocument.wordprocessingml.document |
 | Word (.doc) | application/msword |
 | Markdown (.md) | text/markdown, text/x-markdown |
+| Markdown 图文包 (.zip) | application/zip |
 | 纯文本 (.txt) | text/plain |
 | HTML | text/html |
 
 **限制**：单文件最大 100 MB。
+
+**Markdown 图文包说明**：
+
+- zip 只是上传容器，系统只为其中的主 Markdown 创建一条文档记录。
+- zip 内应包含一个主 `.md` 文件，以及 Markdown 中使用安全相对路径引用的图片。
+- 图片原文件、原始 zip 和流程图渲染结果存储到 MinIO。
+- Mermaid/PlantUML fenced code 会被抽取为流程图资产；没有可用渲染器时，系统保留源码并生成可检索的源码说明 chunk。
+- 禁止绝对路径、`../` 路径穿越、远程 URL 图片和 base64 data URL。
+- 正文完成入库后即可搜索；图片 OCR/caption 会异步补充，不阻塞正文 RAG。
 
 **单文件上传接口**：
 
@@ -315,6 +325,8 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/documents/upload/batc
 
 ```
 PENDING（已接收）→ PROCESSING（解析/分块/向量化）→ READY（可搜索）
+                                                  ├─► READY_WITH_PENDING_ASSETS（正文可搜索，视觉资产处理中）
+                                                  ├─► READY_WITH_ASSET_ERRORS（正文可搜索，部分视觉资产失败）
                                                   └─► FAILED（处理失败）
 ```
 
@@ -324,6 +336,18 @@ PENDING（已接收）→ PROCESSING（解析/分块/向量化）→ READY（可
 2. **分块**：按 512 token 切分，相邻块有 64 token 重叠
 3. **向量化**：调用 AI 提供商生成 1536 维嵌入向量
 4. **存储**：元数据写入 PostgreSQL，向量写入 Milvus
+5. **视觉资产异步处理**：Markdown zip 中的图片和流程图会进入资产 worker，生成 `IMAGE_CAPTION` 或 `DIAGRAM_SUMMARY` 后追加到检索索引。
+
+**视觉资产状态**：
+
+| 状态 | 说明 |
+|------|------|
+| PENDING | 等待 worker 处理 |
+| PROCESSING | 正在进行 OCR/caption/summary |
+| READY | 已生成视觉语义 chunk 并写入向量库 |
+| FAILED | 重试耗尽或资产无法处理 |
+| REINDEX_PENDING | 人工修正后等待重建索引 |
+| REINDEXING | 正在基于人工修正重建视觉 chunk/vector |
 
 ### 4.3 查看文档列表
 
@@ -358,10 +382,12 @@ curl "http://localhost:8081/api/v1/spaces/{spaceId}/documents?sort=createdAt,des
 | originalFilename | 原始文件名 |
 | mimeType | 文件类型 |
 | fileSizeBytes | 文件大小（字节） |
-| status | PENDING / PROCESSING / READY / FAILED |
+| status | PENDING / PROCESSING / READY / READY_WITH_PENDING_ASSETS / READY_WITH_ASSET_ERRORS / FAILED |
 | chunkCount | 分块数量 |
 | errorMessage | 处理失败时的错误信息 |
 | createdAt | 上传时间 |
+
+Markdown 图文包可能返回 `READY_WITH_PENDING_ASSETS` 或 `READY_WITH_ASSET_ERRORS`。这两种状态表示正文 RAG 已可用，只是图片/流程图的视觉语义处理尚未全部完成或部分失败。
 
 ### 4.4 查看文档详情
 
@@ -379,9 +405,50 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/rep
   -H "Authorization: Bearer {accessToken}"
 ```
 
-返回 `202 Accepted`，后台重新执行解析→分块→向量化流程。
+返回 `202 Accepted`，后台重新执行解析→分块→向量化流程。重新处理会先清理该文档旧的 chunk、Milvus 向量、视觉资产记录和旧资产对象，再重建索引。
 
-### 4.6 删除文档
+### 4.6 视觉资产
+
+Markdown 图文包入库后，可查看图片和流程图资产，并对模型生成的 caption/summary 进行人工修正。
+
+**查看资产列表**：
+
+```bash
+curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+**查看资产详情**：
+
+```bash
+curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets/{assetId} \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+**获取资产内容 URL**：
+
+```bash
+curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets/{assetId}/content \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+返回值中的 `url` 是短期有效的 MinIO 预签名 URL，前端应按需获取，不长期保存。
+
+**人工修正描述和摘要**：
+
+```bash
+curl -X PATCH http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets/{assetId}/correction \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "manualCaption": "人工确认后的图片描述",
+    "manualSummary": "用于检索的人工摘要"
+  }'
+```
+
+修正后资产进入 `REINDEX_PENDING`，由 worker 异步删除旧视觉 chunk/vector 并重建索引。
+
+### 4.7 删除文档
 
 > 需要 EDITOR 角色。删除后同步清除 Milvus 中的向量数据，操作不可逆。
 
@@ -390,7 +457,7 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId} \
   -H "Authorization: Bearer {accessToken}"
 ```
 
-### 4.7 文档关联
+### 4.8 文档关联
 
 将两份相关文档建立关联关系，便于知识图谱导航：
 
@@ -486,7 +553,11 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/search/keyword \
         "excerpt": "HikariCP 连接池最大连接数通过 maximum-pool-size 参数配置，默认值为 10...",
         "pageNumber": 5,
         "score": 0.92,
-        "mimeType": "application/pdf"
+        "mimeType": "application/pdf",
+        "contentType": "TEXT",
+        "assetId": null,
+        "section": "连接池配置",
+        "anchorChunkIndex": 3
       }
     ],
     "totalHits": 23,
@@ -502,6 +573,12 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/search/keyword \
 | score | 相关度评分（0-1，越高越相关） |
 | pageNumber | PDF 文档的页码 |
 | durationMs | 搜索耗时（毫秒） |
+| contentType | chunk 类型：`TEXT`、`IMAGE_REFERENCE`、`IMAGE_CAPTION`、`DIAGRAM_SOURCE`、`DIAGRAM_SUMMARY` |
+| assetId | 命中图片/流程图 chunk 时返回视觉资产 ID |
+| section | Markdown 章节上下文 |
+| anchorChunkIndex | 视觉 chunk 关联的最近正文 chunk 序号 |
+
+Markdown 图文 RAG 当前是 L2 文本投影：图片和流程图先由 OCR/caption/summary 转成文本 chunk，再进入现有文本 embedding 与 Milvus 检索链路。系统目前不做 L3 图片向量检索，也不支持按图片局部区域直接检索。
 
 ---
 
@@ -553,11 +630,16 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
     "sessionId": "session-uuid",
     "citations": [
       {
+        "chunkId": "uuid",
         "documentId": "uuid",
         "documentTitle": "数据库配置指南.pdf",
         "excerpt": "maximum-pool-size: 20\nminimum-idle: 5\nconnection-timeout: 30000",
         "pageNumber": 3,
-        "score": 0.94
+        "score": 0.94,
+        "contentType": "TEXT",
+        "assetId": null,
+        "section": "数据库连接池",
+        "anchorChunkIndex": 2
       }
     ],
     "modelUsed": "MINIMAX",
@@ -565,6 +647,8 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
   }
 }
 ```
+
+当问答命中 Markdown 图片或流程图语义 chunk 时，`citations` 中会带出 `assetId` 和 `contentType`。同一视觉资产只返回一条引用，并优先保留 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY`。前端可再调用文档资产 URL 接口打开原图或渲染图。
 
 ### 6.5 连续对话（多轮问答）
 
@@ -852,6 +936,10 @@ curl http://localhost:8081/actuator/metrics \
 | POST | /api/v1/spaces/{sid}/documents/{did}/reprocess | 重新处理 |
 | GET | /api/v1/spaces/{sid}/documents/{did}/relations | 文档关联 |
 | POST | /api/v1/spaces/{sid}/documents/{did}/relations | 添加关联 |
+| GET | /api/v1/spaces/{sid}/documents/{did}/assets | 视觉资产列表 |
+| GET | /api/v1/spaces/{sid}/documents/{did}/assets/{aid} | 视觉资产详情 |
+| GET | /api/v1/spaces/{sid}/documents/{did}/assets/{aid}/content | 获取视觉资产短期访问 URL |
+| PATCH | /api/v1/spaces/{sid}/documents/{did}/assets/{aid}/correction | 人工修正视觉资产描述 |
 
 #### 搜索
 
@@ -979,7 +1067,47 @@ SELECT * FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 10;
 
 原始上传文件存储在容器内的 `/app/uploads`，挂载到 Docker volume `uploads_data`。可通过环境变量 `FILE_STORAGE_PATH` 修改路径。
 
-### 10.7 生产环境注意事项
+### 10.7 Markdown 图文 RAG 运维
+
+Markdown zip 的原始包、图片原件和流程图渲染图存储在 MinIO，资产元数据存储在 PostgreSQL `document_assets`，检索投影存储在 `document_chunks` 和 Milvus。
+
+**清理策略**：
+
+- 删除文档时会清理文档关系、chunk 元数据、Milvus 向量和视觉资产记录。
+- 重新处理文档时会先清理旧 chunk、旧 vector、旧视觉资产记录和旧资产对象，再重新入库。
+- MinIO 对象删除失败时会记录 WARN 日志，不阻断数据库清理；需要运维人员根据 object key 做补偿清理。
+
+**视觉模型失败处理**：
+
+- 视觉资产处理失败会重试，重试耗尽后资产状态变为 `FAILED`。
+- 文档正文不受视觉资产失败影响，文档状态会变为 `READY_WITH_ASSET_ERRORS`。
+- 修复外部 OCR/caption 服务后，可通过人工修正接口触发 `REINDEX_PENDING`，或重新处理整篇文档。
+
+**排查 SQL**：
+
+```sql
+-- 查看待处理或失败的视觉资产
+SELECT id, document_id, asset_type, status, retry_count, next_retry_at, last_error
+FROM document_assets
+WHERE status IN ('PENDING', 'PROCESSING', 'FAILED', 'REINDEX_PENDING', 'REINDEXING')
+ORDER BY updated_at DESC;
+
+-- 查看某个文档的视觉 chunk
+SELECT id, content_type, asset_id, section, anchor_chunk_index
+FROM document_chunks
+WHERE document_id = '文档UUID'
+  AND content_type <> 'TEXT'
+ORDER BY chunk_index;
+```
+
+**上线检查**：
+
+- 确认 MinIO bucket 可写，并且应用具备上传、预签名 URL、删除对象权限。
+- 确认 `document_assets` 和 `document_chunks` 扩展字段迁移已执行。
+- 确认视觉 worker 已启用，并观察是否持续处理 `PENDING` / `REINDEX_PENDING` 资产。
+- 当前默认视觉理解实现是占位链路；接入真实 OCR/caption provider 后再评估并发、超时和重试参数。
+
+### 10.8 生产环境注意事项
 
 1. **JWT 密钥**：务必替换为高强度随机字符串，不能使用默认值
 2. **数据库密码**：设置强密码，避免使用 `changeme`

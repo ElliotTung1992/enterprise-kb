@@ -144,11 +144,34 @@
   - `kb-search/src/test/java/com/enterprise/kb/search/dto/CitationTest.java`
 
 ### Phase 5：文档与上线
-- **状态：** pending
+- **状态：** complete
 - 已完成动作：
-  -
+  - 在 `docs/operation.md` 补充 Markdown zip 上传行为、安全限制、视觉资产状态、人工修正接口和 L2 能力边界。
+  - 在 `docs/operation.md` 补充视觉资产 API 速查、搜索/问答 citation 扩展字段和 Markdown 图文 RAG 运维说明。
+  - 将 `wiki/features/markdown-visual-rag-l2.md` 从方案草案更新为已实现说明，并标注已实现与待增强的检索关联能力。
+  - 更新 `wiki/features/document-ingestion.md`，补充 Markdown zip 支持、异步视觉处理、状态语义和清理行为。
 - 创建/修改文件：
-  -
+  - `docs/operation.md`
+  - `wiki/features/markdown-visual-rag-l2.md`
+  - `wiki/features/document-ingestion.md`
+  - `.planning/2026-05-23-markdown-visual-rag-l2/task_plan.md`
+  - `.planning/2026-05-23-markdown-visual-rag-l2/progress.md`
+
+### Phase 6：引用质量增强
+- **状态：** complete
+- 已完成动作：
+  - 增加 `CitationAssembler`，统一普通 RAG 和 Agentic RAG 的 citation 组装逻辑。
+  - 标准 QnA 使用 `CitationAssembler.fromHits()` 输出引用，按 `assetId` 合并视觉资产引用。
+  - Agentic QnA 的 `SearchAccumulator` 改为按 citation key 分配引用编号，跨多轮工具调用避免重复引用同一资产。
+  - 同一资产命中 reference/source 与 caption/summary 时，优先保留 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY`。
+  - 增加 `CitationAssemblerTest`，覆盖同资产优先保留 caption、普通正文 chunk 保留并重新编号、同类型保留高分结果。
+- 创建/修改文件：
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/CitationAssembler.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/QnAServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/AgenticQnAServiceImpl.java`
+  - `kb-search/src/test/java/com/enterprise/kb/search/service/impl/CitationAssemblerTest.java`
+  - `.planning/2026-05-23-markdown-visual-rag-l2/task_plan.md`
+  - `.planning/2026-05-23-markdown-visual-rag-l2/progress.md`
 
 ## 验证结果
 | 验证项 | 输入 | 预期 | 实际 | 状态 |
@@ -163,6 +186,8 @@
 | Phase 3 编译验证 | 实现资产 API、人工修正、资产级 citation 字段 | 应用及依赖模块可编译 | `mvn -pl kb-app -am -DskipTests compile` 通过 | Pass |
 | Phase 4 文档解析、worker 和重新入库清理测试 | Markdown 可视化样例、资产 worker 成功/失败/重建场景、重新入库清理顺序 | `kb-document` 指定测试通过 | `mvn -pl kb-document -am -Dtest=MarkdownVisualIngestionServiceImplTest,VisualAssetWorkerServiceImplTest,DocumentIngestionPipelineTest -Dsurefire.failIfNoSpecifiedTests=false test` 通过 | Pass |
 | Phase 4 检索和引用测试 | 资产级字段经过混合检索和 Citation DTO | `kb-search` 指定测试通过 | `mvn -pl kb-search -am -Dtest=HybridSearchServiceImplTest,CitationTest -Dsurefire.failIfNoSpecifiedTests=false test` 通过 | Pass |
+| Phase 5 文档检查 | Markdown zip、视觉资产、L2 边界、运维和 API 文档 | 文档已补充且计划状态同步 | 已更新 `docs/operation.md`、`wiki/features/markdown-visual-rag-l2.md`、`wiki/features/document-ingestion.md` 和 `.planning` 记录 | Pass |
+| Phase 6 引用质量测试 | 同一视觉资产多条 chunk 命中时只输出一条引用，并优先保留 caption/summary | `kb-search` 指定测试通过 | `mvn -pl kb-search -am -Dtest=CitationAssemblerTest,HybridSearchServiceImplTest,CitationTest -Dsurefire.failIfNoSpecifiedTests=false test` 通过 | Pass |
 
 ## 错误日志
 | 时间 | 问题 | 尝试 | 处理结果 |
@@ -172,8 +197,8 @@
 ## 5 个问题快速恢复检查
 | 问题 | 答案 |
 |------|------|
-| 我现在在哪里？ | 下一步进入 Phase 1：资产基础设施。 |
-| 我要去哪里？ | 按阶段实现 Markdown 可视化 RAG L2。 |
+| 我现在在哪里？ | Phase 6 引用质量增强已完成。 |
+| 我要去哪里？ | 下一步可进入真实 OCR/caption provider 接入、缩略图接口和上下文扩展。 |
 | 目标是什么？ | 让 Markdown 文本、图片、流程图都能进入现有 RAG 系统，并可被检索和引用。 |
 | 我已经知道了什么？ | 见 `findings.md`。 |
-| 我已经做了什么？ | 已将确认后的 C 方案沉淀到计划文件，并按要求把 `.planning` 新增文件改为中文。 |
+| 我已经做了什么？ | 已完成 Phase 1-6：资产基础设施、异步视觉理解、资产引用/人工修正、验证测试、文档与上线说明、资产级引用去重。 |
