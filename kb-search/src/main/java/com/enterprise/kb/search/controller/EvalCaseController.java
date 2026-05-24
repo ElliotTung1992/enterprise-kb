@@ -151,5 +151,11 @@ public class EvalCaseController {
                 .orElseThrow(() -> new KbException("评估用例不存在", HttpStatus.NOT_FOUND));
     }
 
+    /**
+     * 评估用例导入结果。
+     *
+     * @param imported 成功导入数量
+     * @param errors   导入错误列表
+     */
     public record ImportResult(int imported, List<String> errors) {}
 }

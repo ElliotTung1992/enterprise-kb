@@ -16,4 +16,13 @@ public interface DocumentObjectStorageService {
      * @return 对象 key
      */
     String uploadFile(String objectKey, Path file, String contentType);
+
+    /**
+     * 生成对象的短期访问 URL。
+     *
+     * @param objectKey     对象 key
+     * @param expirySeconds 有效期（秒）
+     * @return 预签名 URL
+     */
+    String presignedGetUrl(String objectKey, int expirySeconds);
 }

@@ -131,7 +131,8 @@ public class QnAServiceImpl implements QnAService {
                 .mapToObj(i -> {
                     SearchHit h = hits.get(i);
                     return new Citation(i + 1, h.chunkId(), h.documentId(),
-                            h.documentTitle(), h.excerpt(), h.pageNumber(), h.score());
+                            h.documentTitle(), h.excerpt(), h.pageNumber(), h.score(),
+                            h.contentType(), h.assetId(), h.section(), h.anchorChunkIndex());
                 })
                 .toList();
         QnAResponse response = new QnAResponse(answer, sessionId, citations, modelUsed, tokensUsed);

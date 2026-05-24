@@ -58,5 +58,10 @@ public class EvalRunController {
         return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
+    /**
+     * 启动评估运行请求。
+     *
+     * @param dataset 数据集名称
+     */
     public record RunEvalRequest(String dataset) {}
 }

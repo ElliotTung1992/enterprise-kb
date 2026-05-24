@@ -23,4 +23,11 @@ public interface VectorStoreService {
      * @param documentId the document ID
      */
     void deleteByDocumentId(UUID documentId);
+
+    /**
+     * 删除指定视觉资产生成的向量。
+     *
+     * @param assetId 资产 ID
+     */
+    void deleteByAssetId(UUID assetId);
 }

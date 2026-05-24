@@ -132,5 +132,12 @@ public class AgentTraceController {
         };
     }
 
+    /**
+     * 从 Trace 创建评估用例的请求。
+     *
+     * @param dataset  数据集名称
+     * @param caseType 用例类型
+     * @param name     用例名称
+     */
     public record CreateEvalCaseRequest(String dataset, String caseType, String name) {}
 }

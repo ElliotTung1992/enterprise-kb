@@ -32,6 +32,12 @@ public class AutoTaggingServiceImpl implements AutoTaggingService {
     private final TagMapper tagMapper;
     private final DocumentTagMapper documentTagMapper;
 
+    /**
+     * LLM 推荐的标签 slug 与置信度。
+     *
+     * @param slug       标签标识
+     * @param confidence 推荐置信度
+     */
     public record TagSuggestion(String slug, double confidence) {}
 
     /**

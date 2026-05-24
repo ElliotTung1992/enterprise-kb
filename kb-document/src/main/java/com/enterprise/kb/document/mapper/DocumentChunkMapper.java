@@ -59,6 +59,13 @@ public interface DocumentChunkMapper {
     void deleteByDocumentId(@Param("documentId") UUID documentId);
 
     /**
+     * 删除指定资产生成的视觉语义分块。
+     *
+     * @param assetId 资产 ID
+     */
+    void deleteVisualByAssetId(@Param("assetId") UUID assetId);
+
+    /**
      * 删除空间内所有文档的分块
      *
      * @param spaceId 空间 ID

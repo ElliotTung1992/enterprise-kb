@@ -35,16 +35,17 @@ Phase 2
 - **状态：** in_progress
 
 ### Phase 3：资产引用与人工修正
-- [ ] 扩展 `Citation`，支持资产级引用。
-- [ ] 增加资产列表、详情、内容、缩略图接口。
-- [ ] 通过文档所属知识空间的 `VIEWER` 权限校验资产访问。
-- [ ] 后端鉴权通过后返回短期有效的 MinIO presigned URL。
-- [ ] 增加人工修正 caption/summary 的字段和 API。
-- [ ] 人工修正后将资产标记为 `REINDEX_PENDING`。
-- [ ] worker 删除旧的资产视觉 chunk/vector，并基于人工修正内容重建。
+- [x] 扩展 `Citation`，支持资产级引用。
+- [x] 增加资产列表、详情、内容接口。
+- [ ] 增加缩略图接口。
+- [x] 通过文档所属知识空间的 `VIEWER` 权限校验资产访问。
+- [x] 后端鉴权通过后返回短期有效的 MinIO presigned URL。
+- [x] 增加人工修正 caption/summary 的字段和 API。
+- [x] 人工修正后将资产标记为 `REINDEX_PENDING`。
+- [x] worker 删除旧的资产视觉 chunk/vector，并基于人工修正内容重建。
 - [ ] 增加基于 `documentId + section + anchor_chunk_index` 的检索上下文扩展。
 - [ ] 按 `assetId` 合并引用，优先使用 caption/summary chunk，弱化 reference/source chunk。
-- **状态：** pending
+- **状态：** in_progress
 
 ### Phase 4：验证与评估
 - [ ] 增加 Markdown 图片、缺失图片、Mermaid、PlantUML 的解析单元测试。

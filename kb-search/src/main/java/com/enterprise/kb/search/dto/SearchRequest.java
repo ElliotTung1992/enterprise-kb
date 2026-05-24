@@ -7,6 +7,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * 搜索请求 DTO。
+ *
+ * @param query         查询文本
+ * @param topK          返回结果数量
+ * @param modelProvider 模型提供商
+ * @param filters       搜索过滤条件
+ * @param semanticQuery 语义检索查询文本
+ */
 public record SearchRequest(
         @NotBlank String query,
         @Positive int topK,
@@ -24,6 +33,14 @@ public record SearchRequest(
         this(query, topK, modelProvider, filters, null);
     }
 
+    /**
+     * 搜索过滤条件。
+     *
+     * @param tagIds    标签 ID 列表
+     * @param dateFrom  创建时间起点
+     * @param dateTo    创建时间终点
+     * @param mimeTypes MIME 类型列表
+     */
     public record SearchFilters(
             List<UUID> tagIds,
             Instant dateFrom,

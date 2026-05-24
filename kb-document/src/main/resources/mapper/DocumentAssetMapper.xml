@@ -86,9 +86,16 @@
         ORDER BY asset_index ASC
     </select>
 
+    <select id="findByDocumentIdAndAssetId" resultMap="DocumentAssetResultMap">
+        SELECT * FROM document_assets
+        WHERE document_id = #{documentId,jdbcType=OTHER}
+          AND id = #{assetId,jdbcType=OTHER}
+        LIMIT 1
+    </select>
+
     <select id="findPendingForProcessing" resultMap="DocumentAssetResultMap">
         SELECT * FROM document_assets
-        WHERE status = 'PENDING'
+        WHERE status IN ('PENDING', 'REINDEX_PENDING')
           AND (next_retry_at IS NULL OR next_retry_at &lt;= NOW())
         ORDER BY created_at ASC
         LIMIT #{limit}
@@ -109,10 +116,13 @@
 
     <update id="markProcessing">
         UPDATE document_assets
-        SET status = 'PROCESSING',
+        SET status = CASE
+                WHEN status = 'REINDEX_PENDING' THEN 'REINDEXING'
+                ELSE 'PROCESSING'
+            END,
             updated_at = NOW()
         WHERE id = #{id,jdbcType=OTHER}
-          AND status = 'PENDING'
+          AND status IN ('PENDING', 'REINDEX_PENDING')
     </update>
 
     <update id="updateUnderstanding">
@@ -126,6 +136,17 @@
             last_error = #{asset.lastError},
             updated_at = #{asset.updatedAt}
         WHERE id = #{asset.id,jdbcType=OTHER}
+    </update>
+
+    <update id="updateManualCorrection">
+        UPDATE document_assets
+        SET manual_caption = #{manualCaption},
+            manual_summary = #{manualSummary},
+            status = 'REINDEX_PENDING',
+            next_retry_at = NULL,
+            last_error = NULL,
+            updated_at = NOW()
+        WHERE id = #{id,jdbcType=OTHER}
     </update>
 
     <update id="markRetry">

@@ -49,4 +49,11 @@ public class VectorStoreServiceImpl implements VectorStoreService {
         vectorStore.delete(b.eq("documentId", documentId.toString()).build());
         log.debug("Deleted vectors for documentId={}", documentId);
     }
+
+    @Override
+    public void deleteByAssetId(UUID assetId) {
+        FilterExpressionBuilder b = new FilterExpressionBuilder();
+        vectorStore.delete(b.eq("assetId", assetId.toString()).build());
+        log.debug("Deleted vectors for assetId={}", assetId);
+    }
 }

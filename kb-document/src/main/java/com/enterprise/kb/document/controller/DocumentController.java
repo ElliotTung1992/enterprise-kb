@@ -4,8 +4,12 @@ import com.enterprise.kb.common.constants.DocumentStatus;
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.common.dto.PageResponse;
 import com.enterprise.kb.document.dto.AddRelationRequest;
+import com.enterprise.kb.document.dto.AssetCorrectionRequest;
+import com.enterprise.kb.document.dto.AssetUrlResponse;
+import com.enterprise.kb.document.dto.DocumentAssetDto;
 import com.enterprise.kb.document.dto.DocumentDto;
 import com.enterprise.kb.document.dto.DocumentRelationDto;
+import com.enterprise.kb.document.service.DocumentAssetService;
 import com.enterprise.kb.document.service.DocumentRelationService;
 import com.enterprise.kb.document.service.DocumentService;
 import jakarta.validation.Valid;
@@ -36,6 +40,7 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final DocumentRelationService relationService;
+    private final DocumentAssetService assetService;
     private final com.enterprise.kb.user.service.UserService userService;
 
     /**
@@ -178,6 +183,72 @@ public class DocumentController {
     public ResponseEntity<ApiResponse<List<DocumentRelationDto>>> getRelations(
             @PathVariable UUID spaceId, @PathVariable UUID docId) {
         return ResponseEntity.ok(ApiResponse.ok(relationService.getRelations(docId)));
+    }
+
+    /**
+     * 查询文档视觉资产列表
+     * <p>返回 Markdown 入库时抽取出的图片和流程图资产。</p>
+     *
+     * @param spaceId 空间 ID
+     * @param docId   文档 ID
+     * @return 视觉资产列表
+     */
+    @GetMapping("/{docId}/assets")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    public ResponseEntity<ApiResponse<List<DocumentAssetDto>>> listAssets(
+            @PathVariable UUID spaceId, @PathVariable UUID docId) {
+        return ResponseEntity.ok(ApiResponse.ok(assetService.listAssets(spaceId, docId)));
+    }
+
+    /**
+     * 查询文档视觉资产详情
+     *
+     * @param spaceId 空间 ID
+     * @param docId   文档 ID
+     * @param assetId 资产 ID
+     * @return 视觉资产详情
+     */
+    @GetMapping("/{docId}/assets/{assetId}")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    public ResponseEntity<ApiResponse<DocumentAssetDto>> getAsset(
+            @PathVariable UUID spaceId, @PathVariable UUID docId, @PathVariable UUID assetId) {
+        return ResponseEntity.ok(ApiResponse.ok(assetService.getAsset(spaceId, docId, assetId)));
+    }
+
+    /**
+     * 获取视觉资产内容访问 URL
+     * <p>后端完成空间权限校验后，返回短期有效的 MinIO 预签名 URL。</p>
+     *
+     * @param spaceId 空间 ID
+     * @param docId   文档 ID
+     * @param assetId 资产 ID
+     * @return 短期访问 URL
+     */
+    @GetMapping("/{docId}/assets/{assetId}/content")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    public ResponseEntity<ApiResponse<AssetUrlResponse>> getAssetContentUrl(
+            @PathVariable UUID spaceId, @PathVariable UUID docId, @PathVariable UUID assetId) {
+        return ResponseEntity.ok(ApiResponse.ok(assetService.createContentUrl(spaceId, docId, assetId)));
+    }
+
+    /**
+     * 人工修正视觉资产描述和摘要
+     * <p>保存修正内容后，资产会进入 REINDEX_PENDING 状态，等待 worker 异步重建视觉 chunk 和向量。</p>
+     *
+     * @param spaceId 空间 ID
+     * @param docId   文档 ID
+     * @param assetId 资产 ID
+     * @param request 修正请求
+     * @return 更新后的视觉资产详情
+     */
+    @PatchMapping("/{docId}/assets/{assetId}/correction")
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'EDITOR')")
+    public ResponseEntity<ApiResponse<DocumentAssetDto>> correctAsset(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID docId,
+            @PathVariable UUID assetId,
+            @RequestBody AssetCorrectionRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(assetService.correctAsset(spaceId, docId, assetId, request)));
     }
 
     /**

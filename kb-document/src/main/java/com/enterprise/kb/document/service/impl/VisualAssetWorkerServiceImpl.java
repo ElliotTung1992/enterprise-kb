@@ -79,6 +79,10 @@ public class VisualAssetWorkerServiceImpl implements VisualAssetWorkerService {
             return;
         }
         try {
+            if (asset.getStatus() == AssetStatus.REINDEX_PENDING) {
+                vectorStoreService.deleteByAssetId(asset.getId());
+                chunkMapper.deleteVisualByAssetId(asset.getId());
+            }
             VisualUnderstandingResult result = visualUnderstandingService.understand(asset);
             asset.setOcrText(result.ocrText());
             asset.setCaption(result.caption());
@@ -191,7 +195,8 @@ public class VisualAssetWorkerServiceImpl implements VisualAssetWorkerService {
 
     private void recomputeDocumentStatus(UUID documentId) {
         long pending = assetMapper.countByDocumentIdAndStatuses(documentId,
-                List.of(AssetStatus.PENDING.name(), AssetStatus.PROCESSING.name()));
+                List.of(AssetStatus.PENDING.name(), AssetStatus.PROCESSING.name(),
+                        AssetStatus.REINDEX_PENDING.name(), AssetStatus.REINDEXING.name()));
         long failed = assetMapper.countByDocumentIdAndStatuses(documentId, List.of(AssetStatus.FAILED.name()));
         documentMapper.findByIdAndDeletedAtIsNull(documentId).ifPresent(document -> {
             if (pending > 0) {

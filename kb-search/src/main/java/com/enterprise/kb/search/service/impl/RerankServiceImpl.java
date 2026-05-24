@@ -68,7 +68,8 @@ public class RerankServiceImpl implements RerankService {
                         // 用 Rerank 相关性分数替换原来的 RRF 分数
                         return new SearchHit(original.chunkId(), original.documentId(),
                                 original.documentTitle(), original.excerpt(),
-                                original.pageNumber(), result.getScore(), original.mimeType());
+                                original.pageNumber(), result.getScore(), original.mimeType(),
+                                original.contentType(), original.assetId(), original.section(), original.anchorChunkIndex());
                     })
                     .toList();
 

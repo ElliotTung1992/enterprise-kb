@@ -8,6 +8,11 @@ import java.math.BigDecimal;
 /**
  * 修改投诉处理计划并审批通过的请求体。
  * <p>所有字段均为可选，仅传入需要修改的字段，不传则保持原值。</p>
+ *
+ * @param responsibleParty   修改后的责任方
+ * @param compensationType   修改后的补偿类型
+ * @param compensationAmount 修改后的补偿金额
+ * @param comment            审批意见或修改说明
  */
 public record ComplaintPlanModifyRequest(
         /** 修改后的责任方，为 null 则保持原值 */

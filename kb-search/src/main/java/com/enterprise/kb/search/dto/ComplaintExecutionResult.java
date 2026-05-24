@@ -4,6 +4,10 @@ import java.util.UUID;
 
 /**
  * 投诉处理计划执行结果
+ *
+ * @param planId      计划 ID
+ * @param complaintId 投诉案件 ID
+ * @param summary     执行摘要
  */
 public record ComplaintExecutionResult(
         /** 计划 ID */

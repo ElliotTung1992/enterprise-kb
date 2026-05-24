@@ -31,6 +31,16 @@ public interface DocumentAssetMapper {
     List<DocumentAsset> findByDocumentId(@Param("documentId") UUID documentId);
 
     /**
+     * 查询文档下的指定视觉资产。
+     *
+     * @param documentId 文档 ID
+     * @param assetId    资产 ID
+     * @return 资产实体
+     */
+    Optional<DocumentAsset> findByDocumentIdAndAssetId(@Param("documentId") UUID documentId,
+                                                       @Param("assetId") UUID assetId);
+
+    /**
      * 查询待处理的视觉资产。
      *
      * @param limit 最大返回数量
@@ -70,6 +80,17 @@ public interface DocumentAssetMapper {
      * @param asset 资产实体
      */
     void updateUnderstanding(@Param("asset") DocumentAsset asset);
+
+    /**
+     * 保存人工修正内容，并标记资产等待重建索引。
+     *
+     * @param id            资产 ID
+     * @param manualCaption 人工修正描述
+     * @param manualSummary 人工修正摘要
+     */
+    void updateManualCorrection(@Param("id") UUID id,
+                                @Param("manualCaption") String manualCaption,
+                                @Param("manualSummary") String manualSummary);
 
     /**
      * 标记资产等待重试。

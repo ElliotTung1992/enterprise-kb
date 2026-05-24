@@ -2,9 +2,11 @@ package com.enterprise.kb.document.service.impl;
 
 import com.enterprise.kb.document.service.DocumentObjectStorageService;
 import io.minio.BucketExistsArgs;
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.UploadObjectArgs;
+import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,21 @@ public class MinioDocumentObjectStorageService implements DocumentObjectStorageS
             return objectKey;
         } catch (Exception e) {
             throw new IllegalStateException("上传对象到 MinIO 失败: " + objectKey, e);
+        }
+    }
+
+    @Override
+    public String presignedGetUrl(String objectKey, int expirySeconds) {
+        try {
+            ensureBucket();
+            return minioClient.getPresignedObjectUrl(GetPresignedObjectUrlArgs.builder()
+                    .method(Method.GET)
+                    .bucket(bucket)
+                    .object(objectKey)
+                    .expiry(expirySeconds)
+                    .build());
+        } catch (Exception e) {
+            throw new IllegalStateException("生成 MinIO 预签名 URL 失败: " + objectKey, e);
         }
     }
 

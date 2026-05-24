@@ -87,11 +87,38 @@
   - `kb-document/src/main/java/com/enterprise/kb/document/pipeline/DocumentIngestionPipeline.java`
 
 ### Phase 3：资产引用与人工修正
-- **状态：** pending
+- **状态：** in_progress
 - 已完成动作：
-  -
+  - 新增视觉资产 DTO、Service 和 Controller API。
+  - 增加资产列表、详情、内容 URL 接口，复用空间级 `VIEWER` 权限。
+  - 增加 MinIO 短期 presigned URL 生成能力。
+  - 增加人工修正接口，保存 `manualCaption` / `manualSummary` 并将资产标记为 `REINDEX_PENDING`。
+  - worker 支持处理 `REINDEX_PENDING`：删除旧资产视觉 chunk/vector，再用人工修正内容重建。
+  - 扩展 `SearchHit` 和 `Citation`，带出 `contentType`、`assetId`、`section`、`anchorChunkIndex`。
+  - 语义检索和关键词检索均返回资产级引用字段。
 - 创建/修改文件：
-  -
+  - `kb-document/src/main/java/com/enterprise/kb/document/dto/DocumentAssetDto.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/dto/AssetUrlResponse.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/dto/AssetCorrectionRequest.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/DocumentAssetService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/DocumentAssetServiceImpl.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/controller/DocumentController.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/DocumentObjectStorageService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/MinioDocumentObjectStorageService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/VectorStoreService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/VectorStoreServiceImpl.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/mapper/DocumentAssetMapper.java`
+  - `kb-document/src/main/resources/mapper/DocumentAssetMapper.xml`
+  - `kb-document/src/main/java/com/enterprise/kb/document/mapper/DocumentChunkMapper.java`
+  - `kb-document/src/main/resources/mapper/DocumentChunkMapper.xml`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/VisualAssetWorkerServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/dto/SearchHit.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/dto/Citation.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/SemanticSearchServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/KeywordSearchServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/RerankServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/QnAServiceImpl.java`
+  - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/AgenticQnAServiceImpl.java`
 
 ### Phase 4：验证与评估
 - **状态：** pending
@@ -117,6 +144,7 @@
 | `.planning` 文件中文化 | 用户要求 `.planning` 下新增文件改为中文 | 计划、发现、进度文件主体为中文 | 已将三个新增计划文件改为中文，技术标识保持原样 | Pass |
 | Phase 1 编译验证 | 实现资产基础设施和 Markdown zip 视觉入库 | `kb-document` 及依赖模块可编译 | `mvn -pl kb-document -am -DskipTests compile` 通过 | Pass |
 | Phase 2 编译验证 | 实现异步视觉理解 worker 基础链路 | 应用及依赖模块可编译 | `mvn -pl kb-app -am -DskipTests compile` 通过 | Pass |
+| Phase 3 编译验证 | 实现资产 API、人工修正、资产级 citation 字段 | 应用及依赖模块可编译 | `mvn -pl kb-app -am -DskipTests compile` 通过 | Pass |
 
 ## 错误日志
 | 时间 | 问题 | 尝试 | 处理结果 |

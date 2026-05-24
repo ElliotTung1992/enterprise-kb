@@ -41,7 +41,8 @@ public class KeywordSearchServiceImpl implements KeywordSearchService {
         String sql = """
                 SELECT dc.id::text AS chunk_id, dc.document_id::text AS document_id,
                        d.title AS document_title, dc.content AS excerpt, dc.page_number,
-                       similarity(?, dc.content) AS score
+                       similarity(?, dc.content) AS score,
+                       dc.content_type, dc.asset_id::text AS asset_id, dc.section, dc.anchor_chunk_index
                 FROM document_chunks dc
                 JOIN documents d ON d.id = dc.document_id
                 WHERE d.space_id = ?::uuid AND d.deleted_at IS NULL
@@ -52,7 +53,11 @@ public class KeywordSearchServiceImpl implements KeywordSearchService {
                 (rs, rowNum) -> new SearchHit(
                         rs.getString("chunk_id"), UUID.fromString(rs.getString("document_id")),
                         rs.getString("document_title"), truncate(rs.getString("excerpt"), 300),
-                        rs.getObject("page_number", Integer.class), rs.getDouble("score"), null),
+                        rs.getObject("page_number", Integer.class), rs.getDouble("score"), null,
+                        rs.getString("content_type"),
+                        rs.getString("asset_id") != null ? UUID.fromString(rs.getString("asset_id")) : null,
+                        rs.getString("section"),
+                        rs.getObject("anchor_chunk_index", Integer.class)),
                 req.query(), spaceId.toString(), req.query(), req.topK());
         return new SearchResponse(hits, hits.size(), "KEYWORD", System.currentTimeMillis() - start);
     }

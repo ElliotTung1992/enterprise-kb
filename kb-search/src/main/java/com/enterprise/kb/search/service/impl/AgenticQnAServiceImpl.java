@@ -203,7 +203,8 @@ public class AgenticQnAServiceImpl implements AgenticQnAService {
                 .map(e -> {
                     SearchHit h = acc.bestHitByChunkId.get(e.getKey());
                     return new Citation(e.getValue(), h.chunkId(), h.documentId(),
-                            h.documentTitle(), h.excerpt(), h.pageNumber(), h.score());
+                            h.documentTitle(), h.excerpt(), h.pageNumber(), h.score(),
+                            h.contentType(), h.assetId(), h.section(), h.anchorChunkIndex());
                 })
                 .toList();
 

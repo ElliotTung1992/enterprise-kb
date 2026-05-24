@@ -53,10 +53,21 @@ public class SemanticSearchServiceImpl implements SemanticSearchService {
             Object pageNum = doc.getMetadata().get("page_number");
             Integer page = pageNum != null ? Integer.parseInt(pageNum.toString()) : null;
             double score = doc.getScore() != null ? doc.getScore() : 0.0;
+            Object assetId = doc.getMetadata().get("assetId");
+            Object anchorChunkIndex = doc.getMetadata().get("anchorChunkIndex");
             return new SearchHit(doc.getId(), documentId, resolveDocTitle(documentId),
-                    truncate(doc.getText(), 300), page, score, null);
+                    truncate(doc.getText(), 300), page, score, null,
+                    metadataString(doc, "contentType"),
+                    assetId != null ? UUID.fromString(assetId.toString()) : null,
+                    metadataString(doc, "section"),
+                    anchorChunkIndex != null ? Integer.parseInt(anchorChunkIndex.toString()) : null);
         }).toList();
         return new SearchResponse(hits, hits.size(), "SEMANTIC", System.currentTimeMillis() - start);
+    }
+
+    private String metadataString(Document doc, String key) {
+        Object value = doc.getMetadata().get(key);
+        return value == null ? null : value.toString();
     }
 
     private String resolveDocTitle(UUID documentId) {
