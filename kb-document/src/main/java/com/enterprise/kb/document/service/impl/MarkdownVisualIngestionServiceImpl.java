@@ -112,6 +112,11 @@ public class MarkdownVisualIngestionServiceImpl implements MarkdownVisualIngesti
     @Override
     @Transactional
     public void deleteByDocumentId(UUID documentId) {
+        List<DocumentAsset> assets = assetMapper.findByDocumentId(documentId);
+        for (DocumentAsset asset : assets) {
+            deleteObjectQuietly(asset.getObjectKey());
+            deleteObjectQuietly(asset.getThumbnailObjectKey());
+        }
         assetMapper.deleteByDocumentId(documentId);
     }
 
@@ -513,6 +518,15 @@ public class MarkdownVisualIngestionServiceImpl implements MarkdownVisualIngesti
     private String objectKey(IngestionContext ctx, String category, String fileName) {
         return "documents/%s/%s/%s/%s".formatted(
                 ctx.getSpaceId(), ctx.getDocumentId(), category, safeFileName(fileName));
+    }
+
+    private void deleteObjectQuietly(String objectKey) {
+        if (!StringUtils.hasText(objectKey)) return;
+        try {
+            objectStorageService.deleteFile(objectKey);
+        } catch (Exception e) {
+            log.warn("删除视觉资产对象失败: objectKey={}", objectKey, e);
+        }
     }
 
     private String safeFileName(String name) {

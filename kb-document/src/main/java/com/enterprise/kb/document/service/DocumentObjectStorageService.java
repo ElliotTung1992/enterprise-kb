@@ -18,6 +18,13 @@ public interface DocumentObjectStorageService {
     String uploadFile(String objectKey, Path file, String contentType);
 
     /**
+     * 删除对象存储中的文件。
+     *
+     * @param objectKey 对象 key
+     */
+    void deleteFile(String objectKey);
+
+    /**
      * 生成对象的短期访问 URL。
      *
      * @param objectKey     对象 key

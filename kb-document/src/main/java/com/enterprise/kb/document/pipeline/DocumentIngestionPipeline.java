@@ -50,6 +50,8 @@ public class DocumentIngestionPipeline {
             doc.setStatus(DocumentStatus.PROCESSING);
             doc.setUpdatedAt(Instant.now());
             documentMapper.update(doc);
+            vectorStoreService.deleteByDocumentId(ctx.getDocumentId());
+            chunkMetadataService.deleteByDocumentId(ctx.getDocumentId());
             markdownVisualIngestionService.deleteByDocumentId(ctx.getDocumentId());
             MarkdownVisualIngestionResult visualResult = MarkdownVisualIngestionResult.empty();
             List<org.springframework.ai.document.Document> parsed;

@@ -140,4 +140,24 @@ class HybridSearchServiceImplTest {
         assertThat(hits).hasSize(1);
         assertThat(hits.get(0).chunkId()).isEqualTo("chunk-kw");
     }
+
+    @Test
+    void assetCitationFieldsSurviveHybridFusion() {
+        UUID assetId = UUID.randomUUID();
+        SearchHit visualHit = new SearchHit(
+                "visual-chunk", UUID.randomUUID(), "Visual Doc", "图片说明",
+                null, 0.9, "text/markdown", "IMAGE_CAPTION", assetId, "图片章节", 3);
+
+        when(semanticSearchService.search(any(), any()))
+                .thenReturn(response(visualHit));
+        when(keywordSearchService.search(any(), any()))
+                .thenReturn(response());
+
+        SearchHit fused = hybridSearchService.search(SPACE_ID, REQUEST).hits().getFirst();
+
+        assertThat(fused.contentType()).isEqualTo("IMAGE_CAPTION");
+        assertThat(fused.assetId()).isEqualTo(assetId);
+        assertThat(fused.section()).isEqualTo("图片章节");
+        assertThat(fused.anchorChunkIndex()).isEqualTo(3);
+    }
 }

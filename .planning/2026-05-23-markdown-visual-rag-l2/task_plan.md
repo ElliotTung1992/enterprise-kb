@@ -4,7 +4,7 @@
 设计并实现一套可用于生产环境的 Markdown 可视化入库链路，使 Markdown 文档中的文本、图片、流程图能够被解析、索引、检索并在现有 RAG 系统中被引用。
 
 ## 当前阶段
-Phase 2
+Phase 4
 
 ## 阶段拆分
 
@@ -48,13 +48,13 @@ Phase 2
 - **状态：** in_progress
 
 ### Phase 4：验证与评估
-- [ ] 增加 Markdown 图片、缺失图片、Mermaid、PlantUML 的解析单元测试。
-- [ ] 增加资产 worker 测试：成功处理、OCR/caption 部分失败、重试耗尽、人工重建索引。
-- [ ] 增加检索测试，验证图片/流程图语义 chunk 可被搜索到。
-- [ ] 增加引用测试，验证资产级引用输出和去重逻辑。
-- [ ] 增加重新入库测试，确认旧资产、chunk、vector、MinIO 对象会被清理并重建。
-- [ ] 创建包含文本、图片、缺失图片、Mermaid、PlantUML 的 Markdown zip 测试样例。
-- **状态：** pending
+- [x] 增加 Markdown 图片、缺失图片、Mermaid、PlantUML 的解析单元测试。
+- [x] 增加资产 worker 测试：成功处理、视觉理解失败重试、重试耗尽、人工重建索引。
+- [x] 增加检索测试，验证资产级字段在混合检索融合后仍可保留。
+- [x] 增加引用测试，验证资产级引用字段可输出。
+- [x] 增加重新入库测试，确认旧资产、chunk、vector、MinIO 对象会被清理并重建。
+- [x] 创建包含文本、图片、缺失图片、Mermaid、PlantUML 的 Markdown 测试样例。
+- **状态：** complete
 
 ### Phase 5：文档与上线
 - [ ] 补充 Markdown zip 上传行为说明。

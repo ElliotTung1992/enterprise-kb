@@ -5,6 +5,7 @@ import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
 import io.minio.UploadObjectArgs;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,19 @@ public class MinioDocumentObjectStorageService implements DocumentObjectStorageS
             return objectKey;
         } catch (Exception e) {
             throw new IllegalStateException("上传对象到 MinIO 失败: " + objectKey, e);
+        }
+    }
+
+    @Override
+    public void deleteFile(String objectKey) {
+        try {
+            ensureBucket();
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectKey)
+                    .build());
+        } catch (Exception e) {
+            throw new IllegalStateException("删除 MinIO 对象失败: " + objectKey, e);
         }
     }
 

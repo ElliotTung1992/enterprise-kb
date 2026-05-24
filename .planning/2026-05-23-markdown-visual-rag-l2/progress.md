@@ -121,11 +121,27 @@
   - `kb-search/src/main/java/com/enterprise/kb/search/service/impl/AgenticQnAServiceImpl.java`
 
 ### Phase 4：验证与评估
-- **状态：** pending
+- **状态：** complete
 - 已完成动作：
-  -
+  - 增加 Markdown 可视化入库测试样例，覆盖正文、图片引用、缺失图片、Mermaid 和 PlantUML。
+  - 增加 `MarkdownVisualIngestionServiceImplTest`，验证 zip 安全解析、图片上传、缺失图片跳过和流程图资产抽取。
+  - 增加 `VisualAssetWorkerServiceImplTest`，验证资产处理成功、失败重试、重试耗尽和人工修正后的重建索引。
+  - 补齐重新入库前清理逻辑，确保旧 vector、旧 chunk、旧视觉资产记录和旧资产对象先清理再重建。
+  - 增加 `DocumentIngestionPipelineTest`，验证重新入库清理顺序。
+  - 增加混合检索测试，验证 `contentType`、`assetId`、`section`、`anchorChunkIndex` 在融合结果中保留。
+  - 增加 `CitationTest`，验证资产级引用字段可被 DTO 输出。
 - 创建/修改文件：
-  -
+  - `kb-document/src/test/resources/markdown-visual-rag-l2/README.md`
+  - `kb-document/src/test/resources/markdown-visual-rag-l2/images/architecture.svg`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/DocumentObjectStorageService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/MinioDocumentObjectStorageService.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/service/impl/MarkdownVisualIngestionServiceImpl.java`
+  - `kb-document/src/main/java/com/enterprise/kb/document/pipeline/DocumentIngestionPipeline.java`
+  - `kb-document/src/test/java/com/enterprise/kb/document/pipeline/DocumentIngestionPipelineTest.java`
+  - `kb-document/src/test/java/com/enterprise/kb/document/service/impl/MarkdownVisualIngestionServiceImplTest.java`
+  - `kb-document/src/test/java/com/enterprise/kb/document/service/impl/VisualAssetWorkerServiceImplTest.java`
+  - `kb-search/src/test/java/com/enterprise/kb/search/service/impl/HybridSearchServiceImplTest.java`
+  - `kb-search/src/test/java/com/enterprise/kb/search/dto/CitationTest.java`
 
 ### Phase 5：文档与上线
 - **状态：** pending
@@ -145,6 +161,8 @@
 | Phase 1 编译验证 | 实现资产基础设施和 Markdown zip 视觉入库 | `kb-document` 及依赖模块可编译 | `mvn -pl kb-document -am -DskipTests compile` 通过 | Pass |
 | Phase 2 编译验证 | 实现异步视觉理解 worker 基础链路 | 应用及依赖模块可编译 | `mvn -pl kb-app -am -DskipTests compile` 通过 | Pass |
 | Phase 3 编译验证 | 实现资产 API、人工修正、资产级 citation 字段 | 应用及依赖模块可编译 | `mvn -pl kb-app -am -DskipTests compile` 通过 | Pass |
+| Phase 4 文档解析、worker 和重新入库清理测试 | Markdown 可视化样例、资产 worker 成功/失败/重建场景、重新入库清理顺序 | `kb-document` 指定测试通过 | `mvn -pl kb-document -am -Dtest=MarkdownVisualIngestionServiceImplTest,VisualAssetWorkerServiceImplTest,DocumentIngestionPipelineTest -Dsurefire.failIfNoSpecifiedTests=false test` 通过 | Pass |
+| Phase 4 检索和引用测试 | 资产级字段经过混合检索和 Citation DTO | `kb-search` 指定测试通过 | `mvn -pl kb-search -am -Dtest=HybridSearchServiceImplTest,CitationTest -Dsurefire.failIfNoSpecifiedTests=false test` 通过 | Pass |
 
 ## 错误日志
 | 时间 | 问题 | 尝试 | 处理结果 |
