@@ -2,6 +2,7 @@ package com.enterprise.kb.document.service.impl;
 
 import com.enterprise.kb.document.service.DocumentObjectStorageService;
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
@@ -12,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -49,6 +52,21 @@ public class MinioDocumentObjectStorageService implements DocumentObjectStorageS
             return objectKey;
         } catch (Exception e) {
             throw new IllegalStateException("上传对象到 MinIO 失败: " + objectKey, e);
+        }
+    }
+
+    @Override
+    public void downloadFile(String objectKey, Path target) {
+        try {
+            ensureBucket();
+            try (InputStream inputStream = minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectKey)
+                    .build())) {
+                Files.copy(inputStream, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("从 MinIO 下载对象失败: " + objectKey, e);
         }
     }
 

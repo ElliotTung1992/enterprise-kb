@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.document.mapper.MdDocumentMapper">
+
+    <resultMap id="MdDocumentResultMap" type="com.enterprise.kb.document.model.MdDocument">
+        <id property="id" column="id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="uploadedBy" column="uploaded_by"/>
+        <result property="title" column="title"/>
+        <result property="originalFilename" column="original_filename"/>
+        <result property="objectKey" column="object_key"/>
+        <result property="fileSizeBytes" column="file_size_bytes"/>
+        <result property="mimeType" column="mime_type"/>
+        <result property="status" column="status"/>
+        <result property="chunkCount" column="chunk_count"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="metadata" column="metadata"
+                typeHandler="com.enterprise.kb.document.typehandler.JsonbTypeHandler"/>
+        <result property="headingTree" column="heading_tree"
+                typeHandler="com.enterprise.kb.document.typehandler.JsonbTypeHandler"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="deletedAt" column="deleted_at"/>
+    </resultMap>
+
+    <select id="findByIdAndDeletedAtIsNull" resultMap="MdDocumentResultMap">
+        SELECT * FROM md_documents WHERE id = #{id,jdbcType=OTHER} AND deleted_at IS NULL LIMIT 1
+    </select>
+
+    <select id="findBySpaceId" resultMap="MdDocumentResultMap">
+        SELECT * FROM md_documents
+        WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+        <if test="status != null">AND status = #{status}</if>
+        <if test="keyword != null and keyword != ''">AND LOWER(title) LIKE LOWER(CONCAT('%', #{keyword}, '%'))</if>
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findIdsBySpaceId" resultType="java.util.UUID">
+        SELECT id FROM md_documents WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+    </select>
+
+    <insert id="insert" useGeneratedKeys="false">
+        INSERT INTO md_documents (
+            id, space_id, uploaded_by, title, original_filename, object_key,
+            file_size_bytes, mime_type, status, chunk_count, error_message,
+            metadata, heading_tree, created_at, updated_at, deleted_at
+        ) VALUES (
+            #{id,jdbcType=OTHER},
+            #{spaceId,jdbcType=OTHER},
+            #{uploadedBy,jdbcType=OTHER},
+            #{title},
+            #{originalFilename},
+            #{objectKey},
+            #{fileSizeBytes},
+            #{mimeType},
+            #{status},
+            #{chunkCount},
+            #{errorMessage},
+            #{metadata,typeHandler=com.enterprise.kb.document.typehandler.JsonbTypeHandler,jdbcType=OTHER},
+            #{headingTree,typeHandler=com.enterprise.kb.document.typehandler.JsonbTypeHandler,jdbcType=OTHER},
+            #{createdAt},
+            #{updatedAt},
+            #{deletedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE md_documents SET
+            title = #{title},
+            status = #{status},
+            chunk_count = #{chunkCount},
+            error_message = #{errorMessage},
+            metadata = #{metadata,typeHandler=com.enterprise.kb.document.typehandler.JsonbTypeHandler,jdbcType=OTHER},
+            heading_tree = #{headingTree,typeHandler=com.enterprise.kb.document.typehandler.JsonbTypeHandler,jdbcType=OTHER},
+            updated_at = #{updatedAt},
+            deleted_at = #{deletedAt}
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+    <update id="softDeleteBySpaceId">
+        UPDATE md_documents SET deleted_at = NOW(), updated_at = NOW()
+        WHERE space_id = #{spaceId,jdbcType=OTHER} AND deleted_at IS NULL
+    </update>
+</mapper>

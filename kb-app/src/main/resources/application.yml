@@ -147,6 +147,14 @@ enterprise:
       include-prompts: ${AGENT_TRACE_INCLUDE_PROMPTS:true}
       # 是否记录检索片段正文，用于评估检索和答案 grounding
       include-retrieval-excerpts: ${AGENT_TRACE_INCLUDE_RETRIEVAL_EXCERPTS:true}
+    milvus:
+      md-collection: ${MILVUS_MD_COLLECTION:md_kb_chunks}
+    search:
+      md-parent-expansion:
+        max-parents: ${MD_PARENT_EXPANSION_MAX_PARENTS:5}
+        max-chars-per-parent: ${MD_PARENT_EXPANSION_MAX_CHARS_PER_PARENT:2000}
+        max-windows-per-parent: ${MD_PARENT_EXPANSION_MAX_WINDOWS_PER_PARENT:3}
+        max-context-chars: ${MD_PARENT_EXPANSION_MAX_CONTEXT_CHARS:10000}
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
       minio:
@@ -180,6 +188,10 @@ enterprise:
     chunking:
       chunk-size: 512
       overlap-tokens: 100
+      markdown:
+        max-tokens: ${MD_CHUNK_MAX_TOKENS:512}
+        min-tokens: ${MD_CHUNK_MIN_TOKENS:64}
+        split-heading-levels: 3
 
 logging:
   level:

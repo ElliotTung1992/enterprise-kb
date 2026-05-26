@@ -18,6 +18,14 @@ public interface DocumentObjectStorageService {
     String uploadFile(String objectKey, Path file, String contentType);
 
     /**
+     * 从对象存储下载文件到本地临时路径。
+     *
+     * @param objectKey 对象 key
+     * @param target    本地目标路径
+     */
+    void downloadFile(String objectKey, Path target);
+
+    /**
      * 删除对象存储中的文件。
      *
      * @param objectKey 对象 key

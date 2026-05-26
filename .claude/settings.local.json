@@ -22,7 +22,19 @@
       "Bash(grep -E \"\\\\.java$\")",
       "Bash(export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home)",
       "Bash(mvn -q install -pl kb-search -am -DskipTests)",
-      "Bash(docker exec *)"
+      "Bash(docker exec *)",
+      "Bash(grep \"\\\\.java$\")",
+      "Bash(grep -E \"\\\\.\\(java|xml\\)$\")",
+      "Bash(mvn -q -pl kb-document test -Dtest=MarkdownStructureIngestionServiceImplTest)",
+      "Bash(mvn -pl kb-document test -Dtest=MarkdownStructureIngestionServiceImplTest)",
+      "Bash(mvn -pl kb-document,kb-search -am install -DskipTests)",
+      "Bash(curl -s -m 3 http://127.0.0.1:8081/actuator/health)",
+      "Bash(/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java -version)",
+      "Bash(mvn install *)",
+      "Bash(mvn -q -pl kb-document -am test -Dtest=MarkdownStructureIngestionServiceImplTest)",
+      "Bash(mvn -q -pl kb-document -am test -Dtest=MarkdownStructureIngestionServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false)",
+      "Bash(mvn -pl kb-document test -Dtest=MarkdownStructureIngestionServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false)",
+      "Bash(mvn -q test -pl kb-document -am -Dtest=MarkdownStructureIngestionServiceImplTest)"
     ]
   }
 }

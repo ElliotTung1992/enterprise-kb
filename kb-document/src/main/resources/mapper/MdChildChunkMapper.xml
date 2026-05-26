@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.document.mapper.MdChildChunkMapper">
+
+    <resultMap id="MdChildChunkResultMap" type="com.enterprise.kb.document.model.MdChildChunk">
+        <id property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="documentId" column="document_id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="section" column="section"/>
+        <result property="seqInParent" column="seq_in_parent"/>
+        <result property="embedText" column="embed_text"/>
+        <result property="tokenCount" column="token_count"/>
+        <result property="embeddingModel" column="embedding_model"/>
+        <result property="charStart" column="char_start"/>
+        <result property="charEnd" column="char_end"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insertBatch">
+        INSERT INTO md_child_chunk (
+            id, parent_id, document_id, space_id, section, seq_in_parent,
+            embed_text, token_count, embedding_model, char_start, char_end, created_at
+        ) VALUES
+        <foreach collection="list" item="chunk" separator=",">
+            (
+                #{chunk.id,jdbcType=OTHER},
+                #{chunk.parentId,jdbcType=OTHER},
+                #{chunk.documentId,jdbcType=OTHER},
+                #{chunk.spaceId,jdbcType=OTHER},
+                #{chunk.section},
+                #{chunk.seqInParent},
+                #{chunk.embedText},
+                #{chunk.tokenCount},
+                #{chunk.embeddingModel},
+                #{chunk.charStart},
+                #{chunk.charEnd},
+                #{chunk.createdAt}
+            )
+        </foreach>
+    </insert>
+
+    <select id="findById" resultMap="MdChildChunkResultMap">
+        SELECT * FROM md_child_chunk WHERE id = #{id,jdbcType=OTHER} LIMIT 1
+    </select>
+
+    <select id="findByParentId" resultMap="MdChildChunkResultMap">
+        SELECT * FROM md_child_chunk
+        WHERE parent_id = #{parentId,jdbcType=OTHER}
+        ORDER BY seq_in_parent ASC
+    </select>
+
+    <delete id="deleteByDocumentId">
+        DELETE FROM md_child_chunk WHERE document_id = #{documentId,jdbcType=OTHER}
+    </delete>
+
+    <delete id="deleteBySpaceId">
+        DELETE FROM md_child_chunk WHERE space_id = #{spaceId,jdbcType=OTHER}
+    </delete>
+</mapper>

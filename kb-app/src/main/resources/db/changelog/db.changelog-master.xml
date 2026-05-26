@@ -31,4 +31,6 @@
     <include file="db/changelog/024-add-customer-messages-domain.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/025-add-agent-traces-eval.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/026-add-document-visual-assets.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/027-create-markdown-rag.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/028-md-documents-object-key.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

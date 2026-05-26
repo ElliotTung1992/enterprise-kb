@@ -6,6 +6,17 @@ import com.enterprise.kb.auth.service.JwtService;
 import com.enterprise.kb.auth.service.impl.JwtServiceImpl;
 import com.enterprise.kb.user.security.SpacePermissionEvaluator;
 import com.enterprise.kb.user.service.UserService;
+import io.milvus.client.MilvusServiceClient;
+import io.milvus.param.IndexType;
+import io.milvus.param.MetricType;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.milvus.MilvusVectorStore;
+import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -103,6 +114,56 @@ public class AppConfig {
     @Bean("traceExecutor")
     public Executor traceExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    /**
+     * Markdown 结构感知 RAG 专用 Milvus 集合。
+     *
+     * <p>该集合与标准 RAG 的 {@code kb_chunks} 物理隔离，避免两条竖井的召回结果混合。
+     * 入库和查询均通过 {@code mdVectorStore} 显式注入。</p>
+     *
+     * @param milvusClient   Milvus 客户端
+     * @param embeddingModel 默认 embedding 模型
+     * @param databaseName   Milvus database
+     * @param collectionName Markdown 专用集合名
+     * @param dimension      embedding 维度
+     * @return Markdown 专用向量存储
+     */
+    @Bean("mdVectorStore")
+    public VectorStore mdVectorStore(
+            MilvusServiceClient milvusClient,
+            @Qualifier("dashscopeEmbeddingModel") EmbeddingModel embeddingModel,
+            @Value("${spring.ai.vectorstore.milvus.database-name:default}") String databaseName,
+            @Value("${enterprise.kb.milvus.md-collection:md_kb_chunks}") String collectionName,
+            @Value("${spring.ai.vectorstore.milvus.embedding-dimension:1536}") int dimension) {
+        return MilvusVectorStore.builder(milvusClient, embeddingModel)
+                .databaseName(databaseName)
+                .collectionName(collectionName)
+                .embeddingDimension(dimension)
+                .indexType(IndexType.IVF_FLAT)
+                .metricType(MetricType.COSINE)
+                .initializeSchema(true)
+                .build();
+    }
+
+    /**
+     * 将标准 RAG 的自动配置 {@code vectorStore} 标记为 primary。
+     *
+     * <p>新增 {@code mdVectorStore} 后，项目中仍有标准竖井通过类型注入 {@link VectorStore}。
+     * 为了不修改标准竖井代码，这里在 Bean 实例化前只调整自动配置 Bean 的优先级。</p>
+     *
+     * @return Bean 定义后置处理器
+     */
+    @Bean
+    public static BeanFactoryPostProcessor vectorStorePrimaryPostProcessor() {
+        return new BeanFactoryPostProcessor() {
+            @Override
+            public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+                if (beanFactory.containsBeanDefinition("vectorStore")) {
+                    beanFactory.getBeanDefinition("vectorStore").setPrimary(true);
+                }
+            }
+        };
     }
 
     /**
