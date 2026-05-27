@@ -26,6 +26,8 @@
 | 015 | 扩展 | 安装 `pg_trgm`，建全文检索 GIN 索引 |
 | 016 | 建表 | qa_sessions, qa_messages |
 | 017 | Drop | 删除 mcp_api_keys 表 |
+| 027 | 建表 | md_documents, md_parent_chunk, md_child_chunk（结构感知 RAG，含 child `pg_trgm` GIN 索引）→ [[features/markdown-structure-rag]] |
+| 028 | 扩展 | md_documents 增 object_key、迁移并删除旧 file_path |
 
 ## 注意事项
 

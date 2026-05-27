@@ -34,7 +34,8 @@
       "Bash(mvn -q -pl kb-document -am test -Dtest=MarkdownStructureIngestionServiceImplTest)",
       "Bash(mvn -q -pl kb-document -am test -Dtest=MarkdownStructureIngestionServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false)",
       "Bash(mvn -pl kb-document test -Dtest=MarkdownStructureIngestionServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false)",
-      "Bash(mvn -q test -pl kb-document -am -Dtest=MarkdownStructureIngestionServiceImplTest)"
+      "Bash(mvn -q test -pl kb-document -am -Dtest=MarkdownStructureIngestionServiceImplTest)",
+      "Bash(md5 -q docs/acceptance-md-structure-rag.md)"
     ]
   }
 }

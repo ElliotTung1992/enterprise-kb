@@ -32,6 +32,21 @@
         "wiki/log.md",
         "wiki/hot.md"
       ]
+    },
+    "docs/acceptance-md-structure-rag.md": {
+      "hash": "195621d645699d1f8d0c6a84e91a05bc",
+      "ingested_at": "2026-05-26",
+      "pages_created": [
+        "wiki/features/markdown-structure-rag.md",
+        "wiki/features/markdown-structure-rag-acceptance.md",
+        "wiki/decisions/adr-012-markdown-structure-rag.md"
+      ],
+      "pages_updated": [
+        "wiki/Home.md",
+        "wiki/database/migrations.md",
+        "wiki/log.md",
+        "wiki/hot.md"
+      ]
     }
   }
 }

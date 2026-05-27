@@ -1,5 +1,17 @@
 # Wiki Ingest Log
 
+## 2026-05-26 | ingest | Markdown 结构感知 RAG 验收文档
+- Source: `docs/acceptance-md-structure-rag.md`
+- Summary: [[features/markdown-structure-rag-acceptance]]
+- Pages created:
+  - [[features/markdown-structure-rag]]
+  - [[features/markdown-structure-rag-acceptance]]
+  - [[decisions/adr-012-markdown-structure-rag]]（ingest 后补建：提炼 C1–C17 核心架构决策）
+- Pages updated:
+  - [[Home]] — 功能导航 + 架构决策导航
+  - [[database/migrations]] — 新增迁移 027/028
+- Key insight: 「结构感知 RAG（small-to-big 父子索引）」是与「图文 RAG L2」**不同的另一条平行竖井**（`md_documents`/`md_kb_chunks`，标准竖井零改动）；child 边界只决定召回命中，回答返回完整 parent，故弃用标准链 100-token overlap；融合阶段不去重以保留多 child 位置供多窗节选。
+
 ## 2026-05-18 | save | 客服助手意图识别 — 两层域路由
 - Type: feature
 - Location: wiki/features/intent-routing.md

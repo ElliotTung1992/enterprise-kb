@@ -82,6 +82,7 @@ public class MdParentExpansionServiceImpl implements MdParentExpansionService {
     }
 
     private SearchHit toParentHit(SearchHit childHit, MdParentChunk parent, Set<Integer> hitSeqs) {
+        // 获取title
         String title = documentMapper.findByIdAndDeletedAtIsNull(parent.getDocumentId())
                 .map(d -> d.getTitle()).orElse(childHit.documentTitle());
         return new SearchHit(

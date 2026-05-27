@@ -34,6 +34,12 @@ _Last updated: 2026-05-18_
 - 未做：评估集为模板（待运营测试同学标注）、影子数据为空（待部署）、迁移 024 未落库、端到端 & HITL 回归未跑
 - 下一步：标注评估集 → `DomainRouterEvalTest` 达标 → 部署攒影子数据 → 影子达标后开 `routing-enabled` 灰度
 
+## 最近 ingest（非开发焦点）
+
+**2026-05-26 Markdown 结构感知 RAG 验收文档** → [[features/markdown-structure-rag]] · [[features/markdown-structure-rag-acceptance]] · [[decisions/adr-012-markdown-structure-rag]]
+- 与 [[features/markdown-visual-rag-l2]]（图文 RAG）是**两条不同竖井**：结构感知走全新 `md_documents`/`md_kb_chunks`，small-to-big 父子索引，标准竖井零改动。
+- 已实现，入库单测 7/7 通过；检索/Agentic 无自动化测试、端到端未联调。核心架构决策已落 adr-012。
+
 ## 上一轮焦点
 
 **投诉升级系统**（Phase 0-9 完成）→ [[features/complaint-escalation]] · [[decisions/adr-007-complaint-escalation-stategraph]]
