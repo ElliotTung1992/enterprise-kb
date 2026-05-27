@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.document.mapper.MdDocumentAssetMapper">
+
+    <resultMap id="MdDocumentAssetResultMap" type="com.enterprise.kb.document.model.MdDocumentAsset">
+        <id property="id" column="id"/>
+        <result property="documentId" column="document_id"/>
+        <result property="spaceId" column="space_id"/>
+        <result property="childChunkId" column="child_chunk_id"/>
+        <result property="assetIndex" column="asset_index"/>
+        <result property="imageUrl" column="image_url"/>
+        <result property="objectKey" column="object_key"/>
+        <result property="mimeType" column="mime_type"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="section" column="section"/>
+        <result property="altText" column="alt_text"/>
+        <result property="title" column="title"/>
+        <result property="ocrText" column="ocr_text"/>
+        <result property="caption" column="caption"/>
+        <result property="summary" column="summary"/>
+        <result property="entities" column="entities"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insertBatch">
+        INSERT INTO md_document_assets (
+            id, document_id, space_id, child_chunk_id, asset_index,
+            image_url, object_key, mime_type, file_size,
+            section, alt_text, title,
+            ocr_text, caption, summary, entities,
+            created_at, updated_at
+        ) VALUES
+        <foreach collection="list" item="asset" separator=",">
+            (
+                #{asset.id,jdbcType=OTHER},
+                #{asset.documentId,jdbcType=OTHER},
+                #{asset.spaceId,jdbcType=OTHER},
+                #{asset.childChunkId,jdbcType=OTHER},
+                #{asset.assetIndex},
+                #{asset.imageUrl},
+                #{asset.objectKey},
+                #{asset.mimeType},
+                #{asset.fileSize},
+                #{asset.section},
+                #{asset.altText},
+                #{asset.title},
+                #{asset.ocrText},
+                #{asset.caption},
+                #{asset.summary},
+                #{asset.entities},
+                #{asset.createdAt},
+                #{asset.updatedAt}
+            )
+        </foreach>
+    </insert>
+
+    <update id="updateChildChunkId">
+        UPDATE md_document_assets
+        SET child_chunk_id = #{childChunkId,jdbcType=OTHER}, updated_at = NOW()
+        WHERE id = #{id,jdbcType=OTHER}
+    </update>
+
+    <select id="findById" resultMap="MdDocumentAssetResultMap">
+        SELECT * FROM md_document_assets WHERE id = #{id,jdbcType=OTHER} LIMIT 1
+    </select>
+
+    <delete id="deleteByDocumentId">
+        DELETE FROM md_document_assets WHERE document_id = #{documentId,jdbcType=OTHER}
+    </delete>
+
+    <delete id="deleteBySpaceId">
+        DELETE FROM md_document_assets WHERE space_id = #{spaceId,jdbcType=OTHER}
+    </delete>
+</mapper>
+
