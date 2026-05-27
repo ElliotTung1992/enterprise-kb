@@ -3,7 +3,8 @@ version: '3.9'
 services:
   # ── PostgreSQL ───────────────────────────────────────────────
   postgres:
-    image: postgres:16
+    # vchord-suite 打包 VectorChord + vchord_bm25 + pg_tokenizer（md 竖井 BM25 关键词检索所需），基于官方 PG16，数据目录兼容
+    image: tensorchord/vchord-suite:pg16-20260501
     container_name: kb-postgres
     environment:
       POSTGRES_DB: enterprise_kb

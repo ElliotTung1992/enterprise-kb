@@ -147,6 +147,13 @@ enterprise:
       include-prompts: ${AGENT_TRACE_INCLUDE_PROMPTS:true}
       # 是否记录检索片段正文，用于评估检索和答案 grounding
       include-retrieval-excerpts: ${AGENT_TRACE_INCLUDE_RETRIEVAL_EXCERPTS:true}
+    md:
+      # md 关键词路算法：TRGM(默认，pg_trgm 子串相似度) / BM25(vchord_bm25 词级打分)，一键回退
+      keyword-mode: ${MD_KEYWORD_MODE:TRGM}
+      # 索引与查询共用的 pg_tokenizer 配置名（建于运维脚本 db/manual/md-bm25-build.sql）
+      bm25-tokenizer: ${MD_BM25_TOKENIZER:md_tok}
+      # vchord_bm25 索引名，to_bm25query 按名引用
+      bm25-index: ${MD_BM25_INDEX:idx_md_child_bm25}
     milvus:
       md-collection: ${MILVUS_MD_COLLECTION:md_kb_chunks}
     search:
