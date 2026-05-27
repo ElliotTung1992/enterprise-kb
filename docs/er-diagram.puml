@@ -1,8 +1,14 @@
 @startuml enterprise-kb-erd
 
 ' ────────────────────────────────────────────────────────
-' 企业知识库 — 数据库 ER 图
-' 生成自 db/changelog/001~016 迁移脚本
+' 企业知识库 — 数据库 ER 图（基础用户/空间/会话体系）
+'
+' 注：标准（非 Markdown）RAG 竖井已全退役，迁移 031 删除了
+'     documents / document_chunks / document_assets /
+'     document_relations / tags / document_tags 六张表，故本图不再绘制。
+'     Markdown RAG（md_documents / md_parent_chunk / md_child_chunk /
+'     md_document_asset）及客服、投诉、Trace、Eval 等表由各自模块单独维护，
+'     不在此基础图中展开。
 ' ────────────────────────────────────────────────────────
 
 left to right direction
@@ -79,7 +85,7 @@ together {
 }
 
 ' ══════════════════════════════════════════════════════
-' 列 3：空间成员 + 文档 + 标签
+' 列 3：空间成员 + 审计日志
 ' ══════════════════════════════════════════════════════
 
 together {
@@ -93,81 +99,6 @@ together {
           granted_by  : UUID
         --
         <<UNIQUE (user_id, space_id, role_type)>>
-    }
-
-    entity "documents" as documents {
-        * id                : UUID <<PK>>
-        --
-        * space_id          : UUID <<FK>>
-          uploaded_by       : UUID
-        * title             : VARCHAR(500)
-        * original_filename : VARCHAR(500)
-        * file_path         : TEXT
-          file_size_bytes   : BIGINT
-          mime_type         : VARCHAR(100)
-          source_url        : TEXT
-        * status            : VARCHAR(30)
-          error_message     : TEXT
-          chunk_count       : INTEGER
-          language          : VARCHAR(20)
-          metadata          : JSONB
-        * created_at        : TIMESTAMPTZ
-        * updated_at        : TIMESTAMPTZ
-          deleted_at        : TIMESTAMPTZ
-    }
-
-    entity "tags" as tags {
-        * id          : UUID <<PK>>
-        --
-        * space_id    : UUID <<FK>>
-        * name        : VARCHAR(200)
-        * slug        : VARCHAR(200)
-          color       : VARCHAR(7)
-          parent_id   : UUID <<FK, self>>
-        * tag_type    : VARCHAR(50)
-          description : TEXT
-          sort_order  : INTEGER
-        * created_at  : TIMESTAMPTZ
-        * updated_at  : TIMESTAMPTZ
-          deleted_at  : TIMESTAMPTZ
-        --
-        <<UNIQUE (space_id, slug)>>
-    }
-}
-
-' ══════════════════════════════════════════════════════
-' 列 4：文档子表
-' ══════════════════════════════════════════════════════
-
-together {
-    entity "document_chunks" as document_chunks {
-        * id              : UUID <<PK>>
-        --
-        * document_id     : UUID <<FK>>
-        * chunk_index     : INTEGER
-        * content         : TEXT
-          token_count     : INTEGER
-          milvus_id       : VARCHAR(100)
-          embedding_model : VARCHAR(100)
-          page_number     : INTEGER
-          char_start      : INTEGER
-          char_end        : INTEGER
-        * created_at      : TIMESTAMPTZ
-        --
-        <<UNIQUE (document_id, chunk_index)>>
-    }
-
-    entity "document_tags" as document_tags {
-        * id          : UUID <<PK>>
-        --
-        * document_id : UUID <<FK>>
-        * tag_id      : UUID <<FK>>
-          tagged_by   : UUID
-          auto_tagged : BOOLEAN
-          confidence  : NUMERIC(5,4)
-        * created_at  : TIMESTAMPTZ
-        --
-        <<UNIQUE (document_id, tag_id)>>
     }
 
     entity "audit_logs" as audit_logs {
@@ -186,24 +117,10 @@ together {
 }
 
 ' ══════════════════════════════════════════════════════
-' 列 5：文档关联 + 问答会话
+' 列 4：问答会话
 ' ══════════════════════════════════════════════════════
 
 together {
-    entity "document_relations" as document_relations {
-        * id             : UUID <<PK>>
-        --
-        * source_doc_id  : UUID <<FK>>
-        * target_doc_id  : UUID <<FK>>
-        * relation_type  : VARCHAR(100)
-          weight         : NUMERIC(5,4)
-          auto_detected  : BOOLEAN
-          created_by     : UUID
-        * created_at     : TIMESTAMPTZ
-        --
-        <<UNIQUE (source_doc_id, target_doc_id, relation_type)>>
-    }
-
     entity "qa_sessions" as qa_sessions {
         * id          : UUID <<PK>>
         --
@@ -230,16 +147,12 @@ together {
 ' roles 无实际连线，锚定到 users 下方（同列）
 users            -[hidden]down-   roles
 
-' audit_logs 无实际连线，锚定到 document_tags 下方（同列）
-document_tags    -[hidden]down-   audit_logs
+' audit_logs 无实际连线，锚定到 user_space_roles 下方（同列）
+user_space_roles -[hidden]down-   audit_logs
 
-' document_relations 锚定到 document_chunks / document_tags 右侧
-document_chunks  -[hidden]right-  document_relations
-document_tags    -[hidden]right-  document_relations
-
-' qa 实体锚定到 document_relations 下方（同列）
-document_relations -[hidden]down- qa_sessions
-qa_sessions        -[hidden]down- qa_messages
+' qa 实体锚定到 audit_logs 右侧/下方
+audit_logs       -[hidden]right-  qa_sessions
+qa_sessions      -[hidden]down-   qa_messages
 
 ' ══════════════════════════════════════════════════════
 ' 关系定义（按列从左到右，减少连线跨越）
@@ -252,15 +165,6 @@ users           ||--o{  spaces             : "owner_id"
 ' 列2 → 列3
 users           ||--o{  user_space_roles   : "user_id"
 spaces          ||--o{  user_space_roles   : "space_id"
-spaces          ||--o{  documents          : "space_id"
-spaces          ||--o{  tags               : "space_id"
-
-' 列3 → 列4
-documents       ||--o{  document_chunks    : "document_id"
-documents       ||--o{  document_tags      : "document_id"
-documents       ||--o{  document_relations : "source/target_doc_id"
-tags            ||--o{  document_tags      : "tag_id"
-tags            ||--o{  tags               : "parent_id (self)"
 
 ' 问答会话关系
 users           ||--o{  qa_sessions        : "user_id"

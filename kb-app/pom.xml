@@ -35,10 +35,6 @@
             <groupId>com.enterprise</groupId>
             <artifactId>kb-search</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.enterprise</groupId>
-            <artifactId>kb-knowledge-graph</artifactId>
-        </dependency>
 
         <!-- Spring Boot -->
         <dependency>

@@ -1,14 +1,19 @@
 # 企业知识库 — 功能操作文档
 
+> **重要变更（标准 RAG 退役）**：标准（非 Markdown）RAG 竖井已全部下线。文档上传与问答仅支持
+> **Markdown 结构感知 RAG**，接口前缀由 `/documents`、`/qa`、`/search` 迁移为 `/md-documents`、
+> `/md-qa`（会话管理仍为两竖井共享的 `/qa/sessions`）。原“搜索”“标签与知识图谱”功能及其接口已移除。
+> 设计见 `docs/design-md-structure-rag.md`。
+
 ## 目录
 
 1. [快速开始](#1-快速开始)
 2. [账号与认证](#2-账号与认证)
 3. [空间管理](#3-空间管理)
-4. [文档管理](#4-文档管理)
-5. [搜索](#5-搜索)
-6. [AI 问答](#6-ai-问答)
-7. [标签与知识图谱](#7-标签与知识图谱)
+4. [Markdown 文档管理](#4-markdown-文档管理)
+5. [搜索（已下线）](#5-搜索已下线)
+6. [AI 问答（Markdown）](#6-ai-问答markdown)
+7. [标签与知识图谱（已下线）](#7-标签与知识图谱已下线)
 8. [系统管理（管理员）](#8-系统管理管理员)
 9. [API 参考](#9-api-参考)
 10. [部署与运维](#10-部署与运维)
@@ -24,9 +29,9 @@
   │
   └─► Spring Boot 应用 (8081)
           │
-          ├─► PostgreSQL 5432   — 用户/空间/文档元数据、会话记录
+          ├─► PostgreSQL 5432   — 用户/空间/Markdown 文档元数据、会话记录
           ├─► Redis 6379        — 会话上下文（LLM 多轮记忆，24h TTL）
-          ├─► Milvus 19530      — 向量索引（语义搜索）
+          ├─► Milvus 19530      — 向量索引（md_kb_chunks，Markdown child 向量）
           ├─► MinIO 9000        — Milvus 对象存储
           └─► etcd 2379         — Milvus 元数据
 ```
@@ -187,14 +192,14 @@ curl http://localhost:8081/api/v1/auth/me \
 
 ## 3. 空间管理
 
-**空间**是知识库的基本隔离单元。每个空间有独立的文档、标签和成员权限。
+**空间**是知识库的基本隔离单元。每个空间有独立的 Markdown 文档和成员权限。
 
 ### 空间角色说明
 
 | 角色 | 权限 |
 |------|------|
-| VIEWER | 查看文档、搜索、AI 问答 |
-| EDITOR | 上传/删除文档、创建/删除标签 |
+| VIEWER | 查看文档、AI 问答 |
+| EDITOR | 上传/删除 Markdown 文档 |
 | ADMIN | 管理成员权限、删除空间 |
 
 ### 3.1 创建空间
@@ -254,7 +259,7 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/members/{userId} \
 
 ### 3.6 删除空间
 
-> 需要 ADMIN 角色。删除后空间内所有文档、标签、向量数据将一并删除，操作不可逆。
+> 需要 ADMIN 角色。删除后空间内所有 Markdown 文档及向量数据将一并删除，操作不可逆。
 
 **接口**：`DELETE /api/v1/spaces/{spaceId}`
 
@@ -265,111 +270,51 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId} \
 
 ---
 
-## 4. 文档管理
+## 4. Markdown 文档管理
+
+> 系统仅支持 **Markdown（`.md`）文档**。接口前缀为 `/api/v1/spaces/{spaceId}/md-documents`。
+> 入库按文档结构（H1-H3）做 small-to-big 父子切分（设计见 `docs/design-md-structure-rag.md`）。
 
 ### 4.1 上传文档
 
 **页面操作**：
 
-1. 访问 http://localhost:8081/upload.html
+1. 访问 http://localhost:8081/md-rag.html
 2. 在顶部选择目标空间
-3. 将文件拖入上传区域，或点击"选择文件"
-4. 支持同时选择多个文件
-5. 点击"上传"，页面会实时显示处理进度
+3. 选择 `.md` 文件，点击"上传并入库"
 
-**支持格式**：
+**支持格式**：仅 Markdown（`text/markdown`，`.md`）。单文件最大 100 MB。
 
-| 格式 | MIME 类型 |
-|------|-----------|
-| PDF | application/pdf |
-| Word (.docx) | application/vnd.openxmlformats-officedocument.wordprocessingml.document |
-| Word (.doc) | application/msword |
-| Markdown (.md) | text/markdown, text/x-markdown |
-| Markdown 图文包 (.zip) | application/zip |
-| 纯文本 (.txt) | text/plain |
-| HTML | text/html |
+**入库处理**：
 
-**限制**：单文件最大 100 MB。
+- 按 H1-H3 切 parent（整段 section），parent 内再切段落级 child（small-to-big：child 用于召回，parent 整段返回给 LLM）。
+- 表格做双表示：检索用逐行自然语言化文本，返回 LLM 用原始 markdown 表格。
+- Markdown 中引用的图片走图片理解（`MdImageUnderstandingService`，默认占位实现，可切换 DashScope），caption 作为 `md_document_asset` 异步补充，不阻塞正文问答。
+- 原始 `.md` 存入 MinIO。
 
-**Markdown 图文包说明**：
-
-- zip 只是上传容器，系统只为其中的主 Markdown 创建一条文档记录。
-- zip 内应包含一个主 `.md` 文件，以及 Markdown 中使用安全相对路径引用的图片。
-- 图片原文件、原始 zip 和流程图渲染结果存储到 MinIO。
-- Mermaid/PlantUML fenced code 会被抽取为流程图资产；没有可用渲染器时，系统保留源码并生成可检索的源码说明 chunk。
-- 禁止绝对路径、`../` 路径穿越、远程 URL 图片和 base64 data URL。
-- 正文完成入库后即可搜索；图片 OCR/caption 会异步补充，不阻塞正文 RAG。
-
-**单文件上传接口**：
+**上传接口**：
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/documents/upload \
+curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-documents/upload \
   -H "Authorization: Bearer {accessToken}" \
-  -F "file=@/path/to/document.pdf"
+  -F "file=@/path/to/document.md"
 ```
 
-**批量上传接口**：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/documents/upload/batch \
-  -H "Authorization: Bearer {accessToken}" \
-  -F "files=@doc1.pdf" \
-  -F "files=@doc2.docx"
-```
-
-上传接口返回 `202 Accepted`，文档将在后台异步处理。
+上传后文档异步入库，初始状态为 `PENDING`。
 
 ### 4.2 文档处理状态
 
-文档上传后经历以下状态：
-
 ```
-PENDING（已接收）→ PROCESSING（解析/分块/向量化）→ READY（可搜索）
-                                                  ├─► READY_WITH_PENDING_ASSETS（正文可搜索，视觉资产处理中）
-                                                  ├─► READY_WITH_ASSET_ERRORS（正文可搜索，部分视觉资产失败）
-                                                  └─► FAILED（处理失败）
+PENDING（已接收）→ PROCESSING（结构切分 / child 向量化）→ READY（可问答） / FAILED（处理失败）
 ```
 
-**处理过程说明**：
-
-1. **解析**：提取文本内容（PDF 按页，Word 按段落，Markdown 保留结构）
-2. **分块**：按 512 token 切分，相邻块有 64 token 重叠
-3. **向量化**：调用 AI 提供商生成 1536 维嵌入向量
-4. **存储**：元数据写入 PostgreSQL，向量写入 Milvus
-5. **视觉资产异步处理**：Markdown zip 中的图片和流程图会进入资产 worker，生成 `IMAGE_CAPTION` 或 `DIAGRAM_SUMMARY` 后追加到检索索引。
-
-**视觉资产状态**：
-
-| 状态 | 说明 |
-|------|------|
-| PENDING | 等待 worker 处理 |
-| PROCESSING | 正在进行 OCR/caption/summary |
-| READY | 已生成视觉语义 chunk 并写入向量库 |
-| FAILED | 重试耗尽或资产无法处理 |
-| REINDEX_PENDING | 人工修正后等待重建索引 |
-| REINDEXING | 正在基于人工修正重建视觉 chunk/vector |
+入库流程：结构切分（parent/child + 表格线性化 + 图片理解）→ child 写入 `md_kb_chunks` 向量 +
+`md_parent_chunk` / `md_child_chunk` / `md_document_asset` 元数据。
 
 ### 4.3 查看文档列表
 
-**页面操作**：仪表盘选择空间后，下方"最近文档"区域显示最新 10 条记录。
-
-**接口**：支持分页、状态筛选、关键词搜索
-
 ```bash
-# 列出所有文档（分页）
-curl "http://localhost:8081/api/v1/spaces/{spaceId}/documents?page=0&size=20" \
-  -H "Authorization: Bearer {accessToken}"
-
-# 按状态筛选
-curl "http://localhost:8081/api/v1/spaces/{spaceId}/documents?status=READY" \
-  -H "Authorization: Bearer {accessToken}"
-
-# 按关键词搜索文档标题
-curl "http://localhost:8081/api/v1/spaces/{spaceId}/documents?keyword=技术规范" \
-  -H "Authorization: Bearer {accessToken}"
-
-# 按创建时间倒序
-curl "http://localhost:8081/api/v1/spaces/{spaceId}/documents?sort=createdAt,desc" \
+curl "http://localhost:8081/api/v1/spaces/{spaceId}/md-documents?page=0&size=20" \
   -H "Authorization: Bearer {accessToken}"
 ```
 
@@ -379,239 +324,74 @@ curl "http://localhost:8081/api/v1/spaces/{spaceId}/documents?sort=createdAt,des
 |------|------|
 | id | 文档 UUID |
 | title | 文档标题 |
-| originalFilename | 原始文件名 |
-| mimeType | 文件类型 |
-| fileSizeBytes | 文件大小（字节） |
-| status | PENDING / PROCESSING / READY / READY_WITH_PENDING_ASSETS / READY_WITH_ASSET_ERRORS / FAILED |
-| chunkCount | 分块数量 |
+| mimeType | 恒为 `text/markdown` |
+| fileSize | 文件大小（字节） |
+| status | PENDING / PROCESSING / READY / FAILED |
+| chunkCount | child 分块数量 |
 | errorMessage | 处理失败时的错误信息 |
 | createdAt | 上传时间 |
-
-Markdown 图文包可能返回 `READY_WITH_PENDING_ASSETS` 或 `READY_WITH_ASSET_ERRORS`。这两种状态表示正文 RAG 已可用，只是图片/流程图的视觉语义处理尚未全部完成或部分失败。
 
 ### 4.4 查看文档详情
 
 ```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId} \
+curl http://localhost:8081/api/v1/spaces/{spaceId}/md-documents/{documentId} \
   -H "Authorization: Bearer {accessToken}"
 ```
 
-### 4.5 重新处理文档
+### 4.5 删除文档
 
-当文档处于 FAILED 状态，或需要更新分块/向量时使用：
+> 需要 EDITOR 角色。删除后同步清除 `md_parent_chunk` / `md_child_chunk` / `md_document_asset`
+> 记录与 `md_kb_chunks` 向量，操作不可逆。
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/reprocess \
+curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/md-documents/{documentId} \
   -H "Authorization: Bearer {accessToken}"
-```
-
-返回 `202 Accepted`，后台重新执行解析→分块→向量化流程。重新处理会先清理该文档旧的 chunk、Milvus 向量、视觉资产记录和旧资产对象，再重建索引。
-
-### 4.6 视觉资产
-
-Markdown 图文包入库后，可查看图片和流程图资产，并对模型生成的 caption/summary 进行人工修正。
-
-**查看资产列表**：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-**查看资产详情**：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets/{assetId} \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-**获取资产内容 URL**：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets/{assetId}/content \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-返回值中的 `url` 是短期有效的 MinIO 预签名 URL，前端应按需获取，不长期保存。
-
-**人工修正描述和摘要**：
-
-```bash
-curl -X PATCH http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/assets/{assetId}/correction \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "manualCaption": "人工确认后的图片描述",
-    "manualSummary": "用于检索的人工摘要"
-  }'
-```
-
-修正后资产进入 `REINDEX_PENDING`，由 worker 异步删除旧视觉 chunk/vector 并重建索引。
-
-### 4.7 删除文档
-
-> 需要 EDITOR 角色。删除后同步清除 Milvus 中的向量数据，操作不可逆。
-
-```bash
-curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId} \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-### 4.8 文档关联
-
-将两份相关文档建立关联关系，便于知识图谱导航：
-
-**查看关联**：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/relations \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-**添加关联**：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/documents/{docId}/relations \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{"targetDocumentId": "目标文档UUID", "relationType": "REFERENCES"}'
 ```
 
 ---
 
-## 5. 搜索
+## 5. 搜索（已下线）
 
-### 5.1 三种搜索模式
-
-**页面操作**：
-
-1. 访问 http://localhost:8081/search.html
-2. 在顶部选择目标空间
-3. 选择搜索模式（默认混合搜索）
-4. 输入查询内容，按回车或点击搜索按钮
-
-| 模式 | 原理 | 适用场景 |
-|------|------|----------|
-| 混合搜索（推荐） | 关键词 + 语义融合排序 | 通用场景，效果最佳 |
-| 语义搜索 | 向量相似度（COSINE） | 自然语言提问、概念检索 |
-| 关键词搜索 | 全文检索（BM25） | 精确词匹配、技术名词 |
-
-### 5.2 搜索接口
-
-**混合搜索**：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/search/hybrid \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "如何配置数据库连接池",
-    "topK": 10
-  }'
-```
-
-**语义搜索**：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/search \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "连接池最大连接数配置", "topK": 5}'
-```
-
-**关键词搜索**：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/search/keyword \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{"query": "HikariCP maximum-pool-size", "topK": 10}'
-```
-
-### 5.3 搜索请求参数
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| query | string | 是 | 搜索内容 |
-| topK | integer | 否 | 返回结果数（默认 10，常用 5/10/20） |
-| modelProvider | string | 否 | 指定 AI 提供商（MINIMAX/OPENAI/ANTHROPIC） |
-| filters.tagIds | array | 否 | 按标签筛选 |
-| filters.dateFrom | string | 否 | 上传日期起始（ISO 8601） |
-| filters.dateTo | string | 否 | 上传日期截止（ISO 8601） |
-| filters.mimeTypes | array | 否 | 按文件类型筛选 |
-
-### 5.4 搜索结果说明
-
-```json
-{
-  "data": {
-    "hits": [
-      {
-        "chunkId": "uuid",
-        "documentId": "uuid",
-        "documentTitle": "数据库配置指南.pdf",
-        "excerpt": "HikariCP 连接池最大连接数通过 maximum-pool-size 参数配置，默认值为 10...",
-        "pageNumber": 5,
-        "score": 0.92,
-        "mimeType": "application/pdf",
-        "contentType": "TEXT",
-        "assetId": null,
-        "section": "连接池配置",
-        "anchorChunkIndex": 3
-      }
-    ],
-    "totalHits": 23,
-    "searchMode": "hybrid",
-    "durationMs": 145
-  }
-}
-```
-
-| 字段 | 说明 |
-|------|------|
-| excerpt | 包含匹配内容的文本片段 |
-| score | 相关度评分（0-1，越高越相关） |
-| pageNumber | PDF 文档的页码 |
-| durationMs | 搜索耗时（毫秒） |
-| contentType | chunk 类型：`TEXT`、`IMAGE_REFERENCE`、`IMAGE_CAPTION`、`DIAGRAM_SOURCE`、`DIAGRAM_SUMMARY` |
-| assetId | 命中图片/流程图 chunk 时返回视觉资产 ID |
-| section | Markdown 章节上下文 |
-| anchorChunkIndex | 视觉 chunk 关联的最近正文 chunk 序号 |
-
-Markdown 图文 RAG 当前是 L2 文本投影：图片和流程图先由 OCR/caption/summary 转成文本 chunk，再进入现有文本 embedding 与 Milvus 检索链路。系统目前不做 L3 图片向量检索，也不支持按图片局部区域直接检索。
+> 标准搜索接口（`POST /search`、`/search/keyword`、`/search/hybrid`）随标准 RAG 竖井一并下线。
+>
+> Markdown 竖井不单独暴露检索端点——检索能力已并入问答：`MdHybridSearchService`（`md_kb_chunks`
+> 向量召回 + `md_child_chunk` 关键词/BM25，RRF 融合）→ rerank → parent 展开，全部在
+> [AI 问答（Markdown）](#6-ai-问答markdown) 内部完成。若需观察检索命中，可调用问答接口查看返回的
+> `citations` 字段。
 
 ---
 
-## 6. AI 问答
+## 6. AI 问答（Markdown）
 
 ### 6.1 功能说明
 
-AI 问答基于 RAG（检索增强生成）技术：先从知识库检索相关内容，再由 AI 模型结合上下文生成回答。回答会附带来源引用，确保可溯源、可验证。
+AI 问答基于 Markdown 结构感知 RAG：先用混合检索（向量 + 关键词 RRF）召回相关 child 片段，
+经 rerank 后按 parent 折叠展开为整段 section（small-to-big），再由 LLM 结合上下文生成回答。
+回答附带来源引用（文档标题 + 章节面包屑），可溯源、可验证。接口前缀为
+`/api/v1/spaces/{spaceId}/md-qa`。
 
 ### 6.2 页面操作
 
-1. 访问 http://localhost:8081/qa.html
+1. 访问 http://localhost:8081/md-rag.html
 2. 在顶部选择目标空间（切换空间会自动开始新对话）
-3. 选择 AI 模型（默认通义千问 / MiniMax / GPT-4o / Claude）
-4. 设置上下文块数（默认 5，越多参考内容越丰富，但消耗更多 Token）
-5. 在输入框输入问题，按 Enter 发送（Shift+Enter 换行）
-6. 查看底部"引用来源"面板了解回答依据
-7. 左侧会话列表展示当前空间的历史对话，点击可切换查看
-8. 点击左上角"+ 新对话"开始全新会话
+3. 在输入框输入问题，按 Enter 发送（Shift+Enter 换行）
+4. 查看"引用来源"了解回答依据
+5. 左侧会话列表展示当前空间的历史对话，点击可切换查看
 
 ### 6.3 支持的 AI 模型
 
-| 提供商 | 模型 | 特点 | 需要密钥 |
-|--------|------|------|----------|
-| DashScope（默认） | qwen-max | 通义千问，中文理解强 | DASHSCOPE_API_KEY |
-| MiniMax | abab6.5s-chat | 中英文均衡，性价比高 | MINIMAX_API_KEY |
-| OpenAI | gpt-4o | 英文推理能力强 | OPENAI_API_KEY |
-| Anthropic | Claude Sonnet | 长文本理解出色 | ANTHROPIC_API_KEY |
+| 提供商 | 特点 | 需要密钥 |
+|--------|------|----------|
+| MiniMax（默认 chat） | 中英文均衡，性价比高 | MINIMAX_API_KEY |
+| DashScope | 通义千问；同时提供 embedding（默认）与 rerank | DASHSCOPE_API_KEY |
+| Anthropic | Claude，长文本理解出色 | ANTHROPIC_API_KEY |
+
+> 通过请求体 `modelProvider`（`MINIMAX` / `DASHSCOPE` / `ANTHROPIC`）切换 chat 模型；embedding 固定用 DashScope。
 
 ### 6.4 问答接口（阻塞式）
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
+curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -626,20 +406,15 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
 ```json
 {
   "data": {
-    "answer": "根据知识库中的配置文档，数据库连接池（HikariCP）的默认最大连接数为 **20**，最小空闲连接数为 **5**，连接超时时间为 **30 秒**。\n\n> 如需修改，请在 `application.yml` 的 `spring.datasource.hikari` 节点下调整 `maximum-pool-size` 参数。",
+    "answer": "根据配置文档，数据库连接池（HikariCP）的默认最大连接数为 **20**，最小空闲连接数为 **5**，连接超时时间为 **30 秒**。",
     "sessionId": "session-uuid",
     "citations": [
       {
-        "chunkId": "uuid",
         "documentId": "uuid",
-        "documentTitle": "数据库配置指南.pdf",
+        "documentTitle": "部署运维手册.md",
+        "section": "部署运维 > 数据库 > 连接池",
         "excerpt": "maximum-pool-size: 20\nminimum-idle: 5\nconnection-timeout: 30000",
-        "pageNumber": 3,
-        "score": 0.94,
-        "contentType": "TEXT",
-        "assetId": null,
-        "section": "数据库连接池",
-        "anchorChunkIndex": 2
+        "score": 0.94
       }
     ],
     "modelUsed": "MINIMAX",
@@ -648,14 +423,14 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
 }
 ```
 
-当问答命中 Markdown 图片或流程图语义 chunk 时，`citations` 中会带出 `assetId` 和 `contentType`。同一视觉资产只返回一条引用，并优先保留 `IMAGE_CAPTION` / `DIAGRAM_SUMMARY`。前端可再调用文档资产 URL 接口打开原图或渲染图。
+引用以 parent section 为单位（文档标题 + 章节面包屑），整段超长时按命中位置多窗节选并标注"节选"。
 
 ### 6.5 连续对话（多轮问答）
 
 将上一次返回的 `sessionId` 传入下一次请求，AI 会记住对话上下文：
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
+curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -d '{
@@ -671,7 +446,7 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask \
 适合在自定义前端中实现打字机效果：
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask/stream \
+curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/stream \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
@@ -680,9 +455,24 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/qa/ask/stream \
 
 接口返回 Server-Sent Events 格式，前端使用 `EventSource` 接收。
 
-### 6.7 会话管理
+### 6.7 Agentic 问答（多跳推理）
 
-每次问答均自动创建或续写会话记录（标题取问题前 50 字），无需手动操作。以下接口用于在会话列表页面展示和管理历史对话。
+LLM 作为 Agent 自主决策，双工具 `searchKnowledgeBase`（搜 child 片段）+ `readFullSection`
+（按需展开 parent 整段），适合需要多跳检索的复杂问题：
+
+```bash
+curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/agentic \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "对比安装章节与升级章节对依赖版本的要求", "modelProvider": "MINIMAX"}'
+```
+
+返回结构与阻塞式问答一致（含 `answer` / `citations` / `sessionId`）。
+
+### 6.8 会话管理
+
+每次问答均自动创建或续写会话记录（标题取问题前 50 字），无需手动操作。会话由标准 RAG 与 Markdown RAG
+共用同一张 `qa_sessions` 表，因此以下接口前缀仍为 `/qa/sessions`（非 `/md-qa`）。
 
 **查看会话列表**：
 
@@ -718,95 +508,11 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/qa/sessions/{sessio
 
 ---
 
-## 7. 标签与知识图谱
+## 7. 标签与知识图谱（已下线）
 
-### 7.1 标签类型说明
-
-| 类型 | 说明 | 示例 |
-|------|------|------|
-| TAG | 普通标签/分类 | "重要"、"待归档" |
-| CATEGORY | 分类目录（可含子标签） | "研发"、"产品" |
-| ENTITY | 命名实体（人物/产品/公司） | "Spring Boot"、"张三" |
-| TOPIC | 主题/议题 | "性能优化"、"安全审计" |
-
-### 7.2 页面操作
-
-1. 访问 http://localhost:8081/tags.html
-2. 在顶部选择目标空间
-3. 左侧标签树展示当前空间的所有标签（树状层级结构）
-4. 点击"新建标签"按钮创建标签
-5. 标签卡片右侧的删除图标可删除该标签
-
-### 7.3 创建标签
-
-**接口**：`POST /api/v1/spaces/{spaceId}/tags`
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/tags \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "性能优化",
-    "tagType": "TOPIC",
-    "color": "#10b981",
-    "description": "与系统性能相关的文档"
-  }'
-```
-
-**创建子标签**（指定 parentId）：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/tags \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "数据库优化",
-    "tagType": "TOPIC",
-    "parentId": "父标签UUID",
-    "color": "#6366f1"
-  }'
-```
-
-### 7.4 查看标签列表
-
-**平铺列表**：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/tags \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-**树状结构**：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/tags/tree \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-### 7.5 合并标签
-
-将两个标签合并（将 sourceTag 的所有关联转移至 targetTag，并删除 sourceTag）：
-
-```bash
-curl -X POST "http://localhost:8081/api/v1/spaces/{spaceId}/tags/{sourceTagId}/merge/{targetTagId}" \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-### 7.6 删除标签
-
-```bash
-curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/tags/{tagId} \
-  -H "Authorization: Bearer {accessToken}"
-```
-
-### 7.7 获取知识图谱数据
-
-返回标签节点和关联边，可用于前端图谱可视化：
-
-```bash
-curl http://localhost:8081/api/v1/spaces/{spaceId}/tags/graph \
-  -H "Authorization: Bearer {accessToken}"
-```
+> `kb-knowledge-graph` 模块随标准 RAG 竖井一并退役，标签与知识图谱接口
+> （`/tags`、`/tags/tree`、`/tags/graph`、合并/删除标签等）及 `tags` / `document_tags` 表已全部移除。
+> Markdown 竖井按文档内部结构（H1-H3 章节）组织检索，本期不提供打标 / 文档关系 / 图谱可视化能力。
 
 ---
 
@@ -924,52 +630,28 @@ curl http://localhost:8081/actuator/metrics \
 | PUT | /api/v1/spaces/{id}/members/{uid} | 修改成员角色 |
 | DELETE | /api/v1/spaces/{id}/members/{uid} | 移除成员 |
 
-#### 文档
+#### Markdown 文档
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | /api/v1/spaces/{sid}/documents | 文档列表（分页） |
-| POST | /api/v1/spaces/{sid}/documents/upload | 上传单文件 |
-| POST | /api/v1/spaces/{sid}/documents/upload/batch | 批量上传 |
-| GET | /api/v1/spaces/{sid}/documents/{did} | 文档详情 |
-| DELETE | /api/v1/spaces/{sid}/documents/{did} | 删除文档 |
-| POST | /api/v1/spaces/{sid}/documents/{did}/reprocess | 重新处理 |
-| GET | /api/v1/spaces/{sid}/documents/{did}/relations | 文档关联 |
-| POST | /api/v1/spaces/{sid}/documents/{did}/relations | 添加关联 |
-| GET | /api/v1/spaces/{sid}/documents/{did}/assets | 视觉资产列表 |
-| GET | /api/v1/spaces/{sid}/documents/{did}/assets/{aid} | 视觉资产详情 |
-| GET | /api/v1/spaces/{sid}/documents/{did}/assets/{aid}/content | 获取视觉资产短期访问 URL |
-| PATCH | /api/v1/spaces/{sid}/documents/{did}/assets/{aid}/correction | 人工修正视觉资产描述 |
+| GET | /api/v1/spaces/{sid}/md-documents | 文档列表（分页） |
+| POST | /api/v1/spaces/{sid}/md-documents/upload | 上传 .md 文件 |
+| GET | /api/v1/spaces/{sid}/md-documents/{did} | 文档详情 |
+| DELETE | /api/v1/spaces/{sid}/md-documents/{did} | 删除文档 |
 
-#### 搜索
+#### AI 问答（Markdown）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | /api/v1/spaces/{sid}/search | 语义搜索 |
-| POST | /api/v1/spaces/{sid}/search/keyword | 关键词搜索 |
-| POST | /api/v1/spaces/{sid}/search/hybrid | 混合搜索 |
-
-#### AI 问答
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/v1/spaces/{sid}/qa/ask | 问答（阻塞式） |
-| POST | /api/v1/spaces/{sid}/qa/ask/stream | 问答（流式 SSE） |
-| GET | /api/v1/spaces/{sid}/qa/sessions | 会话列表 |
+| POST | /api/v1/spaces/{sid}/md-qa/ask | 问答（阻塞式） |
+| POST | /api/v1/spaces/{sid}/md-qa/ask/agentic | Agentic 多跳问答 |
+| POST | /api/v1/spaces/{sid}/md-qa/ask/stream | 问答（流式 SSE） |
+| GET | /api/v1/spaces/{sid}/qa/sessions | 会话列表（两竖井共享） |
 | GET | /api/v1/spaces/{sid}/qa/sessions/{sessionId}/messages | 会话消息列表 |
 | PATCH | /api/v1/spaces/{sid}/qa/sessions/{sessionId}/title | 重命名会话 |
 | DELETE | /api/v1/spaces/{sid}/qa/sessions/{sessionId} | 删除会话 |
 
-#### 标签
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /api/v1/spaces/{sid}/tags | 标签列表 |
-| GET | /api/v1/spaces/{sid}/tags/tree | 标签树 |
-| POST | /api/v1/spaces/{sid}/tags | 创建标签 |
-| DELETE | /api/v1/spaces/{sid}/tags/{tid} | 删除标签 |
-| POST | /api/v1/spaces/{sid}/tags/{tid}/merge/{tid2} | 合并标签 |
-| GET | /api/v1/spaces/{sid}/tags/graph | 知识图谱数据 |
+> 标准 `/documents`、`/search`、`/tags` 系列接口及知识图谱接口已随标准 RAG 退役移除。
 
 #### 用户管理（管理员）
 
@@ -1061,51 +743,43 @@ SELECT * FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 10;
 
 ### 10.5 向量维度配置
 
-当前配置使用 1536 维向量（与 OpenAI text-embedding-3-small 和 MiniMax embo-01 兼容）。如需修改，需同步更新 `application.yml` 中的 `embedding-dimension` 并**重建** Milvus collection（现有数据需重新向量化）。
+当前配置使用 1536 维向量（DashScope `text-embedding-v2` / MiniMax embedding 均兼容）。如需修改，需同步更新 `application.yml` 中的 `embedding-dimension` 并**重建** `md_kb_chunks` 集合（现有数据需重新向量化）。
 
-### 10.6 文件存储路径
+### 10.6 文件存储
 
-原始上传文件存储在容器内的 `/app/uploads`，挂载到 Docker volume `uploads_data`。可通过环境变量 `FILE_STORAGE_PATH` 修改路径。
+原始 `.md` 文件经 `DocumentObjectStorageService` 存入 MinIO（对象存储，挂载到 Docker volume `minio_data`），数据库中以 `md_documents.object_key` 引用。
 
-### 10.7 Markdown 图文 RAG 运维
+### 10.7 Markdown 图片理解运维
 
-Markdown zip 的原始包、图片原件和流程图渲染图存储在 MinIO，资产元数据存储在 PostgreSQL `document_assets`，检索投影存储在 `document_chunks` 和 Milvus。
+Markdown 中引用的图片由 `MdImageUnderstandingService` 处理（默认 `NoopMdImageUnderstandingService` 占位实现，可切换 `DashScopeMdImageUnderstandingService`），生成的 caption 作为可检索文本随 child 一并入库；图片资产元数据存于 PostgreSQL `md_document_asset`，原图与原始 `.md` 存于 MinIO。
 
 **清理策略**：
 
-- 删除文档时会清理文档关系、chunk 元数据、Milvus 向量和视觉资产记录。
-- 重新处理文档时会先清理旧 chunk、旧 vector、旧视觉资产记录和旧资产对象，再重新入库。
-- MinIO 对象删除失败时会记录 WARN 日志，不阻断数据库清理；需要运维人员根据 object key 做补偿清理。
-
-**视觉模型失败处理**：
-
-- 视觉资产处理失败会重试，重试耗尽后资产状态变为 `FAILED`。
-- 文档正文不受视觉资产失败影响，文档状态会变为 `READY_WITH_ASSET_ERRORS`。
-- 修复外部 OCR/caption 服务后，可通过人工修正接口触发 `REINDEX_PENDING`，或重新处理整篇文档。
+- 删除 Markdown 文档时清理 `md_parent_chunk` / `md_child_chunk` / `md_document_asset` 记录、`md_kb_chunks` 向量及 MinIO 对象。
+- 删除空间时由 MD 空间删除监听器清理该空间下全部 md 表与向量。
+- MinIO 对象删除失败时记录 WARN 日志，不阻断数据库清理；需运维人员按 object key 做补偿清理。
 
 **排查 SQL**：
 
 ```sql
--- 查看待处理或失败的视觉资产
-SELECT id, document_id, asset_type, status, retry_count, next_retry_at, last_error
-FROM document_assets
-WHERE status IN ('PENDING', 'PROCESSING', 'FAILED', 'REINDEX_PENDING', 'REINDEXING')
-ORDER BY updated_at DESC;
+-- 查看某空间的 Markdown 文档及状态
+SELECT id, title, status, chunk_count, error_message, created_at
+FROM md_documents
+WHERE space_id = '空间UUID' AND deleted_at IS NULL
+ORDER BY created_at DESC;
 
--- 查看某个文档的视觉 chunk
-SELECT id, content_type, asset_id, section, anchor_chunk_index
-FROM document_chunks
+-- 查看某文档的 child 分块
+SELECT id, parent_id, seq_in_parent, token_count
+FROM md_child_chunk
 WHERE document_id = '文档UUID'
-  AND content_type <> 'TEXT'
-ORDER BY chunk_index;
+ORDER BY seq_in_parent;
 ```
 
 **上线检查**：
 
-- 确认 MinIO bucket 可写，并且应用具备上传、预签名 URL、删除对象权限。
-- 确认 `document_assets` 和 `document_chunks` 扩展字段迁移已执行。
-- 确认视觉 worker 已启用，并观察是否持续处理 `PENDING` / `REINDEX_PENDING` 资产。
-- 当前默认视觉理解实现是占位链路；接入真实 OCR/caption provider 后再评估并发、超时和重试参数。
+- 确认 MinIO bucket 可写，应用具备上传、预签名 URL、删除对象权限。
+- 确认 Milvus `md_kb_chunks` 集合可用（由 `mdVectorStore` 在启动时 `initializeSchema`）。
+- 默认图片理解为占位实现；接入真实 OCR/caption provider 后再评估并发、超时与重试参数。
 
 ### 10.8 生产环境注意事项
 

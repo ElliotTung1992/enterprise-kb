@@ -37,36 +37,38 @@ There are currently **no automated tests** in this project.
 
 | Component | Purpose | Port |
 |-----------|---------|------|
-| PostgreSQL 16 | Relational data (users, spaces, documents, sessions) | 5432 |
-| Milvus 2.4 | Vector store for embeddings (collection: `kb_chunks`, 1536-dim COSINE) | 19530 |
+| PostgreSQL 16 | Relational data (users, spaces, Markdown documents, QA sessions) | 5432 |
+| Milvus 2.4 | Vector store for Markdown child-chunk embeddings (collection: `md_kb_chunks`, 1536-dim COSINE) | 19530 |
 | Redis 7 | QA session chat history cache (TTL 24h) | 6379 |
 | MinIO | Milvus object storage backend | 9000 |
 
-### Document Ingestion Pipeline
+> **标准（非 Markdown）RAG 竖井已全退役**（迁移 031）。原 `DocumentController` / `DocumentIngestionPipeline` / `HybridSearch` / `Semantic`+`KeywordSearch` / `QnAService` / `AgenticQnAService`、`kb_chunks` 集合、`documents`/`document_chunks` 等 6 张表、以及 `kb-knowledge-graph` 模块均已删除。系统现仅保留 **Markdown 结构感知 RAG 竖井**（设计见 `docs/design-md-structure-rag.md`）。
 
-Upload → `DocumentService` → async `DocumentIngestionPipeline` (virtual thread via `ingestionExecutor`):
+### Document Ingestion Pipeline (Markdown)
 
-1. **PARSING** — `DocumentParserService`: raw file → Spring AI `Document` list
-2. **CHUNKING** — `SentenceAwareChunkingServiceImpl`: sentence-aware splits, 512-token chunks with 100-token overlap
-3. **EMBEDDING + VECTOR STORE** — `VectorStoreService`: calls `EmbeddingModel` → stores in Milvus
-4. **CHUNK METADATA** — `ChunkMetadataService`: persists chunk metadata to PostgreSQL `document_chunks` table
+Upload → `MdDocumentController` → `MdDocumentService` → async `MdDocumentIngestionWorker` (virtual thread via `ingestionExecutor`):
 
-Document status transitions: `PENDING` → `PROCESSING` → `COMPLETED` / `FAILED`.
+1. **STRUCTURE SPLIT** — `MarkdownStructureIngestionService`: 按 H1-H3 切 parent（整段 section），parent 内再切段落级 child；表格双表示（检索用逐行线性化、返回用原始 markdown）；图片走 `MdImageUnderstandingService`（Noop / DashScope 可切换）
+2. **PERSIST CHUNKS** — `md_parent_chunk` / `md_child_chunk` / `md_document_asset`（PostgreSQL）
+3. **EMBED + VECTOR STORE** — `MdVectorStoreService`: child 的 `embed_text` 经 `EmbeddingModel` 入 Milvus `md_kb_chunks`
 
-### Search & QA Pipeline
+Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`。原始 `.md` 存 MinIO（`DocumentObjectStorageService`）。
 
-**Hybrid Search** (`HybridSearchService`): runs semantic + keyword search in parallel, fuses results with RRF (Reciprocal Rank Fusion, k=60).
+### Search & QA Pipeline (Markdown)
 
-- Semantic: Milvus vector similarity via `SemanticSearchService`
-- Keyword: PostgreSQL `pg_trgm` full-text search via `KeywordSearchService`
-- Optional reranking: `RerankService` (DashScope `gte-rerank`)
-- Optional HyDE: `HydeService` expands queries before embedding
+**MD Hybrid Search** (`MdHybridSearchService`): `MdVectorSearchService`（`md_kb_chunks` 向量召回）+ `MdKeywordSearchService`（`md_child_chunk` 上的关键词/BM25）并行，RRF 融合（child 粒度，融合阶段不去重）。
 
-**Standard QA** (`QnAServiceImpl`): hybrid search → rerank → prompt → LLM → persist session.
+- Optional reranking: `RerankService` (DashScope `gte-rerank`)，在 child 粒度精排
+- Optional HyDE / 改写: `HydeService` / `QueryRewriteService`
+- **Parent Expansion** (`MdParentExpansionService`): topK child 按 `parentId` 折叠去重，回查整段 parent 正文 + 多窗节选后交给 LLM（small-to-big）
 
-**Agentic QA** (`AgenticQnAServiceImpl`): uses Spring AI Alibaba `ReactAgent` — LLM autonomously calls `searchKnowledgeBase` tool in a ReAct loop (multi-hop reasoning). Token budget managed by `AgenticTokenBudgetService`.
+**MD QA** (`MdQnAServiceImpl`): MD hybrid search → rerank → parent expansion → prompt → LLM → persist session（`qa_sessions`/`qa_messages`，与会话端点共享）。
 
-**Streaming**: `QnAController` exposes SSE endpoint (`text/event-stream`) via `Flux<String>` for token-by-token responses.
+**MD Agentic QA** (`MdAgenticQnAServiceImpl`): Spring AI Alibaba `ReactAgent`，双工具 `searchKnowledgeBase`（搜 child）+ `readFullSection`（按需展开 parent）。Token budget 由 `AgenticTokenBudgetService` 管理。
+
+**Streaming**: `MdQnAController` 暴露 SSE 端点（`text/event-stream`）。
+
+> 此外，`kb-search` 还含**商城客服助手 / 投诉工作流**（`CustomerAssistantService` / `Complaint*` / `DomainHandler`），它们用各自的 `ReactAgent`，**不依赖**知识库检索，与 MD 竖井相互独立。
 
 ### AI Provider System
 
@@ -76,7 +78,7 @@ Document status transitions: `PENDING` → `PROCESSING` → `COMPLETED` / `FAILE
 - **Embedding**: `dashscopeEmbeddingModel` (marked `@Primary` via `BeanFactoryPostProcessor`), `minimaxEmbeddingModel`
 - Default chat provider: `MINIMAX`; default embedding: `DASHSCOPE`
 
-> **Embedding dimension warning**: All providers use 1536-dim vectors. Switching embedding providers requires rebuilding the Milvus collection and re-ingesting all documents.
+> **Embedding dimension warning**: All providers use 1536-dim vectors. Switching embedding providers requires rebuilding the `md_kb_chunks` collection and re-ingesting all documents.
 
 ### Permission Model
 
@@ -88,10 +90,11 @@ Space-level RBAC enforced via `@PreAuthorize("hasPermission(#spaceId, 'SPACE', '
 - `AuthService`/`AuthServiceImpl` — needs `UserService` from `kb-user` inside `kb-auth`
 - `MethodSecurityExpressionHandler` — registers `SpacePermissionEvaluator`
 - `ingestionExecutor` — JDK 21 virtual thread executor for document ingestion
+- `milvusClient` — hand-defined `MilvusServiceClient` for `mdVectorStore`. Spring AI's `MilvusVectorStoreAutoConfiguration` is excluded via `spring.autoconfigure.exclude`, so no `kb_chunks` collection is auto-created (standard RAG decommissioned)
 
 ### Database Migrations
 
-Liquibase manages schema via `kb-app/src/main/resources/db/changelog/db.changelog-master.xml`. Migration files are numbered `001–017` in `db/changelog/`. New migrations must be added there as numbered SQL files and referenced in the master changelog.
+Liquibase manages schema via `kb-app/src/main/resources/db/changelog/db.changelog-master.xml`. Migration files are numbered `001–031` in `db/changelog/`. New migrations must be added there as numbered SQL files and referenced in the master changelog. (`031-drop-standard-rag.sql` dropped the 6 standard-RAG tables.)
 
 MyBatis mapper XMLs live in each module's `src/main/resources/mapper/`. The global `type-handlers-package` for UUID/JSONB handlers is `com.enterprise.kb.document.typehandler`.
 
@@ -106,7 +109,8 @@ MyBatis mapper XMLs live in each module's `src/main/resources/mapper/`. The glob
 | 文件 | 内容 |
 |------|------|
 | `docs/operation.md` | 用户操作手册：功能说明、API 接口速查、部署运维 |
-| `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，含全部 16 张表） |
+| `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，基础用户/空间/会话体系；标准 RAG 表已退役不再绘制） |
+| `docs/design-md-structure-rag.md` | Markdown 结构感知 RAG（small-to-big 父子索引）设计文档 |
 | `planning/plan.md` | 可扩展内容与优化点规划（技术向：RAG/性能/质量） |
 | `planning/plan2.md` | 可扩展内容与优化点规划（产品向：体验/安全/集成） |
 
@@ -123,7 +127,7 @@ MyBatis mapper XMLs live in each module's `src/main/resources/mapper/`. The glob
 多模块 Maven 项目，模块依赖顺序：
 
 ```
-kb-common → kb-auth → kb-user → kb-document / kb-search / kb-knowledge-graph → kb-app
+kb-common → kb-auth → kb-user → kb-document / kb-search → kb-app
 ```
 
 | 模块 | 职责 |
@@ -131,10 +135,11 @@ kb-common → kb-auth → kb-user → kb-document / kb-search / kb-knowledge-gra
 | `kb-common` | 公共异常、DTO、工具类 |
 | `kb-auth` | JWT 认证、登录注册、Token 刷新 |
 | `kb-user` | 用户管理、知识空间、权限校验 |
-| `kb-document` | 文档上传、解析、向量入库 |
-| `kb-search` | 关键词检索、语义检索、混合检索、问答、**会话管理** |
-| `kb-knowledge-graph` | 标签管理、知识图谱、自动打标 |
+| `kb-document` | Markdown 文档上传、结构化解析、图片理解、向量入库 |
+| `kb-search` | Markdown 混合检索、问答（标准/Agentic）、客服助手、投诉工作流、Trace/Eval、**会话管理** |
 | `kb-app` | 启动入口、Bean 装配（AppConfig） |
+
+> `kb-knowledge-graph` 模块已随标准 RAG 退役删除。
 
 ---
 

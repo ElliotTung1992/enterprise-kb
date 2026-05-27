@@ -35,4 +35,5 @@
     <include file="db/changelog/028-md-documents-object-key.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/029-add-md-bm25.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/030-add-md-document-assets.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/031-drop-standard-rag.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

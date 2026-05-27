@@ -72,7 +72,7 @@ import java.util.regex.Pattern;
 
 /**
  * 商城客户助手服务实现。
- * <p>独立于知识库问答（AgenticQnAServiceImpl），使用 ReactAgent 驱动售后咨询对话：
+ * <p>独立于知识库问答，使用 ReactAgent 驱动售后咨询对话：
  * 查询订单资格 → 触发 HITL 人工审核 → 审核完成后通知用户。</p>
  */
 @Slf4j

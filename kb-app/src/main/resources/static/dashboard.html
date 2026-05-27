@@ -16,10 +16,7 @@
   <div class="brand"><i class="bi bi-journal-bookmark-fill me-2"></i>知识库</div>
   <ul class="nav flex-column mt-2 flex-grow-1">
     <li class="nav-item"><a class="nav-link active" href="/dashboard.html"><i class="bi bi-grid-1x2"></i>仪表盘</a></li>
-    <li class="nav-item"><a class="nav-link" href="/upload.html"><i class="bi bi-cloud-upload"></i>上传文档</a></li>
-    <li class="nav-item"><a class="nav-link" href="/search.html"><i class="bi bi-search"></i>搜索</a></li>
-    <li class="nav-item"><a class="nav-link" href="/qa.html"><i class="bi bi-chat-dots"></i>AI 问答</a></li>
-    <li class="nav-item"><a class="nav-link" href="/tags.html"><i class="bi bi-tags"></i>标签管理</a></li>
+    <li class="nav-item"><a class="nav-link" href="/md-rag.html"><i class="bi bi-markdown"></i>Markdown RAG</a></li>
   </ul>
   <div class="p-3 border-top" style="border-color:#312e81!important">
     <small class="d-block text-truncate mb-2" id="sidebar-username"></small>
@@ -46,41 +43,29 @@
 
   <div class="p-4">
     <!-- Stats row -->
-    <div class="row g-3 mb-4" id="stats-row">
+    <div class="row g-3 mb-4">
       <div class="col-md-3">
-        <div class="kb-card text-center stat-card" id="card-docs" title="查看所有文档">
-          <div class="fs-2 fw-bold text-primary" id="stat-docs">—</div>
-          <div class="text-muted small">文档总数 <i class="bi bi-arrow-right-short"></i></div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="kb-card text-center stat-card" id="card-ready" title="查看已就绪文档">
-          <div class="fs-2 fw-bold text-success" id="stat-ready">—</div>
-          <div class="text-muted small">已就绪 <i class="bi bi-arrow-right-short"></i></div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="kb-card text-center stat-card" id="card-processing" title="查看处理中文档">
-          <div class="fs-2 fw-bold text-warning" id="stat-processing">—</div>
-          <div class="text-muted small">处理中 <i class="bi bi-arrow-right-short"></i></div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="kb-card text-center stat-card" id="card-spaces" title="查看所有空间">
+        <div class="kb-card text-center stat-card" id="card-spaces" title="管理所有空间">
           <div class="fs-2 fw-bold text-info" id="stat-spaces">—</div>
           <div class="text-muted small">空间数 <i class="bi bi-arrow-right-short"></i></div>
         </div>
       </div>
     </div>
 
-    <!-- Recent docs -->
+    <!-- Markdown RAG 入口 -->
     <div class="kb-card">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>最近文档</h6>
-        <a href="/upload.html" class="btn btn-sm btn-primary"><i class="bi bi-plus me-1"></i>上传</a>
-      </div>
-      <div id="recent-docs">
-        <div class="text-center text-muted py-4">请先选择一个空间</div>
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:48px;height:48px;background:#ede9fe;color:#6d28d9;font-size:1.4rem">
+            <i class="bi bi-markdown"></i>
+          </div>
+          <div>
+            <h6 class="fw-bold mb-1">Markdown 结构化问答</h6>
+            <div class="text-muted small mb-0">上传 Markdown 文档、按文档结构检索并问答。文档的上传与问答均在 Markdown RAG 页面完成。</div>
+          </div>
+        </div>
+        <a href="/md-rag.html" class="btn btn-primary"><i class="bi bi-arrow-right-circle me-1"></i>进入 Markdown RAG</a>
       </div>
     </div>
   </div>
@@ -144,44 +129,13 @@
       </div>
       <div class="modal-body pt-2">
         <p class="mb-1">确认删除空间 <strong id="delete-space-name" class="text-danger"></strong>？</p>
-        <p class="text-muted small mb-0">空间内所有文档及向量数据将被永久删除，此操作不可恢复。</p>
+        <p class="text-muted small mb-0">空间内所有 Markdown 文档及向量数据将被永久删除，此操作不可恢复。</p>
       </div>
       <div class="modal-footer border-0">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
         <button type="button" class="btn btn-danger" id="btn-confirm-delete-space">
           <i class="bi bi-trash3 me-1"></i>确认删除
         </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Docs List Modal -->
-<div class="modal fade" id="docs-modal" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="docs-modal-title"><i class="bi bi-files me-2 text-primary"></i>文档列表</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="d-flex gap-2 mb-3 flex-wrap">
-          <input type="radio" class="btn-check" name="doc-filter" id="df-all" value="">
-          <label class="btn btn-sm btn-outline-secondary" for="df-all">全部</label>
-          <input type="radio" class="btn-check" name="doc-filter" id="df-ready" value="READY">
-          <label class="btn btn-sm btn-outline-success" for="df-ready">已就绪</label>
-          <input type="radio" class="btn-check" name="doc-filter" id="df-processing" value="PROCESSING">
-          <label class="btn btn-sm btn-outline-warning" for="df-processing">处理中</label>
-          <input type="radio" class="btn-check" name="doc-filter" id="df-pending" value="PENDING">
-          <label class="btn btn-sm btn-outline-secondary" for="df-pending">待处理</label>
-          <input type="radio" class="btn-check" name="doc-filter" id="df-failed" value="FAILED">
-          <label class="btn btn-sm btn-outline-danger" for="df-failed">失败</label>
-        </div>
-        <div id="docs-modal-body"></div>
-      </div>
-      <div class="modal-footer">
-        <a href="/upload.html" class="btn btn-primary btn-sm"><i class="bi bi-plus me-1"></i>上传文档</a>
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
       </div>
     </div>
   </div>
@@ -196,9 +150,6 @@ requireAuth();
 const username = localStorage.getItem('username') || '';
 document.getElementById('sidebar-username').textContent = username;
 document.getElementById('topbar-username').textContent = username;
-
-const statusColors = { PENDING: 'badge-pending', PROCESSING: 'badge-processing', READY: 'badge-ready', FAILED: 'badge-failed' };
-const statusLabels = { PENDING: '待处理', PROCESSING: '处理中', READY: '就绪', FAILED: '失败' };
 
 let allSpaces = [];
 
@@ -219,10 +170,9 @@ async function loadSpaces() {
   if (saved && allSpaces.find(s => s.id === saved)) sel.value = saved;
   else if (allSpaces.length) sel.value = allSpaces[0].id;
 
-  if (sel.value) loadDashboard(sel.value);
+  if (sel.value) setCurrentSpace(sel.value, sel.options[sel.selectedIndex].text);
   sel.addEventListener('change', () => {
     setCurrentSpace(sel.value, sel.options[sel.selectedIndex].text);
-    loadDashboard(sel.value);
   });
 }
 
@@ -247,9 +197,6 @@ function openSpacesList() {
             </div>
             ${s.description ? `<small class="text-muted text-truncate d-block">${escHtml(s.description)}</small>` : ''}
           </div>
-          <span class="text-muted small d-flex align-items-center gap-1 flex-shrink-0">
-            <i class="bi bi-files"></i>查看文档
-          </span>
         </a>
         <button class="btn btn-sm btn-outline-danger flex-shrink-0" title="删除空间"
                 onclick="confirmDeleteSpace(${i});return false;">
@@ -286,8 +233,7 @@ document.getElementById('btn-confirm-delete-space').addEventListener('click', as
 
     if (sel.value === space.id) {
       sel.value = allSpaces[0]?.id || '';
-      if (sel.value) loadDashboard(sel.value);
-      else document.getElementById('recent-docs').innerHTML = '<div class="text-center text-muted py-4">请先选择一个空间</div>';
+      if (sel.value) setCurrentSpace(sel.value, sel.options[sel.selectedIndex].text);
     }
 
     showToast('空间已删除');
@@ -301,122 +247,13 @@ document.getElementById('btn-confirm-delete-space').addEventListener('click', as
 
 function switchToSpace(idx) {
   const s = allSpaces[idx];
-  const spaceId = s.id;
-  const spaceName = s.name;
-
   const sel = document.getElementById('space-select');
-  sel.value = spaceId;
-  setCurrentSpace(spaceId, spaceName);
-  loadDashboard(spaceId);
-
-  const spacesEl = document.getElementById('spaces-list-modal');
-  const spacesModal = bootstrap.Modal.getInstance(spacesEl);
-
-  function openDocs() {
-    document.getElementById('docs-modal-title').innerHTML =
-      `<i class="bi bi-files me-2 text-primary"></i>${escHtml(spaceName)} — 文档列表`;
-    document.getElementById('df-all').checked = true;
-    const docsModal = new bootstrap.Modal(document.getElementById('docs-modal'));
-    docsModal.show();
-    renderDocsModal('', spaceId);
-    document.querySelectorAll('input[name="doc-filter"]').forEach(input => {
-      input.onchange = () => renderDocsModal(input.value, spaceId);
-    });
-  }
-
-  if (spacesModal) {
-    spacesEl.addEventListener('hidden.bs.modal', openDocs, { once: true });
-    spacesModal.hide();
-  } else {
-    openDocs();
-  }
+  sel.value = s.id;
+  setCurrentSpace(s.id, s.name);
+  bootstrap.Modal.getInstance(document.getElementById('spaces-list-modal'))?.hide();
 }
 
-// ── Docs modal ────────────────────────────────────────────────────────────
-
-function openDocsModal(filterStatus) {
-  const spaceId = document.getElementById('space-select').value;
-  if (!spaceId) { showToast('请先选择空间', 'error'); return; }
-
-  const radio = document.querySelector(`input[name="doc-filter"][value="${filterStatus}"]`);
-  if (radio) radio.checked = true;
-
-  new bootstrap.Modal(document.getElementById('docs-modal')).show();
-  renderDocsModal(filterStatus, spaceId);
-
-  document.querySelectorAll('input[name="doc-filter"]').forEach(input => {
-    input.onchange = () => renderDocsModal(input.value, spaceId);
-  });
-}
-
-async function renderDocsModal(filterStatus, spaceId) {
-  const body = document.getElementById('docs-modal-body');
-  body.innerHTML = '<div class="text-center py-4"><span class="spinner-border text-primary"></span></div>';
-  try {
-    const params = new URLSearchParams({ size: 50 });
-    if (filterStatus) params.set('status', filterStatus);
-    const res = await apiFetch(`/spaces/${spaceId}/documents?${params}`);
-    const docs = res.data?.content || [];
-    if (!docs.length) {
-      body.innerHTML = '<div class="text-center text-muted py-4">暂无文档</div>';
-      return;
-    }
-    body.innerHTML = docs.map(d => `
-      <div class="d-flex align-items-center gap-3 py-2 border-bottom">
-        <i class="bi ${mimeIcon(d.mimeType)} fs-5 flex-shrink-0"></i>
-        <div class="flex-grow-1 overflow-hidden">
-          <div class="fw-semibold text-truncate">${escHtml(d.title)}</div>
-          <small class="text-muted">${formatSize(d.fileSizeBytes)} · ${formatDate(d.createdAt)}${d.chunkCount ? ' · ' + d.chunkCount + ' 块' : ''}</small>
-        </div>
-        <span class="badge ${statusColors[d.status] || ''} flex-shrink-0">${statusLabels[d.status] || d.status}</span>
-        <button class="btn btn-sm btn-outline-danger flex-shrink-0" title="删除"
-                onclick="deleteDoc('${d.id}','${spaceId}')">
-          <i class="bi bi-trash3"></i>
-        </button>
-      </div>`).join('');
-  } catch (err) {
-    body.innerHTML = `<div class="alert alert-danger">${escHtml(err.message)}</div>`;
-  }
-}
-
-async function deleteDoc(docId, spaceId) {
-  if (!confirm('确认删除此文档？此操作不可恢复。')) return;
-  try {
-    await apiFetch(`/spaces/${spaceId}/documents/${docId}`, { method: 'DELETE' });
-    showToast('文档已删除');
-    const activeFilter = document.querySelector('input[name="doc-filter"]:checked')?.value || '';
-    renderDocsModal(activeFilter, spaceId);
-    loadDashboard(spaceId);
-  } catch (err) { showToast(err.message, 'error'); }
-}
-
-document.getElementById('card-docs').addEventListener('click', () => openDocsModal(''));
-document.getElementById('card-ready').addEventListener('click', () => openDocsModal('READY'));
-document.getElementById('card-processing').addEventListener('click', () => openDocsModal('PROCESSING'));
 document.getElementById('card-spaces').addEventListener('click', openSpacesList);
-
-// ── Dashboard ─────────────────────────────────────────────────────────────
-
-async function loadDashboard(spaceId) {
-  setCurrentSpace(spaceId, document.getElementById('space-select').options[document.getElementById('space-select').selectedIndex]?.text || '');
-  const res = await apiFetch(`/spaces/${spaceId}/documents?size=10`);
-  const docs = res.data?.content || [];
-  document.getElementById('stat-docs').textContent = res.data?.totalElements ?? 0;
-  document.getElementById('stat-ready').textContent = docs.filter(d => d.status === 'READY').length;
-  document.getElementById('stat-processing').textContent = docs.filter(d => d.status === 'PROCESSING' || d.status === 'PENDING').length;
-
-  const container = document.getElementById('recent-docs');
-  if (!docs.length) { container.innerHTML = '<div class="text-center text-muted py-3">暂无文档</div>'; return; }
-  container.innerHTML = docs.map(d => `
-    <div class="d-flex align-items-center py-2 border-bottom">
-      <i class="bi ${mimeIcon(d.mimeType)} me-3 text-primary fs-5"></i>
-      <div class="flex-grow-1 overflow-hidden">
-        <div class="fw-semibold text-truncate">${escHtml(d.title)}</div>
-        <small class="text-muted">${formatSize(d.fileSizeBytes)} · ${formatDate(d.createdAt)}</small>
-      </div>
-      <span class="badge ${statusColors[d.status] || ''} ms-2">${statusLabels[d.status] || d.status}</span>
-    </div>`).join('');
-}
 
 // ── Create space ──────────────────────────────────────────────────────────
 
@@ -439,23 +276,13 @@ document.getElementById('btn-create-space').addEventListener('click', async () =
     opt.value = newSpace.id; opt.textContent = newSpace.name;
     sel.appendChild(opt);
     sel.value = newSpace.id;
+    setCurrentSpace(newSpace.id, newSpace.name);
     document.getElementById('stat-spaces').textContent = allSpaces.length;
-    loadDashboard(newSpace.id);
   } catch (err) { showToast(err.message, 'error'); }
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function mimeIcon(mime) {
-  if (!mime) return 'bi-file-earmark';
-  if (mime.includes('pdf')) return 'bi-file-earmark-pdf text-danger';
-  if (mime.includes('word')) return 'bi-file-earmark-word text-primary';
-  if (mime.includes('html')) return 'bi-file-earmark-code text-warning';
-  if (mime.includes('markdown') || mime.includes('plain')) return 'bi-file-earmark-text text-secondary';
-  return 'bi-file-earmark';
-}
-function formatSize(b) { if (!b) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(1) + ' KB'; return (b/1048576).toFixed(1) + ' MB'; }
-function formatDate(s) { return s ? new Date(s).toLocaleDateString('zh-CN') : ''; }
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 loadSpaces().catch(console.error);

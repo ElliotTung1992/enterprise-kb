@@ -7,16 +7,14 @@ import com.enterprise.kb.auth.service.impl.JwtServiceImpl;
 import com.enterprise.kb.user.security.SpacePermissionEvaluator;
 import com.enterprise.kb.user.service.UserService;
 import io.milvus.client.MilvusServiceClient;
+import io.milvus.param.ConnectParam;
 import io.milvus.param.IndexType;
 import io.milvus.param.MetricType;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.milvus.MilvusVectorStore;
-import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
-import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -119,7 +117,7 @@ public class AppConfig {
     /**
      * Markdown 结构感知 RAG 专用 Milvus 集合。
      *
-     * <p>该集合与标准 RAG 的 {@code kb_chunks} 物理隔离，避免两条竖井的召回结果混合。
+     * <p>标准 RAG 竖井退役后，{@code md_kb_chunks} 是系统唯一的 Milvus 集合。
      * 入库和查询均通过 {@code mdVectorStore} 显式注入。</p>
      *
      * @param milvusClient   Milvus 客户端
@@ -147,23 +145,28 @@ public class AppConfig {
     }
 
     /**
-     * 将标准 RAG 的自动配置 {@code vectorStore} 标记为 primary。
+     * 应用自定义的 Milvus 客户端。
      *
-     * <p>新增 {@code mdVectorStore} 后，项目中仍有标准竖井通过类型注入 {@link VectorStore}。
-     * 为了不修改标准竖井代码，这里在 Bean 实例化前只调整自动配置 Bean 的优先级。</p>
+     * <p>标准 RAG 竖井退役后，已通过 {@code spring.autoconfigure.exclude} 排除 Spring AI 的
+     * {@code MilvusVectorStoreAutoConfiguration}——该自动配置会创建标准集合 {@code kb_chunks}
+     * 并启用 {@code initialize-schema} 自动建表。由于它同时负责创建 {@link MilvusServiceClient}，
+     * 这里改为手动声明客户端，供 {@code mdVectorStore} 注入。</p>
      *
-     * @return Bean 定义后置处理器
+     * @param host         Milvus 主机
+     * @param port         Milvus 端口
+     * @param databaseName Milvus database
+     * @return Milvus 客户端
      */
     @Bean
-    public static BeanFactoryPostProcessor vectorStorePrimaryPostProcessor() {
-        return new BeanFactoryPostProcessor() {
-            @Override
-            public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-                if (beanFactory.containsBeanDefinition("vectorStore")) {
-                    beanFactory.getBeanDefinition("vectorStore").setPrimary(true);
-                }
-            }
-        };
+    public MilvusServiceClient milvusClient(
+            @Value("${spring.ai.vectorstore.milvus.client.host:localhost}") String host,
+            @Value("${spring.ai.vectorstore.milvus.client.port:19530}") int port,
+            @Value("${spring.ai.vectorstore.milvus.database-name:default}") String databaseName) {
+        return new MilvusServiceClient(ConnectParam.newBuilder()
+                .withHost(host)
+                .withPort(port)
+                .withDatabaseName(databaseName)
+                .build());
     }
 
     /**

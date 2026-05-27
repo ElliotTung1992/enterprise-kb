@@ -16,7 +16,6 @@
         <module>kb-user</module>
         <module>kb-document</module>
         <module>kb-search</module>
-        <module>kb-knowledge-graph</module>
         <module>kb-app</module>
     </modules>
 
@@ -101,11 +100,6 @@
             <dependency>
                 <groupId>com.enterprise</groupId>
                 <artifactId>kb-search</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.enterprise</groupId>
-                <artifactId>kb-knowledge-graph</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

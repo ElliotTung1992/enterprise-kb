@@ -12,6 +12,9 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
+      # 标准 RAG 退役：排除会创建并初始化 kb_chunks 集合的自动配置；
+      # Milvus 客户端改由 AppConfig.milvusClient 手动声明，仅供 md_kb_chunks 使用。
+      - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration
 
   threads:
     virtual:
@@ -72,17 +75,15 @@ spring:
         options:
           model: claude-sonnet-4-5
 
+    # Milvus 自动配置已被 spring.autoconfigure.exclude 排除（标准 RAG 退役）。
+    # 以下仅供 AppConfig.milvusClient 与 mdVectorStore（md_kb_chunks）读取连接信息。
     vectorstore:
       milvus:
         client:
           host: ${MILVUS_HOST:localhost}
           port: ${MILVUS_PORT:19530}
         database-name: default
-        collection-name: kb_chunks
         embedding-dimension: 1536
-        index-type: IVF_FLAT
-        metric-type: COSINE
-        initialize-schema: true
 
 mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
