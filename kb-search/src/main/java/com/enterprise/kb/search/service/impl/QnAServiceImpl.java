@@ -69,7 +69,7 @@ public class QnAServiceImpl implements QnAService {
     }
 
     private QnAResponse askWithTrace(UUID spaceId, QnARequest req, UUID sessionId, TraceScope trace) {
-        // Pre-retrieval 阶段：查询改写 + HyDE 假设文档生成，两者并行提升检索质量
+        // Pre-retrieval 阶段：查询改写 + HyDE 假设文档生成
         String retrievalQuery = queryRewriteService.rewrite(req.question());
         trace.event(new TraceEvent("QUERY_REWRITE", "query-rewrite", "SUCCEEDED",
                 TracePayload.map("question", req.question()),

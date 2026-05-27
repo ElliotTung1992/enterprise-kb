@@ -85,8 +85,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
      */
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
-        UUID sessionId = req.sessionId() != null
-                ? req.sessionId() : UUID.randomUUID();
+        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
         List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
         AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
         List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
