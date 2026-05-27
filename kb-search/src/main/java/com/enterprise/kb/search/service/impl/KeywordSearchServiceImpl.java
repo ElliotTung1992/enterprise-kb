@@ -56,6 +56,8 @@ public class KeywordSearchServiceImpl implements KeywordSearchService {
                         rs.getObject("page_number", Integer.class), rs.getDouble("score"), null,
                         rs.getString("content_type"),
                         rs.getString("asset_id") != null ? UUID.fromString(rs.getString("asset_id")) : null,
+                        null,
+                        null,
                         rs.getString("section"),
                         rs.getObject("anchor_chunk_index", Integer.class)),
                 req.query(), spaceId.toString(), req.query(), req.topK());

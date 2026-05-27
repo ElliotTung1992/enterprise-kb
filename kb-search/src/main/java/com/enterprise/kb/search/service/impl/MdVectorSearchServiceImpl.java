@@ -57,10 +57,14 @@ public class MdVectorSearchServiceImpl implements MdVectorSearchService {
     private SearchHit toHit(Document document) {
         UUID documentId = UUID.fromString(document.getMetadata().get("documentId").toString());
         Object seq = document.getMetadata().get("seqInParent");
+        Object assetId = document.getMetadata().get("assetId");
         return new SearchHit(document.getId(), documentId, title(documentId),
                 truncate(document.getText(), 300), null,
                 document.getScore() != null ? document.getScore() : 0.0,
-                "text/markdown", "MD_CHILD", null,
+                "text/markdown", string(document, "contentType", "MD_CHILD"),
+                assetId != null ? UUID.fromString(assetId.toString()) : null,
+                string(document, "assetUrl"),
+                string(document, "assetTitle"),
                 string(document, "section"),
                 seq != null ? Integer.parseInt(seq.toString()) : null);
     }
@@ -72,6 +76,11 @@ public class MdVectorSearchServiceImpl implements MdVectorSearchService {
     private String string(Document document, String key) {
         Object value = document.getMetadata().get(key);
         return value == null ? null : value.toString();
+    }
+
+    private String string(Document document, String key, String fallback) {
+        String value = string(document, key);
+        return value == null ? fallback : value;
     }
 
     private String truncate(String text, int maxLen) {

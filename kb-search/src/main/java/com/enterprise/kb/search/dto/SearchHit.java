@@ -14,6 +14,8 @@ import java.util.UUID;
  * @param mimeType         文档 MIME 类型
  * @param contentType      分块内容类型
  * @param assetId          关联视觉资产 ID
+ * @param assetUrl         关联视觉资产 URL
+ * @param assetTitle       关联视觉资产标题
  * @param section          所属章节
  * @param anchorChunkIndex 关联的最近文本 chunk 序号
  */
@@ -27,6 +29,8 @@ public record SearchHit(
         String mimeType,
         String contentType,
         UUID assetId,
+        String assetUrl,
+        String assetTitle,
         String section,
         Integer anchorChunkIndex
 ) {}

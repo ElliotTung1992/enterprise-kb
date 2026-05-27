@@ -11,6 +11,8 @@
         <result property="section" column="section"/>
         <result property="seqInParent" column="seq_in_parent"/>
         <result property="embedText" column="embed_text"/>
+        <result property="contentType" column="content_type"/>
+        <result property="assetId" column="asset_id"/>
         <result property="tokenCount" column="token_count"/>
         <result property="embeddingModel" column="embedding_model"/>
         <result property="charStart" column="char_start"/>
@@ -21,7 +23,7 @@
     <insert id="insertBatch">
         INSERT INTO md_child_chunk (
             id, parent_id, document_id, space_id, section, seq_in_parent,
-            embed_text, token_count, embedding_model, char_start, char_end, created_at
+            embed_text, content_type, asset_id, token_count, embedding_model, char_start, char_end, created_at
         ) VALUES
         <foreach collection="list" item="chunk" separator=",">
             (
@@ -32,6 +34,8 @@
                 #{chunk.section},
                 #{chunk.seqInParent},
                 #{chunk.embedText},
+                #{chunk.contentType},
+                #{chunk.assetId,jdbcType=OTHER},
                 #{chunk.tokenCount},
                 #{chunk.embeddingModel},
                 #{chunk.charStart},

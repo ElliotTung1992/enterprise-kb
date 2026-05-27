@@ -1,12 +1,21 @@
 package com.enterprise.kb.document.service.impl;
 
+import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.document.markdown.MarkdownStructureIngestionResult;
 import com.enterprise.kb.document.model.MdChildChunk;
+import com.enterprise.kb.document.model.MdDocumentAsset;
 import com.enterprise.kb.document.model.MdParentChunk;
+import com.enterprise.kb.document.service.DocumentObjectStorageService;
 import com.enterprise.kb.document.service.MarkdownStructureIngestionService;
+import com.enterprise.kb.document.service.MdImageInput;
+import com.enterprise.kb.document.service.MdImageReference;
+import com.enterprise.kb.document.service.MdImageUnderstandingResult;
+import com.enterprise.kb.document.service.MdImageUnderstandingService;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -28,8 +37,14 @@ import java.util.regex.Pattern;
 public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureIngestionService {
 
     private static final Pattern H4_H6 = Pattern.compile("^#{4,6}\\s+.*");
+    private static final Pattern IMAGE_LINE = Pattern.compile("^\\s*!\\[([^]]*)]\\((\\S+)(?:\\s+\"([^\"]*)\")?\\)\\s*$");
+    private static final String IMAGE_END_MARKER = "[/图片说明]";
     private static final int DEFAULT_MAX_TOKENS = 512;
     private static final int DEFAULT_MIN_TOKENS = 64;
+
+    private MdImageUrlResolver imageUrlResolver;
+    private MdImageUnderstandingService imageUnderstandingService;
+    private DocumentObjectStorageService objectStorageService;
 
     @Value("${enterprise.kb.chunking.markdown.max-tokens:512}")
     private int maxTokens = DEFAULT_MAX_TOKENS;
@@ -40,6 +55,27 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
     /** 切分到第几级标题（默认 H1-H3），由配置驱动 parent 切分粒度。 */
     @Value("${enterprise.kb.chunking.markdown.split-heading-levels:3}")
     private int splitHeadingLevels = 3;
+
+    @Value("${enterprise.kb.md.image.max-count:50}")
+    private int maxImageCount = 50;
+
+    @Value("${enterprise.kb.md.image.max-size-mb:10}")
+    private long maxImageSizeMb = 10;
+
+    @Value("${enterprise.kb.md.image.allowed-mime-types:image/png,image/jpeg,image/webp}")
+    private List<String> allowedImageMimeTypes = List.of("image/png", "image/jpeg", "image/webp");
+
+    public MarkdownStructureIngestionServiceImpl() {
+    }
+
+    @Autowired
+    public MarkdownStructureIngestionServiceImpl(MdImageUrlResolver imageUrlResolver,
+                                                 MdImageUnderstandingService imageUnderstandingService,
+                                                 DocumentObjectStorageService objectStorageService) {
+        this.imageUrlResolver = imageUrlResolver;
+        this.imageUnderstandingService = imageUnderstandingService;
+        this.objectStorageService = objectStorageService;
+    }
 
     /** 按 {@code splitHeadingLevels} 构造 parent 切分用的标题正则。 */
     private Pattern headingPattern() {
@@ -62,22 +98,29 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         List<SectionSlice> sections = splitParents(markdown);
         List<MdParentChunk> parents = new ArrayList<>();
         List<MdChildChunk> children = new ArrayList<>();
+        List<MdDocumentAsset> assets = new ArrayList<>();
         List<Document> vectorDocuments = new ArrayList<>();
+        ImageParseState imageState = new ImageParseState();
 
         for (int i = 0; i < sections.size(); i++) {
             SectionSlice section = sections.get(i);
+            // 图片增加过的Section
+            EnhancedSection enhanced = enhanceImages(documentId, spaceId, section, imageState);
+            SectionSlice enhancedSection = new SectionSlice(
+                    section.section(), section.headingLevel(), enhanced.content(), section.charStart(), section.charEnd());
             // 构建parent-chunk
-            MdParentChunk parent = toParent(documentId, spaceId, section, i);
+            MdParentChunk parent = toParent(documentId, spaceId, enhancedSection, i);
             // parent-chunk切child-chunk
-            List<MdChildChunk> childChunks = splitChildren(parent, documentId, spaceId);
+            List<MdChildChunk> childChunks = splitChildren(parent, documentId, spaceId, enhanced.images());
             parent.setChildCount(childChunks.size());
             parents.add(parent);
             children.addAll(childChunks);
+            assets.addAll(enhanced.images().stream().map(EnhancedImage::asset).toList());
             for (MdChildChunk child : childChunks) {
                 vectorDocuments.add(toVectorDocument(child));
             }
         }
-        return new MarkdownStructureIngestionResult(parents, children, vectorDocuments);
+        return new MarkdownStructureIngestionResult(parents, children, assets, vectorDocuments);
     }
 
     private String readFile(String filePath) {
@@ -147,9 +190,10 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         return parent;
     }
 
-    private List<MdChildChunk> splitChildren(MdParentChunk parent, UUID documentId, UUID spaceId) {
+    private List<MdChildChunk> splitChildren(MdParentChunk parent, UUID documentId, UUID spaceId,
+                                             List<EnhancedImage> images) {
         // 行数据转块
-        List<AtomicBlock> blocks = atomicBlocks(parent.getContent());
+        List<AtomicBlock> blocks = atomicBlocks(parent.getContent(), images);
         // 打包数据
         List<ChildSlice> slices = packBlocks(blocks);
         List<MdChildChunk> children = new ArrayList<>();
@@ -164,6 +208,15 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
             child.setSection(parent.getSection());
             child.setSeqInParent(i);
             child.setEmbedText(slice.embedText());
+            child.setContentType(slice.asset() == null ? "TEXT" : "IMAGE_CAPTION");
+            if (slice.asset() != null) {
+                MdDocumentAsset asset = slice.asset();
+                child.setAssetId(asset.getId());
+                child.setAssetUrl(asset.getImageUrl());
+                child.setAssetTitle(firstText(asset.getTitle(), asset.getAltText(), asset.getObjectKey()));
+                child.setAssetObjectKey(asset.getObjectKey());
+                asset.setChildChunkId(child.getId());
+            }
             child.setTokenCount(estimateTokens(slice.embedText()));
             child.setCharStart(slice.charStart());
             child.setCharEnd(slice.charEnd());
@@ -173,14 +226,27 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         return children;
     }
 
-    private List<AtomicBlock> atomicBlocks(String content) {
+    private List<AtomicBlock> atomicBlocks(String content, List<EnhancedImage> images) {
         // 解析成一行一行的数据
         List<Line> lines = linesWithOffsets(content);
+        Map<Integer, MdDocumentAsset> imageByStart = new HashMap<>();
+        for (EnhancedImage image : images) {
+            imageByStart.put(image.start(), image.asset());
+        }
         List<AtomicBlock> blocks = new ArrayList<>();
         for (int i = 0; i < lines.size(); ) {
             Line line = lines.get(i);
             if (line.text().isBlank()) {
                 i++;
+                continue;
+            }
+            // 处理图片
+            MdDocumentAsset image = imageByStart.get(line.start());
+            if (image != null) {
+                CollectResult result = collectImageBlock(lines, i);
+                blocks.add(new AtomicBlock(result.raw().strip(), result.raw().strip(),
+                        result.start(), result.end(), false, true, image));
+                i = result.nextIndex();
                 continue;
             }
             // 处理代码块 - 代码块不被分割
@@ -228,7 +294,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
 
     private AtomicBlock toAtomicBlock(String text, int start, int end) {
         String stripped = text.strip();
-        return new AtomicBlock(stripped, stripped, start, end, false);
+        return new AtomicBlock(stripped, stripped, start, end, false, false, null);
     }
 
     private List<Line> linesWithOffsets(String content) {
@@ -248,6 +314,18 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         int endIndex = startIndex + 1;
         while (endIndex < lines.size()) {
             if (lines.get(endIndex).text().stripLeading().startsWith("```")) {
+                endIndex++;
+                break;
+            }
+            endIndex++;
+        }
+        return collectRange(lines, startIndex, endIndex);
+    }
+
+    private CollectResult collectImageBlock(List<Line> lines, int startIndex) {
+        int endIndex = startIndex + 1;
+        while (endIndex < lines.size()) {
+            if (lines.get(endIndex).text().strip().equals(IMAGE_END_MARKER)) {
                 endIndex++;
                 break;
             }
@@ -289,7 +367,8 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
 
     private boolean isStructuralStart(String text) {
         String stripped = text.stripLeading();
-        return stripped.startsWith("```") || isTableCandidateLine(stripped) || isListLine(stripped);
+        return stripped.startsWith("```") || IMAGE_LINE.matcher(stripped).matches()
+                || isTableCandidateLine(stripped) || isListLine(stripped);
     }
 
     private boolean isTableStart(List<Line> lines, int index) {
@@ -333,7 +412,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
             }
             if (!current.isEmpty() && estimateTokens(current + sentence) > maxTokens) {
                 result.add(new AtomicBlock(current.toString().strip(), current.toString().strip(),
-                        baseStart + currentStart, baseStart + matcher.start(), false));
+                        baseStart + currentStart, baseStart + matcher.start(), false, false, null));
                 current.setLength(0);
                 currentStart = matcher.start();
             }
@@ -345,7 +424,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         }
         if (!current.isEmpty()) {
             result.add(new AtomicBlock(current.toString().strip(), current.toString().strip(),
-                    baseStart + currentStart, baseStart + text.length(), false));
+                    baseStart + currentStart, baseStart + text.length(), false, false, null));
         }
         return result;
     }
@@ -360,7 +439,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
             String candidate = current + (current.isEmpty() ? "" : "\n") + line;
             if (!current.isEmpty() && estimateTokens(candidate) > maxTokens) {
                 result.add(new AtomicBlock(current.toString(), current.toString(),
-                        baseStart + currentStart, baseStart + offset, false));
+                        baseStart + currentStart, baseStart + offset, false, false, null));
                 current.setLength(0);
                 currentStart = offset;
             }
@@ -372,7 +451,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         }
         if (!current.isEmpty()) {
             result.add(new AtomicBlock(current.toString(), current.toString(),
-                    baseStart + currentStart, baseStart + text.length(), false));
+                    baseStart + currentStart, baseStart + text.length(), false, false, null));
         }
         return result;
     }
@@ -381,6 +460,16 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         List<ChildSlice> slices = new ArrayList<>();
         List<AtomicBlock> current = new ArrayList<>();
         for (AtomicBlock block : blocks) {
+            // 如果是图片则单独处理
+            if (block.image()) {
+                // 不管怎么样，前面的单独成一块
+                if (!current.isEmpty()) {
+                    addSlice(slices, current);
+                    current = new ArrayList<>();
+                }
+                addSlice(slices, List.of(block));
+                continue;
+            }
             int currentTokens = tokenSum(current);
             int nextTokens = currentTokens + estimateTokens(block.embedText());
             // 仅当再并入当前块会超 max 时，才给已累积的 current 收口；否则继续贪心累积，
@@ -401,7 +490,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         }
         if (!current.isEmpty()) {
             // 尾部孤儿：最后一个 child 不足 min 且有前序兄弟 → 后向并入前一兄弟
-            if (tokenSum(current) < minTokens && !slices.isEmpty()) {
+            if (tokenSum(current) < minTokens && !slices.isEmpty() && slices.getLast().asset() == null) {
                 mergeIntoPrevious(slices, current);
             } else {
                 addSlice(slices, current);
@@ -413,14 +502,15 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
     private void addSlice(List<ChildSlice> slices, List<AtomicBlock> blocks) {
         String rawText = joinRaw(blocks);
         String embedText = joinEmbed(blocks);
-        slices.add(new ChildSlice(rawText, embedText, blocks.getFirst().start(), blocks.getLast().end()));
+        MdDocumentAsset asset = blocks.size() == 1 ? blocks.getFirst().asset() : null;
+        slices.add(new ChildSlice(rawText, embedText, blocks.getFirst().start(), blocks.getLast().end(), asset));
     }
 
     private void mergeIntoPrevious(List<ChildSlice> slices, List<AtomicBlock> blocks) {
         ChildSlice previous = slices.removeLast();
         String rawText = previous.rawText() + "\n\n" + joinRaw(blocks);
         String embedText = previous.embedText() + "\n\n" + joinEmbed(blocks);
-        slices.add(new ChildSlice(rawText, embedText, previous.charStart(), blocks.getLast().end()));
+        slices.add(new ChildSlice(rawText, embedText, previous.charStart(), blocks.getLast().end(), null));
     }
 
     private String joinRaw(List<AtomicBlock> blocks) {
@@ -472,13 +562,13 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         // 没超限制
         if (estimateTokens(linearized) <= maxTokens) {
             return List.of(new AtomicBlock(tableText.strip(), linearized,
-                    baseStart, baseStart + tableText.length(), true));
+                    baseStart, baseStart + tableText.length(), true, false, null));
         }
         // 如果只有2行数据
         List<Line> lines = linesWithOffsets(tableText);
         if (lines.size() <= 2) {
             return List.of(new AtomicBlock(tableText.strip(), linearized,
-                    baseStart, baseStart + tableText.length(), true));
+                    baseStart, baseStart + tableText.length(), true, false, null));
         }
 
         List<String> headers = cells(lines.getFirst().text());
@@ -511,7 +601,7 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         String raw = String.join("\n", lines.stream().map(Line::text).toList());
         String embed = String.join("\n", embeds);
         return new AtomicBlock(raw, embed,
-                baseStart + lines.getFirst().start(), baseStart + lines.getLast().end(), true);
+                baseStart + lines.getFirst().start(), baseStart + lines.getLast().end(), true, false, null);
     }
 
     private boolean isSeparatorLine(String row) {
@@ -538,6 +628,170 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         return String.join("；", pairs);
     }
 
+    // 把md文件中图片的信息追加图片识别信息
+    private EnhancedSection enhanceImages(UUID documentId, UUID spaceId, SectionSlice section, ImageParseState state) {
+        // 块数据转行数据
+        List<Line> lines = linesWithOffsets(section.content());
+        StringBuilder enhanced = new StringBuilder();
+        List<EnhancedImage> images = new ArrayList<>();
+        boolean inCodeFence = false;
+        for (Line line : lines) {
+            String text = line.text();
+            String stripped = text.stripLeading();
+            // 判断图片是否在代码块中
+            boolean codeFence = stripped.startsWith("```");
+            if (codeFence) {
+                inCodeFence = !inCodeFence;
+            }
+            Matcher matcher = IMAGE_LINE.matcher(text);
+            if (!inCodeFence && matcher.matches()) {
+                ensureImageServices();
+                if (state.assetIndex >= maxImageCount) {
+                    throw new InvalidRequestException("Markdown 图片数量超过限制: " + maxImageCount);
+                }
+                String altText = matcher.group(1).strip();
+                String imageUrl = matcher.group(2).strip();
+                String title = matcher.group(3) == null ? "" : matcher.group(3).strip();
+                MdDocumentAsset asset = buildAsset(documentId, spaceId, section.section(),
+                        state.assetIndex++, imageUrl, altText, title, state);
+                int imageStart = enhanced.length();
+                appendLine(enhanced, line);
+                enhanced.append('\n');
+                enhanced.append(buildImageChunkText(asset)).append('\n');
+                images.add(new EnhancedImage(imageStart, enhanced.length(), asset));
+                continue;
+            }
+            appendLine(enhanced, line);
+        }
+        return new EnhancedSection(enhanced.toString().stripTrailing(), images);
+    }
+
+    private MdDocumentAsset buildAsset(UUID documentId, UUID spaceId, String section, int assetIndex,
+                                       String imageUrl, String altText, String title, ImageParseState state) {
+        MdImageReference reference = imageUrlResolver.resolve(imageUrl);
+        // 开始识别图片中的信息
+        ImageUnderstandingBundle bundle = state.understandingCache.computeIfAbsent(reference.objectKey(),
+                objectKey -> understandImage(reference, section, altText, title));
+
+        MdDocumentAsset asset = new MdDocumentAsset();
+        asset.setId(UUID.randomUUID());
+        asset.setDocumentId(documentId);
+        asset.setSpaceId(spaceId);
+        asset.setAssetIndex(assetIndex);
+        asset.setImageUrl(reference.imageUrl());
+        asset.setObjectKey(reference.objectKey());
+        asset.setMimeType(bundle.mimeType());
+        asset.setFileSize(bundle.fileSize());
+        asset.setSection(section);
+        asset.setAltText(altText);
+        asset.setTitle(firstText(title, altText, reference.objectKey()));
+        asset.setOcrText(bundle.result().ocrText());
+        asset.setCaption(bundle.result().caption());
+        asset.setSummary(bundle.result().summary());
+        asset.setEntities(bundle.result().entities());
+        asset.setCreatedAt(Instant.now());
+        asset.setUpdatedAt(Instant.now());
+        return asset;
+    }
+
+    // 识别图片信息
+    private ImageUnderstandingBundle understandImage(MdImageReference reference, String section,
+                                                     String altText, String title) {
+        Path tempFile = null;
+        try {
+            tempFile = Files.createTempFile("kb-md-image-", ".img");
+            objectStorageService.downloadFile(reference.objectKey(), tempFile);
+            long fileSize = Files.size(tempFile);
+            long maxBytes = maxImageSizeMb * 1024 * 1024;
+            if (fileSize > maxBytes) {
+                throw new InvalidRequestException("Markdown 图片超过最大限制: " + maxImageSizeMb + " MB");
+            }
+            String mimeType = detectImageMimeType(tempFile, reference.objectKey());
+            if (!allowedImageMimeTypes.contains(mimeType)) {
+                throw new InvalidRequestException("Markdown 图片类型不支持: " + mimeType);
+            }
+            byte[] bytes = Files.readAllBytes(tempFile);
+            MdImageUnderstandingResult result = imageUnderstandingService.understand(new MdImageInput(
+                    bytes, mimeType, reference.imageUrl(), reference.objectKey(), section, altText, title));
+            if (!StringUtils.hasText(result.caption()) || !StringUtils.hasText(result.summary())) {
+                throw new InvalidRequestException("Markdown 图片理解结果缺少 caption 或 summary");
+            }
+            return new ImageUnderstandingBundle(mimeType, fileSize, result);
+        } catch (IOException e) {
+            throw new InvalidRequestException("读取 Markdown 图片失败: " + reference.objectKey());
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                    // 临时文件删除失败不影响导入结果。
+                }
+            }
+        }
+    }
+
+    // 识别图片格式
+    private String detectImageMimeType(Path path, String objectKey) throws IOException {
+        String lower = objectKey.toLowerCase();
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".webp")) return "image/webp";
+        String detected = Files.probeContentType(path);
+        if (StringUtils.hasText(detected)) {
+            return normalizeJpegMimeType(detected);
+        }
+        return "application/octet-stream";
+    }
+
+    private String normalizeJpegMimeType(String mimeType) {
+        return "image/jpg".equalsIgnoreCase(mimeType) ? "image/jpeg" : mimeType.toLowerCase();
+    }
+
+    private String buildImageChunkText(MdDocumentAsset asset) {
+        return """
+                [图片说明]
+                图片标题：%s
+                所在章节：%s
+                图片地址：%s
+                替代文本：%s
+                OCR文字：%s
+                图片描述：%s
+                检索摘要：%s
+                关键实体：%s
+                [/图片说明]
+                """.formatted(
+                firstText(asset.getTitle(), asset.getAltText(), asset.getObjectKey()),
+                firstText(asset.getSection(), "未命名章节"),
+                firstText(asset.getObjectKey(), ""),
+                firstText(asset.getAltText(), ""),
+                firstText(asset.getOcrText(), ""),
+                firstText(asset.getCaption(), ""),
+                firstText(asset.getSummary(), ""),
+                firstText(asset.getEntities(), "")).strip();
+    }
+
+    private void appendLine(StringBuilder builder, Line line) {
+        builder.append(line.text());
+        if (line.end() > line.start() && line.end() > line.start() + line.text().length()) {
+            builder.append('\n');
+        }
+    }
+
+    private void ensureImageServices() {
+        if (imageUrlResolver == null || imageUnderstandingService == null || objectStorageService == null) {
+            throw new InvalidRequestException("Markdown 图片处理服务未配置");
+        }
+    }
+
+    private String firstText(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     private Document toVectorDocument(MdChildChunk child) {
         Map<String, Object> metadata = new HashMap<>();
         metadata.put("documentId", child.getDocumentId().toString());
@@ -545,6 +799,13 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
         metadata.put("parentId", child.getParentId().toString());
         metadata.put("section", child.getSection());
         metadata.put("seqInParent", child.getSeqInParent());
+        metadata.put("contentType", child.getContentType());
+        if (child.getAssetId() != null) {
+            metadata.put("assetId", child.getAssetId().toString());
+            metadata.put("assetUrl", child.getAssetUrl());
+            metadata.put("assetTitle", child.getAssetTitle());
+            metadata.put("objectKey", child.getAssetObjectKey());
+        }
         String text = (child.getSection() == null || child.getSection().isBlank())
                 ? child.getEmbedText()
                 : child.getSection() + "\n\n" + child.getEmbedText();
@@ -589,8 +850,11 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
      * @param start     原子块在 parent 原文中的起始字符下标
      * @param end       原子块在 parent 原文中的结束字符下标
      * @param table     是否为表格原子块
+     * @param image     是否为图片语义原子块，图片块必须单独成 child
+     * @param asset     图片语义块关联的 Markdown 图片资产，非图片块为 null
      */
-    private record AtomicBlock(String rawText, String embedText, int start, int end, boolean table) {}
+    private record AtomicBlock(String rawText, String embedText, int start, int end, boolean table,
+                               boolean image, MdDocumentAsset asset) {}
 
     /**
      * 已打包完成的 child 切片。
@@ -600,7 +864,41 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
      * @param charStart child 在 parent 原文中的起始字符下标
      * @param charEnd   child 在 parent 原文中的结束字符下标
      */
-    private record ChildSlice(String rawText, String embedText, int charStart, int charEnd) {}
+    private record ChildSlice(String rawText, String embedText, int charStart, int charEnd, MdDocumentAsset asset) {}
+
+    /**
+     * 增强后的 parent section。
+     *
+     * @param content 增强后的 Markdown 内容
+     * @param images  图片资产及其位置
+     */
+    private record EnhancedSection(String content, List<EnhancedImage> images) {}
+
+    /**
+     * 增强内容中的图片块位置。
+     *
+     * @param start 图片块在增强 parent content 中的起始位置
+     * @param end   图片块在增强 parent content 中的结束位置
+     * @param asset 图片资产
+     */
+    private record EnhancedImage(int start, int end, MdDocumentAsset asset) {}
+
+    /**
+     * 同一篇 Markdown 导入过程中的图片解析状态。
+     */
+    private static class ImageParseState {
+        private int assetIndex;
+        private final Map<String, ImageUnderstandingBundle> understandingCache = new HashMap<>();
+    }
+
+    /**
+     * 可复用的图片理解结果。
+     *
+     * @param mimeType 图片 MIME 类型
+     * @param fileSize 图片大小
+     * @param result   理解结果
+     */
+    private record ImageUnderstandingBundle(String mimeType, long fileSize, MdImageUnderstandingResult result) {}
 
     /**
      * 带字符位置的 Markdown 单行。

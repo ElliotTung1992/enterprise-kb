@@ -1,6 +1,10 @@
 package com.enterprise.kb.document.service.impl;
 
 import com.enterprise.kb.document.markdown.MarkdownStructureIngestionResult;
+import com.enterprise.kb.document.service.DocumentObjectStorageService;
+import com.enterprise.kb.document.service.MdImageInput;
+import com.enterprise.kb.document.service.MdImageUnderstandingResult;
+import com.enterprise.kb.document.service.MdImageUnderstandingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -9,6 +13,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -172,9 +178,141 @@ class MarkdownStructureIngestionServiceImplTest {
                 .doesNotContain("锚段");
     }
 
+    @Test
+    void parseCreatesImageAssetAndStandaloneImageChild(@TempDir Path tempDir) throws IOException {
+        FakeStorage storage = new FakeStorage();
+        storage.put("md-assets/arch.png", "png-data".getBytes());
+        CountingUnderstanding understanding = new CountingUnderstanding();
+        service = imageService(storage, understanding);
+        Path file = write(tempDir, """
+                # 系统架构
+
+                前置说明。
+
+                ![架构图](http://localhost:9000/kb-assets/md-assets/arch.png "系统架构图")
+
+                后置说明。
+                """);
+
+        MarkdownStructureIngestionResult result = service.parse(UUID.randomUUID(), UUID.randomUUID(), file.toString());
+
+        assertThat(result.assets()).hasSize(1);
+        assertThat(result.assets().getFirst().getImageUrl())
+                .isEqualTo("http://localhost:9000/kb-assets/md-assets/arch.png");
+        assertThat(result.assets().getFirst().getObjectKey()).isEqualTo("md-assets/arch.png");
+        assertThat(result.children()).extracting("contentType")
+                .containsExactly("TEXT", "IMAGE_CAPTION", "TEXT");
+        assertThat(result.children().get(1).getAssetId()).isEqualTo(result.assets().getFirst().getId());
+        assertThat(result.parents().getFirst().getContent()).contains("[图片说明]").contains("组件关系摘要");
+        assertThat(result.vectorDocuments().get(1).getMetadata()).containsEntry("contentType", "IMAGE_CAPTION");
+        assertThat(understanding.calls).isEqualTo(1);
+    }
+
+    @Test
+    void parseIgnoresImageSyntaxInsideCodeFence(@TempDir Path tempDir) throws IOException {
+        FakeStorage storage = new FakeStorage();
+        CountingUnderstanding understanding = new CountingUnderstanding();
+        service = imageService(storage, understanding);
+        Path file = write(tempDir, """
+                # 示例
+
+                ```md
+                ![架构图](http://localhost:9000/kb-assets/md-assets/arch.png)
+                ```
+                """);
+
+        MarkdownStructureIngestionResult result = service.parse(UUID.randomUUID(), UUID.randomUUID(), file.toString());
+
+        assertThat(result.assets()).isEmpty();
+        assertThat(result.children()).extracting("contentType").containsOnly("TEXT");
+        assertThat(understanding.calls).isZero();
+    }
+
+    @Test
+    void parseReusesUnderstandingForDuplicateObjectKey(@TempDir Path tempDir) throws IOException {
+        FakeStorage storage = new FakeStorage();
+        storage.put("md-assets/arch.png", "png-data".getBytes());
+        CountingUnderstanding understanding = new CountingUnderstanding();
+        service = imageService(storage, understanding);
+        Path file = write(tempDir, """
+                # A
+
+                ![架构图](http://localhost:9000/kb-assets/md-assets/arch.png)
+
+                ## B
+
+                ![整体架构](http://localhost:9000/kb-assets/md-assets/arch.png)
+                """);
+
+        MarkdownStructureIngestionResult result = service.parse(UUID.randomUUID(), UUID.randomUUID(), file.toString());
+
+        assertThat(result.assets()).hasSize(2);
+        assertThat(result.children()).extracting("contentType").contains("IMAGE_CAPTION", "IMAGE_CAPTION");
+        assertThat(understanding.calls).isEqualTo(1);
+    }
+
+    private MarkdownStructureIngestionServiceImpl imageService(FakeStorage storage, CountingUnderstanding understanding) {
+        MarkdownStructureIngestionServiceImpl imageService = new MarkdownStructureIngestionServiceImpl(
+                new MdImageUrlResolver("http://localhost:9000", "kb-assets"),
+                understanding,
+                storage);
+        ReflectionTestUtils.setField(imageService, "maxTokens", 80);
+        ReflectionTestUtils.setField(imageService, "minTokens", 10);
+        ReflectionTestUtils.setField(imageService, "maxImageCount", 50);
+        ReflectionTestUtils.setField(imageService, "maxImageSizeMb", 10L);
+        ReflectionTestUtils.setField(imageService, "allowedImageMimeTypes", java.util.List.of("image/png"));
+        return imageService;
+    }
+
     private Path write(Path tempDir, String markdown) throws IOException {
         Path file = tempDir.resolve("doc.md");
         Files.writeString(file, markdown);
         return file;
+    }
+
+    private static class CountingUnderstanding implements MdImageUnderstandingService {
+        private int calls;
+
+        @Override
+        public MdImageUnderstandingResult understand(MdImageInput image) {
+            calls++;
+            return new MdImageUnderstandingResult("API Redis", "架构图展示 API 与 Redis 的连接。", "组件关系摘要", "API, Redis");
+        }
+    }
+
+    private static class FakeStorage implements DocumentObjectStorageService {
+        private final Map<String, byte[]> objects = new HashMap<>();
+
+        void put(String objectKey, byte[] bytes) {
+            objects.put(objectKey, bytes);
+        }
+
+        @Override
+        public String uploadFile(String objectKey, Path file, String contentType) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void downloadFile(String objectKey, Path target) {
+            try {
+                byte[] bytes = objects.get(objectKey);
+                if (bytes == null) {
+                    throw new IllegalStateException("missing object");
+                }
+                Files.write(target, bytes);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Override
+        public void deleteFile(String objectKey) {
+            objects.remove(objectKey);
+        }
+
+        @Override
+        public String presignedGetUrl(String objectKey, int expirySeconds) {
+            return objectKey;
+        }
     }
 }

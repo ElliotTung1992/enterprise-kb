@@ -23,6 +23,8 @@ class CitationAssemblerTest {
         assertThat(citations).hasSize(1);
         assertThat(citations.getFirst().chunkId()).isEqualTo("caption");
         assertThat(citations.getFirst().contentType()).isEqualTo("IMAGE_CAPTION");
+        assertThat(citations.getFirst().assetUrl()).isEqualTo("http://localhost:9000/kb-assets/asset.png");
+        assertThat(citations.getFirst().assetTitle()).isEqualTo("图片说明");
         assertThat(citations.getFirst().citationNumber()).isEqualTo(1);
     }
 
@@ -55,6 +57,9 @@ class CitationAssemblerTest {
     private SearchHit hit(String chunkId, UUID documentId, String contentType,
                           UUID assetId, String excerpt, double score) {
         return new SearchHit(chunkId, documentId, "文档", excerpt, null, score,
-                "text/markdown", contentType, assetId, "章节", 1);
+                "text/markdown", contentType, assetId,
+                assetId == null ? null : "http://localhost:9000/kb-assets/asset.png",
+                assetId == null ? null : excerpt,
+                "章节", 1);
     }
 }

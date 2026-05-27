@@ -95,6 +95,8 @@ public class MdParentExpansionServiceImpl implements MdParentExpansionService {
                 "text/markdown",
                 "MD_PARENT",
                 null,
+                null,
+                null,
                 parent.getSection(),
                 null);
     }

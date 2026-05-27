@@ -15,7 +15,7 @@ class CitationTest {
 
         Citation citation = new Citation(
                 1, "chunk-1", documentId, "文档", "图片说明", null, 0.91,
-                "IMAGE_CAPTION", assetId, "图片章节", 5);
+                "IMAGE_CAPTION", assetId, null, null, "图片章节", 5);
 
         assertThat(citation.assetId()).isEqualTo(assetId);
         assertThat(citation.contentType()).isEqualTo("IMAGE_CAPTION");

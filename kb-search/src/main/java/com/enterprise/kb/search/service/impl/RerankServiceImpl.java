@@ -69,7 +69,8 @@ public class RerankServiceImpl implements RerankService {
                         return new SearchHit(original.chunkId(), original.documentId(),
                                 original.documentTitle(), original.excerpt(),
                                 original.pageNumber(), result.getScore(), original.mimeType(),
-                                original.contentType(), original.assetId(), original.section(), original.anchorChunkIndex());
+                                original.contentType(), original.assetId(), original.assetUrl(), original.assetTitle(),
+                                original.section(), original.anchorChunkIndex());
                     })
                     .toList();
 

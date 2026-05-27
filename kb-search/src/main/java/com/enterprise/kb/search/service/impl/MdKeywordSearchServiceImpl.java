@@ -34,8 +34,10 @@ public class MdKeywordSearchServiceImpl implements MdKeywordSearchService {
             null,
             rs.getDouble("score"),
             "text/markdown",
-            "MD_CHILD",
-            null,
+            rs.getString("content_type"),
+            rs.getString("asset_id") == null ? null : UUID.fromString(rs.getString("asset_id")),
+            rs.getString("asset_url"),
+            rs.getString("asset_title"),
             rs.getString("section"),
             rs.getObject("seq_in_parent", Integer.class));
 
@@ -82,9 +84,12 @@ public class MdKeywordSearchServiceImpl implements MdKeywordSearchService {
                 SELECT mc.id::text AS chunk_id, mc.document_id::text AS document_id,
                        md.title AS document_title, mc.embed_text AS excerpt,
                        similarity(?, mc.embed_text) AS score,
+                       mc.content_type, mc.asset_id::text AS asset_id,
+                       ma.image_url AS asset_url, COALESCE(ma.title, ma.alt_text) AS asset_title,
                        mc.section, mc.seq_in_parent
                 FROM md_child_chunk mc
                 JOIN md_documents md ON md.id = mc.document_id
+                LEFT JOIN md_document_assets ma ON ma.id = mc.asset_id
                 WHERE mc.space_id = ?::uuid AND md.deleted_at IS NULL
                   AND mc.embed_text ILIKE '%' || ? || '%'
                 ORDER BY score DESC LIMIT ?""";
@@ -106,9 +111,12 @@ public class MdKeywordSearchServiceImpl implements MdKeywordSearchService {
                 SELECT mc.id::text AS chunk_id, mc.document_id::text AS document_id,
                        md.title AS document_title, mc.embed_text AS excerpt,
                        (mc.bm25vector <&> to_bm25query('%s', tokenize(?, '%s'))) AS score,
+                       mc.content_type, mc.asset_id::text AS asset_id,
+                       ma.image_url AS asset_url, COALESCE(ma.title, ma.alt_text) AS asset_title,
                        mc.section, mc.seq_in_parent
                 FROM md_child_chunk mc
                 JOIN md_documents md ON md.id = mc.document_id
+                LEFT JOIN md_document_assets ma ON ma.id = mc.asset_id
                 WHERE mc.space_id = ?::uuid AND md.deleted_at IS NULL
                   AND mc.bm25vector IS NOT NULL
                 ORDER BY score ASC LIMIT ?""", index, tokenizer);

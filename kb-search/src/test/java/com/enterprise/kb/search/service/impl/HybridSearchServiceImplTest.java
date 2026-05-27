@@ -31,11 +31,11 @@ class HybridSearchServiceImplTest {
     // -- helpers --
 
     private SearchHit hit(String chunkId, String excerpt) {
-        return new SearchHit(chunkId, UUID.randomUUID(), "Doc", excerpt, 1, 0.9, null, null, null, null, null);
+        return new SearchHit(chunkId, UUID.randomUUID(), "Doc", excerpt, 1, 0.9, null, null, null, null, null, null, null);
     }
 
     private SearchHit hit(String chunkId, UUID docId, String excerpt) {
-        return new SearchHit(chunkId, docId, "Doc", excerpt, 1, 0.9, null, null, null, null, null);
+        return new SearchHit(chunkId, docId, "Doc", excerpt, 1, 0.9, null, null, null, null, null, null, null);
     }
 
     private SearchResponse response(SearchHit... hits) {
@@ -111,8 +111,8 @@ class HybridSearchServiceImplTest {
         String sharedExcerpt = "identical content from same document";
 
         // Different chunkIds but same docId + excerpt — Milvus vs PostgreSQL ID mismatch scenario
-        SearchHit fromMilvus   = new SearchHit("milvus-id-123", docId, "Doc", sharedExcerpt, 1, 0.95, null, null, null, null, null);
-        SearchHit fromPostgres = new SearchHit("pg-id-456",     docId, "Doc", sharedExcerpt, 1, 0.90, null, null, null, null, null);
+        SearchHit fromMilvus   = new SearchHit("milvus-id-123", docId, "Doc", sharedExcerpt, 1, 0.95, null, null, null, null, null, null, null);
+        SearchHit fromPostgres = new SearchHit("pg-id-456",     docId, "Doc", sharedExcerpt, 1, 0.90, null, null, null, null, null, null, null);
 
         when(semanticSearchService.search(any(), any()))
                 .thenReturn(response(fromMilvus));
@@ -146,7 +146,7 @@ class HybridSearchServiceImplTest {
         UUID assetId = UUID.randomUUID();
         SearchHit visualHit = new SearchHit(
                 "visual-chunk", UUID.randomUUID(), "Visual Doc", "图片说明",
-                null, 0.9, "text/markdown", "IMAGE_CAPTION", assetId, "图片章节", 3);
+                null, 0.9, "text/markdown", "IMAGE_CAPTION", assetId, null, null, "图片章节", 3);
 
         when(semanticSearchService.search(any(), any()))
                 .thenReturn(response(visualHit));

@@ -6,6 +6,7 @@ import com.enterprise.kb.common.exception.InvalidRequestException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.document.dto.MdDocumentDto;
 import com.enterprise.kb.document.mapper.MdChildChunkMapper;
+import com.enterprise.kb.document.mapper.MdDocumentAssetMapper;
 import com.enterprise.kb.document.mapper.MdDocumentMapper;
 import com.enterprise.kb.document.mapper.MdParentChunkMapper;
 import com.enterprise.kb.document.model.MdDocument;
@@ -42,6 +43,7 @@ public class MdDocumentServiceImpl implements MdDocumentService {
     private static final List<String> ALLOWED_MIME_TYPES = List.of("text/markdown", "text/x-markdown");
 
     private final MdDocumentMapper documentMapper;
+    private final MdDocumentAssetMapper assetMapper;
     private final MdParentChunkMapper parentChunkMapper;
     private final MdChildChunkMapper childChunkMapper;
     private final MdVectorStoreService vectorStoreService;
@@ -129,6 +131,7 @@ public class MdDocumentServiceImpl implements MdDocumentService {
         vectorStoreService.deleteByDocumentId(documentId);
         childChunkMapper.deleteByDocumentId(documentId);
         parentChunkMapper.deleteByDocumentId(documentId);
+        assetMapper.deleteByDocumentId(documentId);
         deleteObjectQuietly(document.getObjectKey());
         document.setDeletedAt(Instant.now());
         document.setUpdatedAt(Instant.now());
@@ -151,6 +154,7 @@ public class MdDocumentServiceImpl implements MdDocumentService {
         }
         childChunkMapper.deleteBySpaceId(spaceId);
         parentChunkMapper.deleteBySpaceId(spaceId);
+        assetMapper.deleteBySpaceId(spaceId);
         documentMapper.softDeleteBySpaceId(spaceId);
     }
 

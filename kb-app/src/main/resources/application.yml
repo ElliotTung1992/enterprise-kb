@@ -154,6 +154,18 @@ enterprise:
       bm25-tokenizer: ${MD_BM25_TOKENIZER:md_tok}
       # vchord_bm25 索引名，to_bm25query 按名引用
       bm25-index: ${MD_BM25_INDEX:idx_md_child_bm25}
+      image:
+        minio-endpoint: ${MD_IMAGE_MINIO_ENDPOINT:${MINIO_ENDPOINT:http://localhost:9000}}
+        bucket: ${MD_IMAGE_MINIO_BUCKET:${MINIO_ASSET_BUCKET:kb-assets}}
+        vision-provider: ${MD_IMAGE_VISION_PROVIDER:DASHSCOPE}
+        vision-model: ${MD_IMAGE_VISION_MODEL:qwen-vl-max}
+        dashscope-base-url: ${MD_IMAGE_DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+        max-count: ${MD_IMAGE_MAX_COUNT:50}
+        max-size-mb: ${MD_IMAGE_MAX_SIZE_MB:10}
+        allowed-mime-types:
+          - image/png
+          - image/jpeg
+          - image/webp
     milvus:
       md-collection: ${MILVUS_MD_COLLECTION:md_kb_chunks}
     search:

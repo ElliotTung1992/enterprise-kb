@@ -138,6 +138,7 @@ public class MdQnAServiceImpl implements MdQnAService {
         return """
                 你是一个专业的 Markdown 知识库问答助手。请严格根据 <sections> 中的 Markdown section 回答。
                 命中是 small-to-big 父子索引：检索命中 child，但这里给你的是完整 parent section。
+                section 中的 [图片说明] 是系统根据图片生成的视觉理解文本，可作为回答依据；如问题要求精确读取图中文字，应优先依据 OCR文字。
                 如果 section 中没有足够信息，请明确说明无法从知识库中找到相关答案，不要编造。
 
                 <sections>

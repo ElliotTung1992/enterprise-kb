@@ -2,6 +2,7 @@ package com.enterprise.kb.document.service.impl;
 
 import com.enterprise.kb.common.constants.DocumentStatus;
 import com.enterprise.kb.document.mapper.MdChildChunkMapper;
+import com.enterprise.kb.document.mapper.MdDocumentAssetMapper;
 import com.enterprise.kb.document.mapper.MdDocumentMapper;
 import com.enterprise.kb.document.mapper.MdParentChunkMapper;
 import com.enterprise.kb.document.markdown.MarkdownStructureIngestionResult;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker {
 
     private final MdDocumentMapper documentMapper;
+    private final MdDocumentAssetMapper assetMapper;
     private final MdParentChunkMapper parentChunkMapper;
     private final MdChildChunkMapper childChunkMapper;
     private final MarkdownStructureIngestionService ingestionService;
@@ -54,6 +56,7 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
             vectorStoreService.deleteByDocumentId(documentId);
             childChunkMapper.deleteByDocumentId(documentId);
             parentChunkMapper.deleteByDocumentId(documentId);
+            assetMapper.deleteByDocumentId(documentId);
 
             // 下载文件
             localMarkdown = downloadMarkdown(document);
@@ -63,8 +66,16 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
             if (!result.parents().isEmpty()) {
                 parentChunkMapper.insertBatch(result.parents());
             }
+            if (!result.assets().isEmpty()) {
+                assetMapper.insertBatch(result.assets());
+            }
             if (!result.children().isEmpty()) {
                 childChunkMapper.insertBatch(result.children());
+                for (var asset : result.assets()) {
+                    if (asset.getChildChunkId() != null) {
+                        assetMapper.updateChildChunkId(asset.getId(), asset.getChildChunkId());
+                    }
+                }
                 vectorStoreService.upsert(result.vectorDocuments());
             }
             document.setStatus(DocumentStatus.READY);
@@ -74,12 +85,24 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
             documentMapper.update(document);
         } catch (Exception e) {
             log.warn("Markdown 文档入库失败：documentId={}", documentId, e);
+            cleanupPartialIngestion(documentId);
             document.setStatus(DocumentStatus.FAILED);
             document.setErrorMessage(e.getMessage());
             document.setUpdatedAt(Instant.now());
             documentMapper.update(document);
         } finally {
             deleteTempFileQuietly(localMarkdown);
+        }
+    }
+
+    private void cleanupPartialIngestion(UUID documentId) {
+        try {
+            vectorStoreService.deleteByDocumentId(documentId);
+            childChunkMapper.deleteByDocumentId(documentId);
+            parentChunkMapper.deleteByDocumentId(documentId);
+            assetMapper.deleteByDocumentId(documentId);
+        } catch (Exception cleanupError) {
+            log.warn("清理 Markdown 入库半成品失败：documentId={}", documentId, cleanupError);
         }
     }
 

@@ -59,6 +59,8 @@ public class SemanticSearchServiceImpl implements SemanticSearchService {
                     truncate(doc.getText(), 300), page, score, null,
                     metadataString(doc, "contentType"),
                     assetId != null ? UUID.fromString(assetId.toString()) : null,
+                    metadataString(doc, "assetUrl"),
+                    metadataString(doc, "assetTitle"),
                     metadataString(doc, "section"),
                     anchorChunkIndex != null ? Integer.parseInt(anchorChunkIndex.toString()) : null);
         }).toList();

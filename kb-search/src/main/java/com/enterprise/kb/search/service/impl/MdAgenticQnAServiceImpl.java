@@ -214,7 +214,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         double score = childHit != null ? childHit.score() : 0.0;
         return new SearchHit(parent.getId().toString(), parent.getDocumentId(), title,
                 truncate(parent.getContent(), maxCharsPerParent), null, score, "text/markdown",
-                "MD_PARENT", null, parent.getSection(), null);
+                "MD_PARENT", null, null, null, parent.getSection(), null);
     }
 
     private QnAResponse buildResponse(QnARequest req, UUID sessionId, UUID spaceId,

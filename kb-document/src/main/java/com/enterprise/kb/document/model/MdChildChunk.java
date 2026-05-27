@@ -23,6 +23,16 @@ public class MdChildChunk {
     private Integer seqInParent;
     /** 用于 embedding 和关键词检索的文本，表格会被自然语言化 */
     private String embedText;
+    /** child 内容类型：TEXT / IMAGE_CAPTION */
+    private String contentType = "TEXT";
+    /** 关联的 Markdown 图片资产 ID */
+    private UUID assetId;
+    /** 非列字段：图片 URL，用于写入向量 metadata */
+    private String assetUrl;
+    /** 非列字段：图片标题，用于写入向量 metadata */
+    private String assetTitle;
+    /** 非列字段：图片 objectKey，用于写入向量 metadata */
+    private String assetObjectKey;
     /** 粗略 token 数，用于调试切分效果 */
     private Integer tokenCount;
     /** 入库时使用的 embedding 模型名称 */

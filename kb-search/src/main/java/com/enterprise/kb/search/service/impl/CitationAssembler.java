@@ -82,6 +82,6 @@ final class CitationAssembler {
     private static Citation toCitation(int citationNumber, SearchHit h) {
         return new Citation(citationNumber, h.chunkId(), h.documentId(), h.documentTitle(),
                 h.excerpt(), h.pageNumber(), h.score(), h.contentType(),
-                h.assetId(), h.section(), h.anchorChunkIndex());
+                h.assetId(), h.assetUrl(), h.assetTitle(), h.section(), h.anchorChunkIndex());
     }
 }
