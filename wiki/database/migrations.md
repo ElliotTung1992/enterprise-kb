@@ -28,6 +28,9 @@
 | 017 | Drop | 删除 mcp_api_keys 表 |
 | 027 | 建表 | md_documents, md_parent_chunk, md_child_chunk（结构感知 RAG，含 child `pg_trgm` GIN 索引）→ [[features/markdown-structure-rag]] |
 | 028 | 扩展 | md_documents 增 object_key、迁移并删除旧 file_path |
+| 029 | 扩展 | 装 `pg_tokenizer` + `vchord_bm25`，md_child_chunk 加 `bm25vector` 列 + `USING bm25` 索引（带前置守卫，仅 vchord-suite 镜像可装时执行）→ [[features/md-keyword-bm25]] |
+
+> **非 migration 的配套运维脚本**：`db/manual/md-bm25-build.sql`（建 jieba analyzer/model/tokenizer/trigger + 回填）依赖语料、**不在 master changelog**、不自动执行，须语料 ingest 后手动跑。详见 [[features/md-keyword-bm25]]。
 
 ## 注意事项
 

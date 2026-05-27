@@ -40,7 +40,13 @@
 | 查询改写 | `QueryRewriteService` | 多路查询扩展，提升召回率 |
 | 精排 | `RerankService` | DashScope gte-rerank，对初步检索结果重新排序 |
 
+## 与 MD 竖井的关系
+
+本页描述**标准竖井**的混合检索（`document_chunks` + Milvus `kb_chunks`，关键词走 pg_trgm）。[[features/markdown-structure-rag]] 是**另一条平行竖井**，同样 RRF k=60 融合，但其关键词路可切换为真正的 BM25（VectorChord-bm25 + pg_tokenizer jieba）——见 [[features/md-keyword-bm25]]。标准竖井**不做** BM25 改造（非 md 场景下线）。
+
 ## 相关页面
 
 - [[ai-rag/agentic-qa]] — Agentic RAG 如何调用混合检索作为工具
 - [[database/entities/documents-chunks]] — document_chunks 表结构
+- [[features/md-keyword-bm25]] — md 竖井关键词路的 BM25 升级
+- [[decisions/adr-003-hybrid-search-rrf]] — RRF 融合决策

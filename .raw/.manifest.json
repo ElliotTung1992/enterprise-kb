@@ -47,6 +47,22 @@
         "wiki/log.md",
         "wiki/hot.md"
       ]
+    },
+    "docs/design-md-keyword-bm25.md": {
+      "hash": "4dd2da00842608d10c69ce8b44db050c",
+      "ingested_at": "2026-05-27",
+      "pages_created": [
+        "wiki/features/md-keyword-bm25.md",
+        "wiki/decisions/adr-013-md-keyword-bm25.md"
+      ],
+      "pages_updated": [
+        "wiki/Home.md",
+        "wiki/features/markdown-structure-rag.md",
+        "wiki/database/migrations.md",
+        "wiki/ai-rag/hybrid-search.md",
+        "wiki/log.md",
+        "wiki/hot.md"
+      ]
     }
   }
 }

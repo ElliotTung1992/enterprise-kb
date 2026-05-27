@@ -5,6 +5,7 @@
 > 架构决策：[[decisions/adr-012-markdown-structure-rag]]
 > 验收报告：[[features/markdown-structure-rag-acceptance]]
 > 兄弟功能：[[features/markdown-visual-rag-l2]]（图文/视觉 RAG，另一回事）
+> 关键词升级：[[features/md-keyword-bm25]]（本竖井关键词路 trgm → BM25，`keyword-mode` 开关切换）
 
 > [!note] 与 [[features/markdown-visual-rag-l2]] 的区别
 > 两者都叫「Markdown RAG」，但是**两条不同的竖井**：
@@ -77,6 +78,9 @@ MD 竖井（本功能）
 
 - **去重延后到展开阶段**：融合阶段保留同 parent 的多个命中 child（保位置 `seq_in_parent`），供 §8.2 多窗节选「同一 section 命中多处各开一窗」。
 - **多窗节选**：parent 整段超 `max-chars-per-parent`(2000) 时，按命中 child 的 seq 邻近度分簇（≤ `max-windows-per-parent`=3），每簇围绕命中向两侧扩，簇间插 `……（中间略）……`。
+
+> [!note] 关键词路可切 BM25
+> 上面 `MdHybridSearch` 的「关键词」一路默认是 pg_trgm（`similarity + ILIKE`），可经 `enterprise.kb.md.keyword-mode=BM25` 切换为真正的 BM25（VectorChord-bm25 + pg_tokenizer jieba），详见 [[features/md-keyword-bm25]] / [[decisions/adr-013-md-keyword-bm25]]。RRF 按排名融合，对分数符号无感，故切换无需改融合逻辑。
 
 ### md Agentic（两工具，方案 D）
 

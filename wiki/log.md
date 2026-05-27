@@ -1,5 +1,18 @@
 # Wiki Ingest Log
 
+## 2026-05-27 | ingest | MD 关键词检索升级 BM25 设计
+- Source: `docs/design-md-keyword-bm25.md`（+ 本会话对运行库的实测）
+- Summary: [[features/md-keyword-bm25]]
+- Pages created:
+  - [[features/md-keyword-bm25]]
+  - [[decisions/adr-013-md-keyword-bm25]]
+- Pages updated:
+  - [[Home]] — 功能导航 + 架构决策导航
+  - [[features/markdown-structure-rag]] — 关键词路 BM25 升级交叉引用
+  - [[database/migrations]] — 新增迁移 029 + 运维脚本备注
+  - [[ai-rag/hybrid-search]] — 与 md 竖井 BM25 变体的关系
+- Key insight: md 竖井关键词路从 pg_trgm（无 IDF/长度归一/词级匹配）升级为真正 BM25（VectorChord-bm25 + pg_tokenizer jieba），**改动只收敛到 `MdKeywordSearchServiceImpl` 一个 method**——因为 RRF 按排名融合、对分数符号无感，BM25 负分无需归一化。三件套 `md_ta`(jieba 切词) → `md_model`(词→ID 冻结词表) → `md_tok`；`bm25vector` 存每篇 TF（`{id:值}` 严格升序），DF/IDF 在 `USING bm25` 倒排索引、查询时 `to_bm25query` 现算。实测：029 已 apply 但 build 脚本未跑（`tokenizer_catalog` 三表 0 行），BM25 链路尚未真正可用；默认仍 TRGM。
+
 ## 2026-05-26 | ingest | Markdown 结构感知 RAG 验收文档
 - Source: `docs/acceptance-md-structure-rag.md`
 - Summary: [[features/markdown-structure-rag-acceptance]]
