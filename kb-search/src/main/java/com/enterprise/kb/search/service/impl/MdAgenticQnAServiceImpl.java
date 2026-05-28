@@ -59,6 +59,8 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     private static final int TOOL_RERANK_TOP_N = 3;
     private static final int MAX_TOOL_CALLS = 6;
     private static final int MAX_RECURSION_LIMIT = MAX_TOOL_CALLS * 2 + 1;
+    private static final String IMAGE_CONTEXT_RULE =
+            "section 中的 [图片说明] 是系统根据图片生成的视觉理解文本，可作为回答依据；如问题要求精确读取图中文字，应优先依据 OCR文字。";
 
     private final ModelProviderResolver modelProviderResolver;
     private final MdHybridSearchService hybridSearchService;
@@ -123,6 +125,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                 .description("""
                         在 Markdown 知识库中检索小粒度 child 片段。
                         返回结果会包含 parentId 和 section 路径。
+                        命中图片语义时 excerpt 可能包含 [图片说明]，可作为图片内容依据；精确读图中文字时优先看 OCR文字。
                         如果片段信息不足，但某个 section 明显相关，请继续调用 readFullSection(parentId)。
                         query 必须是简洁关键词或名词短语。
                         """)
@@ -136,6 +139,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                         (ReadFullSectionInput input) -> readFullSection(input.parentId(), spaceId, acc))
                 .description("""
                         按 parentId 读取 Markdown section 原文。
+                        section 可能包含 [图片说明]，它是系统根据图片生成的视觉理解文本，可作为回答依据。
                         仅当 searchKnowledgeBase 返回的 child 片段相关但信息不完整时调用。
                         同一个 parentId 不要重复读取。
                         """)
@@ -248,7 +252,8 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                 - 如果 child 片段只说明某个 section 相关但细节不足，读取该 parentId 的完整 section 后再答。
                 - 不要重复读取同一个 parentId。
                 - 只能依据工具返回的知识库内容回答，不要编造。
-                """;
+                - %s
+                """.formatted(IMAGE_CONTEXT_RULE);
     }
 
     private String truncate(String text, int maxLen) {
