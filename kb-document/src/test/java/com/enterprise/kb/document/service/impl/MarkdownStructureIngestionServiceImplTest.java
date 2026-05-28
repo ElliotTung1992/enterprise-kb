@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -249,6 +250,37 @@ class MarkdownStructureIngestionServiceImplTest {
         assertThat(result.assets()).hasSize(2);
         assertThat(result.children()).extracting("contentType").contains("IMAGE_CAPTION", "IMAGE_CAPTION");
         assertThat(understanding.calls).isEqualTo(1);
+    }
+
+    @Test
+    void parseReplaysMarkdownImageRagAcceptanceSample() throws Exception {
+        FakeStorage storage = new FakeStorage();
+        storage.put("md-assets/replay/architecture.png", "architecture-png".getBytes());
+        storage.put("md-assets/replay/dashboard.png", "dashboard-png".getBytes());
+        CountingUnderstanding understanding = new CountingUnderstanding();
+        service = imageService(storage, understanding);
+        Path file = Path.of(Objects.requireNonNull(getClass()
+                .getResource("/markdown-image-rag-replay/sample.md")).toURI());
+
+        MarkdownStructureIngestionResult result = service.parse(UUID.randomUUID(), UUID.randomUUID(), file.toString());
+
+        assertThat(result.assets()).hasSize(2);
+        assertThat(result.assets()).extracting("objectKey")
+                .containsExactly("md-assets/replay/architecture.png", "md-assets/replay/dashboard.png");
+        assertThat(result.children()).extracting("contentType")
+                .contains("IMAGE_CAPTION", "IMAGE_CAPTION");
+        assertThat(result.parents()).extracting("content")
+                .anySatisfy(content -> assertThat((String) content)
+                        .contains("![系统架构]")
+                        .contains("[图片说明]")
+                        .contains("md-assets/replay/architecture.png"));
+        assertThat(result.vectorDocuments())
+                .anySatisfy(document -> assertThat(document.getMetadata())
+                        .containsEntry("contentType", "IMAGE_CAPTION")
+                        .containsEntry("objectKey", "md-assets/replay/dashboard.png"));
+        assertThat(result.assets()).extracting("objectKey")
+                .doesNotContain("md-assets/replay/ignored.png");
+        assertThat(understanding.calls).isEqualTo(2);
     }
 
     private MarkdownStructureIngestionServiceImpl imageService(FakeStorage storage, CountingUnderstanding understanding) {
