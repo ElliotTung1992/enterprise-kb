@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -38,6 +38,7 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
     private final MarkdownStructureIngestionService ingestionService;
     private final MdVectorStoreService vectorStoreService;
     private final DocumentObjectStorageService objectStorageService;
+    private final TransactionTemplate transactionTemplate;
 
     /**
      * 异步执行 Markdown 结构化入库。
@@ -46,23 +47,62 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
      */
     @Override
     @Async("ingestionExecutor")
-    @Transactional
     public void ingest(UUID documentId) {
         MdDocument document = documentMapper.findByIdAndDeletedAtIsNull(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Markdown 文档不存在: " + documentId));
         Path localMarkdown = null;
         try {
-            markProcessing(document);
+            markProcessingAndClearChunks(document);
             vectorStoreService.deleteByDocumentId(documentId);
-            childChunkMapper.deleteByDocumentId(documentId);
-            parentChunkMapper.deleteByDocumentId(documentId);
-            assetMapper.deleteByDocumentId(documentId);
-
-            // 下载文件
             localMarkdown = downloadMarkdown(document);
-            // 加载解析文件
             MarkdownStructureIngestionResult result = ingestionService.parse(
                     document.getId(), document.getSpaceId(), localMarkdown.toString());
+
+            persistChunks(result);
+            if (!result.vectorDocuments().isEmpty()) {
+                vectorStoreService.upsert(result.vectorDocuments());
+            }
+            markReady(document, result.children().size());
+        } catch (Exception e) {
+            log.warn("Markdown 文档入库失败：documentId={}", documentId, e);
+            cleanupPartialIngestion(documentId);
+            markFailed(document, e);
+        } finally {
+            deleteTempFileQuietly(localMarkdown);
+        }
+    }
+
+    private void cleanupPartialIngestion(UUID documentId) {
+        try {
+            vectorStoreService.deleteByDocumentId(documentId);
+        } catch (Exception cleanupError) {
+            log.warn("清理 Markdown 向量半成品失败：documentId={}", documentId, cleanupError);
+        }
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                childChunkMapper.deleteByDocumentId(documentId);
+                parentChunkMapper.deleteByDocumentId(documentId);
+                assetMapper.deleteByDocumentId(documentId);
+            });
+        } catch (Exception cleanupError) {
+            log.warn("清理 Markdown 数据库半成品失败：documentId={}", documentId, cleanupError);
+        }
+    }
+
+    private void markProcessingAndClearChunks(MdDocument document) {
+        transactionTemplate.executeWithoutResult(status -> {
+            document.setStatus(DocumentStatus.PROCESSING);
+            document.setErrorMessage(null);
+            document.setUpdatedAt(Instant.now());
+            documentMapper.update(document);
+            childChunkMapper.deleteByDocumentId(document.getId());
+            parentChunkMapper.deleteByDocumentId(document.getId());
+            assetMapper.deleteByDocumentId(document.getId());
+        });
+    }
+
+    private void persistChunks(MarkdownStructureIngestionResult result) {
+        transactionTemplate.executeWithoutResult(status -> {
             if (!result.parents().isEmpty()) {
                 parentChunkMapper.insertBatch(result.parents());
             }
@@ -76,40 +116,31 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
                         assetMapper.updateChildChunkId(asset.getId(), asset.getChildChunkId());
                     }
                 }
-                vectorStoreService.upsert(result.vectorDocuments());
             }
+        });
+    }
+
+    private void markReady(MdDocument document, int chunkCount) {
+        transactionTemplate.executeWithoutResult(status -> {
             document.setStatus(DocumentStatus.READY);
-            document.setChunkCount(result.children().size());
+            document.setChunkCount(chunkCount);
             document.setErrorMessage(null);
             document.setUpdatedAt(Instant.now());
             documentMapper.update(document);
-        } catch (Exception e) {
-            log.warn("Markdown 文档入库失败：documentId={}", documentId, e);
-            cleanupPartialIngestion(documentId);
-            document.setStatus(DocumentStatus.FAILED);
-            document.setErrorMessage(e.getMessage());
-            document.setUpdatedAt(Instant.now());
-            documentMapper.update(document);
-        } finally {
-            deleteTempFileQuietly(localMarkdown);
-        }
+        });
     }
 
-    private void cleanupPartialIngestion(UUID documentId) {
+    private void markFailed(MdDocument document, Exception e) {
         try {
-            vectorStoreService.deleteByDocumentId(documentId);
-            childChunkMapper.deleteByDocumentId(documentId);
-            parentChunkMapper.deleteByDocumentId(documentId);
-            assetMapper.deleteByDocumentId(documentId);
-        } catch (Exception cleanupError) {
-            log.warn("清理 Markdown 入库半成品失败：documentId={}", documentId, cleanupError);
+            transactionTemplate.executeWithoutResult(status -> {
+                document.setStatus(DocumentStatus.FAILED);
+                document.setErrorMessage(e.getMessage());
+                document.setUpdatedAt(Instant.now());
+                documentMapper.update(document);
+            });
+        } catch (Exception markFailedError) {
+            log.warn("标记 Markdown 文档入库失败状态失败：documentId={}", document.getId(), markFailedError);
         }
-    }
-
-    private void markProcessing(MdDocument document) {
-        document.setStatus(DocumentStatus.PROCESSING);
-        document.setUpdatedAt(Instant.now());
-        documentMapper.update(document);
     }
 
     private Path downloadMarkdown(MdDocument document) throws IOException {
