@@ -104,7 +104,8 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
             MarkdownImageEnhancer.EnhancedSection enhanced = imageEnhancer.enhance(
                     documentId, spaceId, section, imageState, imageConfig());
             MarkdownSectionSplitter.SectionSlice enhancedSection = new MarkdownSectionSplitter.SectionSlice(
-                    section.section(), section.headingLevel(), enhanced.content(), section.charStart(), section.charEnd());
+                    section.section(), section.headingLevel(), enhanced.enhancedContent(),
+                    section.charStart(), section.charEnd());
             MdParentChunk parent = toParent(documentId, spaceId, enhancedSection, i);
             List<MdChildChunk> childChunks = splitChildren(parent, documentId, spaceId, enhanced.images());
             parent.setChildCount(childChunks.size());

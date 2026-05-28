@@ -19,7 +19,7 @@ public class MdParentChunk {
     private String section;
     /** 当前 parent 对应的标题层级 */
     private Integer headingLevel;
-    /** Section 完整原始 Markdown 正文 */
+    /** enhancedContent：Section 增强后的 Markdown 正文，保留原文结构并追加图片语义说明 */
     private String content;
     /** Parent 在文档内的顺序 */
     private Integer ordinal;
