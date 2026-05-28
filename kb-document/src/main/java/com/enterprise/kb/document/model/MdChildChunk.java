@@ -23,7 +23,7 @@ public class MdChildChunk {
     private Integer seqInParent;
     /** 用于 embedding 和关键词检索的文本，表格会被自然语言化 */
     private String embedText;
-    /** child 内容类型：TEXT / IMAGE_CAPTION */
+    /** child 内容形态：使用 ChunkContentType 语义（如 TEXT / IMAGE_CAPTION），不表示所属检索竖井 */
     private String contentType = "TEXT";
     /** 关联的 Markdown 图片资产 ID */
     private UUID assetId;

@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.common.constants.ChunkContentType;
 import com.enterprise.kb.search.dto.Citation;
 import com.enterprise.kb.search.dto.SearchHit;
 
@@ -67,13 +68,15 @@ final class CitationAssembler {
     }
 
     private static int contentTypePriority(String contentType) {
-        if ("IMAGE_CAPTION".equals(contentType) || "DIAGRAM_SUMMARY".equals(contentType)) {
+        if (ChunkContentType.IMAGE_CAPTION.name().equals(contentType)
+                || ChunkContentType.DIAGRAM_SUMMARY.name().equals(contentType)) {
             return 4;
         }
-        if ("TEXT".equals(contentType) || contentType == null) {
+        if (ChunkContentType.TEXT.name().equals(contentType) || contentType == null) {
             return 3;
         }
-        if ("IMAGE_REFERENCE".equals(contentType) || "DIAGRAM_SOURCE".equals(contentType)) {
+        if (ChunkContentType.IMAGE_REFERENCE.name().equals(contentType)
+                || ChunkContentType.DIAGRAM_SOURCE.name().equals(contentType)) {
             return 2;
         }
         return 1;

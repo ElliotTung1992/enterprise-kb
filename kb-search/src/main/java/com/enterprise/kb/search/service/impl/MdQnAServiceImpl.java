@@ -15,7 +15,6 @@ import com.enterprise.kb.search.service.MdQnAService;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.service.RerankService;
-import com.enterprise.kb.search.trace.advisor.TraceChatClientAdvisor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -53,7 +52,6 @@ public class MdQnAServiceImpl implements MdQnAService {
     private final RerankService rerankService;
     private final RedisChatMemory redisChatMemory;
     private final QaChatSessionService qaChatSessionService;
-    private final TraceChatClientAdvisor traceChatClientAdvisor;
 
     /**
      * 基于 Markdown 父子索引进行问答。
@@ -70,7 +68,7 @@ public class MdQnAServiceImpl implements MdQnAService {
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(redisChatMemory)
                 .conversationId(sessionId.toString()).build();
         ChatResponse chatResponse = chatClient.prompt()
-                .advisors(memoryAdvisor, traceChatClientAdvisor)
+                .advisors(memoryAdvisor)
                 .system(buildSystemPrompt(parentHits))
                 .user(req.question())
                 .call()

@@ -75,7 +75,7 @@ overlap 与 parent 展开解决的是同一问题——边界上下文丢失。�
 
 ### 7. md Agentic = 方案 D 两工具（C16）
 
-`searchKnowledgeBase(query)` 搜 child + `readFullSection(parentId)` 按需展开 parent，prompt 引导信息不全时展开。同 parentId 不重复展开（accumulator）。复用 `ReactAgent`/`TraceReactAgentFactory`/预算/会话。
+`searchKnowledgeBase(query)` 搜 child + `readFullSection(parentId)` 按需展开 parent，prompt 引导信息不全时展开。同 parentId 不重复展开（accumulator）。复用 `ReactAgent`/预算/会话。
 
 ### 8. 其余取舍
 

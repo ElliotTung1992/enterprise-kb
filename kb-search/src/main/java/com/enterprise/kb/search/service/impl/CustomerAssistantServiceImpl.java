@@ -36,16 +36,6 @@ import com.enterprise.kb.search.service.CustomerAssistantService;
 import com.enterprise.kb.search.service.DomainHandler;
 import com.enterprise.kb.search.service.DomainRouterService;
 import com.enterprise.kb.search.service.ReviewRequestService;
-import com.enterprise.kb.search.trace.TraceContextHolder;
-import com.enterprise.kb.search.trace.TraceEvent;
-import com.enterprise.kb.search.trace.NoopTraceFacade;
-import com.enterprise.kb.search.trace.TracePayload;
-import com.enterprise.kb.search.trace.TraceScope;
-import com.enterprise.kb.search.trace.agent.TraceModelInterceptor;
-import com.enterprise.kb.search.trace.agent.TraceReactAgentFactory;
-import com.enterprise.kb.search.trace.agent.TraceReactAgentFactoryImpl;
-import com.enterprise.kb.search.trace.agent.TraceToolInterceptor;
-import com.enterprise.kb.search.trace.aop.TraceTurn;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +45,6 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.tool.function.FunctionToolCallback;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -77,7 +66,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor(onConstructor_ = @Autowired)
+@RequiredArgsConstructor
 public class CustomerAssistantServiceImpl implements CustomerAssistantService {
 
     private static final String SUBMIT_REVIEW_TOOL = "submitAfterSalesReview";
@@ -110,46 +99,20 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     private final AttackGuardService attackGuardService;
     private final List<DomainHandler> domainHandlers;
     private final AfterSalesDomainHandler afterSalesDomainHandler;
-    private final TraceReactAgentFactory traceReactAgentFactory;
-
-    public CustomerAssistantServiceImpl(ModelProviderResolver modelProviderResolver,
-                                        RedisChatMemory redisChatMemory,
-                                        RedisSaver agentCheckpointSaver,
-                                        ReviewRequestService reviewRequestService,
-                                        ComplaintEscalationService complaintEscalationService,
-                                        ComplaintWorkflowService complaintWorkflowService,
-                                        CustomerSessionMapper customerSessionMapper,
-                                        CustomerMessageMapper customerMessageMapper,
-                                        ObjectMapper objectMapper,
-                                        TransactionTemplate transactionTemplate,
-                                        DomainRouterService domainRouterService,
-                                        ConversationStateStore conversationStateStore,
-                                        AttackGuardService attackGuardService,
-                                        List<DomainHandler> domainHandlers,
-                                        AfterSalesDomainHandler afterSalesDomainHandler) {
-        this(modelProviderResolver, redisChatMemory, agentCheckpointSaver, reviewRequestService,
-                complaintEscalationService, complaintWorkflowService, customerSessionMapper,
-                customerMessageMapper, objectMapper, transactionTemplate, domainRouterService,
-                conversationStateStore, attackGuardService, domainHandlers, afterSalesDomainHandler,
-                noopTraceReactAgentFactory());
-    }
 
     // ---- 对话 ----
 
     @Override
-    @TraceTurn(traceType = "CUSTOMER_ASSISTANT", agentName = "customer-assistant")
     public CustomerAssistantResponse chat(CustomerAssistantRequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
         UUID userId = SecurityUtils.getCurrentUserId();
-        TraceScope trace = TraceContextHolder.currentScopeOrNoop();
         return routingEnabled
-                ? routedChat(req, sessionId, userId, trace)
-                : legacyChat(req, sessionId, userId, trace);
+                ? routedChat(req, sessionId, userId)
+                : legacyChat(req, sessionId, userId);
     }
 
     /** 旧单体路径：单 ReactAgent + 3 工具，作为路由架构的 kill-switch 回退。 */
-    private CustomerAssistantResponse legacyChat(CustomerAssistantRequest req, UUID sessionId, UUID userId,
-                                                TraceScope trace) {
+    private CustomerAssistantResponse legacyChat(CustomerAssistantRequest req, UUID sessionId, UUID userId) {
         List<Message> history = redisChatMemory.get(sessionId.toString());
         List<Message> trimmedHistory = history.size() > MAX_HISTORY_MESSAGES
                 ? history.subList(history.size() - MAX_HISTORY_MESSAGES, history.size())
@@ -170,9 +133,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
         AssistantMessage assistantMessage;
         try {
             log.debug("客户助手 Agent 开始执行：sessionId={}", sessionId);
-            try (AutoCloseable ignored = TraceContextHolder.bind(trace)) {
-                assistantMessage = agent.call(messages, config);
-            }
+            assistantMessage = agent.call(messages, config);
             log.debug("客户助手 Agent 正常返回：sessionId={}，hasToolCalls={}，answer={}",
                     sessionId, assistantMessage.hasToolCalls(),
                     assistantMessage.getText() != null
@@ -184,7 +145,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
                     sessionId, interrupt.isPresent(), e.getCause() != null ? e.getCause().getClass().getSimpleName() : "null");
             if (interrupt.isPresent()) {
                 AssistantMessage.ToolCall tc = findSubmitToolCall(interrupt.get());
-                return processHitlInterrupt(tc, sessionId, userId, req.message(), messages, trace);
+                return processHitlInterrupt(tc, sessionId, userId, req.message(), messages);
             }
             log.error("客户助手 Agent 执行失败：sessionId={}", sessionId, e);
             throw new KbException("对话执行失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -201,15 +162,11 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
                     .orElse(null);
             if (submitCall != null) {
                 log.info("HITL 检测（正常返回路径）：sessionId={}，toolCallId={}", sessionId, submitCall.id());
-                return processHitlInterrupt(submitCall, sessionId, userId, req.message(), messages, trace);
+                return processHitlInterrupt(submitCall, sessionId, userId, req.message(), messages);
             }
         }
 
         String answer = assistantMessage.getText();
-        trace.event(new TraceEvent("AGENT_FINAL", "customer-assistant-final", "SUCCEEDED",
-                TracePayload.map("message", req.message()),
-                TracePayload.map("answer", answer, "hasToolCalls", assistantMessage.hasToolCalls()),
-                null, null, null, null, null, null));
         redisChatMemory.add(sessionId.toString(), List.of(new UserMessage(req.message()), assistantMessage));
         persistExchange(sessionId, userId, req.message(), answer);
 
@@ -301,8 +258,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
                     + "由专员跟进处理——需要我帮您升级吗？";
 
     /** 两层路由流水线：攻击守卫 → 域决策 → 域内分派 → 情绪累积/次要反问 → 状态更新 + 持久化。 */
-    private CustomerAssistantResponse routedChat(CustomerAssistantRequest req, UUID sessionId, UUID userId,
-                                                TraceScope trace) {
+    private CustomerAssistantResponse routedChat(CustomerAssistantRequest req, UUID sessionId, UUID userId) {
         GuardResult guard = attackGuardService.inspect(req.message());
         if (guard.blocked()) {
             log.info("攻击守卫拦截：sessionId={}，reason={}", sessionId, guard.reason());
@@ -328,20 +284,12 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
         } else {
             decision = domainRouterService.route(trimmedHistory, state, req.message());
             domain = decision.primaryDomain();
-            RoutingDecision finalDecision = decision;
-            Domain finalDomain = domain;
-            trace.event(new TraceEvent("ROUTER", "customer-router", "SUCCEEDED",
-                    TracePayload.map("message", req.message(), "state", state),
-                    TracePayload.map("domain", finalDomain, "secondary", finalDecision.secondary(),
-                            "runnerUp", finalDecision.runnerUp(), "emotional", finalDecision.emotional(),
-                            "evidence", finalDecision.evidence()),
-                    null, null, null, null, null, null));
             log.info("Tier-1 路由判定：sessionId={}，domain={}，secondary={}，runnerUp={}，emotional={}，evidence={}",
                     sessionId, domain, decision.secondary(), decision.runnerUp(),
                     decision.emotional(), decision.evidence());
         }
 
-        DomainResult result = dispatch(domain, req, sessionId, userId, trimmedHistory, trace);
+        DomainResult result = dispatch(domain, req, sessionId, userId, trimmedHistory);
 
         // 情绪计数：进入投诉流程则归零；本轮为纯情绪宣泄则累加；否则维持
         int emotionStrikes;
@@ -378,41 +326,21 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
         }
 
         // 路由决策汇总：一条 INFO 覆盖本轮所有可观测断言（域 / awaitingSlot / 情绪累积 / 待确认提议 / 状态写入）。
-        // 验收文档 §7-1/§7-8/§7-9 的 STATE 字段都能从这条日志读出，免去逐条 redis-cli 检查。
         log.info("路由决策汇总：sessionId={}，domain={}，stickyDomain={}，awaitingSlot={}，"
                         + "emotionStrikes={}（上轮={}），pendingOffer={}（上轮={}），stateChanged={}",
                 sessionId, domain, stickyDomain, result.awaitingSlot(),
                 emotionStrikes, state.emotionStrikes(),
                 pendingOffer, state.pendingOffer(), stateChanged);
 
-        String finalAnswer = answer;
-        Domain finalDomain = domain;
-        Domain finalPendingOffer = pendingOffer;
-        trace.event(new TraceEvent("AGENT_FINAL", "customer-router-final", "SUCCEEDED",
-                TracePayload.map("message", req.message(), "domain", finalDomain),
-                TracePayload.map("answer", finalAnswer, "awaitingSlot", result.awaitingSlot(),
-                        "pendingOffer", finalPendingOffer),
-                null, null, null, null, null, null));
-
         return finishTurn(sessionId, userId, req.message(), answer, domain);
     }
 
     /** 按域分派：业务域交 DomainHandler，特殊出口直接返回话术。 */
     private DomainResult dispatch(Domain domain, CustomerAssistantRequest req,
-                                  UUID sessionId, UUID userId, List<Message> history,
-                                  TraceScope trace) {
+                                  UUID sessionId, UUID userId, List<Message> history) {
         return switch (domain) {
-            case AFTER_SALES, COMPLAINT -> {
-                try (AutoCloseable ignored = TraceContextHolder.bind(trace)) {
-                    yield handlerFor(domain).handle(
-                            new DomainContext(sessionId, userId, req.message(), history, req.modelProvider(),
-                                    trace.traceId()));
-                } catch (RuntimeException e) {
-                    throw e;
-                } catch (Exception e) {
-                    throw new KbException("Trace 上下文关闭失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
-                }
-            }
+            case AFTER_SALES, COMPLAINT -> handlerFor(domain).handle(
+                    new DomainContext(sessionId, userId, req.message(), history, req.modelProvider()));
             case HANDOFF -> DomainResult.terminal(HANDOFF_MESSAGE);
             case CHITCHAT -> DomainResult.terminal(CHITCHAT_MESSAGE);
             case UNCLEAR -> DomainResult.terminal(UNCLEAR_MESSAGE);
@@ -524,10 +452,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
 
         FunctionToolCallback<AfterSalesCheckInput, String> checkTool = FunctionToolCallback.builder(
                         "checkAfterSalesEligibility",
-                        (AfterSalesCheckInput input) -> {
-                            String output = checkAfterSalesEligibility(input.orderId());
-                            return output;
-                        })
+                        (AfterSalesCheckInput input) -> checkAfterSalesEligibility(input.orderId()))
                 .description("""
                         查询指定订单的售后资格。
                         输入：用户提供的订单号。
@@ -539,10 +464,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
 
         FunctionToolCallback<EscalateComplaintInput, String> escalateTool = FunctionToolCallback.builder(
                         "escalateComplaint",
-                        (EscalateComplaintInput input) -> {
-                            String output = escalateComplaint(userId, input);
-                            return output;
-                        })
+                        (EscalateComplaintInput input) -> escalateComplaint(userId, input))
                 .description("""
                         将用户投诉升级为正式投诉案件并自动生成 AI 处理计划，提交专员审核。
                         适用场景：多次投诉未解决、涉及金额较大、涉及多方纠纷（商家+物流+平台）、
@@ -575,7 +497,8 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
                 .build();
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(modelProvider);
-        return traceReactAgentFactory.builder("customer-assistant-agent", TraceContextHolder.currentOrNoop())
+        return ReactAgent.builder()
+                .name("customer-assistant-agent")
                 .chatClient(chatClient)
                 .systemPrompt(buildSystemPrompt())
                 .tools(checkTool, escalateTool, submitTool)
@@ -609,8 +532,7 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
     private CustomerAssistantResponse processHitlInterrupt(AssistantMessage.ToolCall toolCall,
                                                             UUID sessionId, UUID userId,
                                                             String userMessage,
-                                                            List<Message> contextMessages,
-                                                            TraceScope trace) {
+                                                            List<Message> contextMessages) {
         String toolCallId   = toolCall != null ? toolCall.id()        : null;
         String toolCallName = toolCall != null ? toolCall.name()      : SUBMIT_REVIEW_TOOL;
         String toolArgs     = toolCall != null ? toolCall.arguments() : "{}";
@@ -624,10 +546,6 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
             reviewRequestService.createPending(sessionId, null, userId,
                     orderId, reason, conversationSnapshot, orderDetailsJson,
                     toolCallId, toolCallName);
-            trace.event(new TraceEvent("HITL_INTERRUPT", toolCallName, "INTERRUPTED",
-                    toolArgs,
-                    TracePayload.map("status", "PENDING_REVIEW", "orderId", orderId, "reason", reason),
-                    null, toolCallId, "REVIEW_REQUEST", null, null, null));
         } catch (Exception e) {
             log.warn("写入 review_requests 失败：sessionId={}", sessionId, e);
         }
@@ -792,14 +710,5 @@ public class CustomerAssistantServiceImpl implements CustomerAssistantService {
             log.warn("序列化消息列表失败", e);
             return "[]";
         }
-    }
-
-    private static NoopTraceFacade noopTraceFacade() {
-        return NoopTraceFacade.INSTANCE;
-    }
-
-    private static TraceReactAgentFactory noopTraceReactAgentFactory() {
-        return new TraceReactAgentFactoryImpl(
-                new TraceToolInterceptor(noopTraceFacade()), new TraceModelInterceptor(noopTraceFacade()));
     }
 }

@@ -84,7 +84,7 @@ MD 竖井（本功能）
 
 ### md Agentic（两工具，方案 D）
 
-`MdAgenticQnAService` 复用 `ReactAgent`/`TraceReactAgentFactory`/预算/会话，提供两工具：
+`MdAgenticQnAService` 复用 `ReactAgent`/预算/会话，提供两工具：
 
 1. `searchKnowledgeBase(query)` — 走 `MdHybridSearch` + rerank，返回 ≤N 条小 child 片段，每条标注 `parentId` + 面包屑。
 2. `readFullSection(parentId)` — 回查 parent 正文，按 `max-chars-per-parent` 裁剪，**同 parentId 不重复展开**（accumulator 记录）。

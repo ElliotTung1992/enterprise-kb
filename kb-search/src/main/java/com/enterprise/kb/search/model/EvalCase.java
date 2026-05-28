@@ -14,8 +14,6 @@ import java.util.UUID;
 public class EvalCase {
 
     private UUID id;
-    /** 来源 Trace ID，可为空 */
-    private UUID sourceTraceId;
     /** 用例类型：ROUTING_TOOL / RETRIEVAL / ANSWER / END_TO_END */
     private String caseType;
     /** 用例名称 */

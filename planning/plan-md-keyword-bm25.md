@@ -136,7 +136,7 @@
 - `search()` 按 mode 选 SQL 分支：
   - TRGM 分支 = 现状原样保留。
   - BM25 分支 = `mc.bm25vector <&> to_bm25query('<index>', tokenize(?, '<tokenizer>')) AS score ... WHERE bm25vector IS NOT NULL ORDER BY score ASC LIMIT ?`，用户 query 走 `?` 绑定（防注入），index/tokenizer 名是配置常量、以 `String.format` 内联（非 MyBatis、非用户输入）。
-  - 两分支都返回同形 `SearchHit`（`MD_CHILD` 粒度、字段不变），`searchMode` 标 `MD_KEYWORD`。
+  - 两分支都返回同形 `SearchHit`（命中粒度为 Markdown child，`contentType` 仅表示内容形态，字段不变），`searchMode` 标 `MD_KEYWORD`。
 
 **验证清单**
 - [ ] `mvn install -pl kb-search -am -DskipTests` 编译通过。

@@ -12,7 +12,7 @@ import java.util.UUID;
  * @param pageNumber       页码
  * @param score            相关性分数
  * @param mimeType         文档 MIME 类型
- * @param contentType      分块内容类型
+ * @param contentType      分块内容形态
  * @param assetId          关联视觉资产 ID
  * @param assetUrl         关联视觉资产 URL
  * @param assetTitle       关联视觉资产标题

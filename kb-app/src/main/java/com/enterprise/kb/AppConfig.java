@@ -34,7 +34,6 @@ import java.util.concurrent.Executors;
  *   <li>{@link AuthService} / {@link JwtService}：认证服务，需注入来自 kb-user 的
  *       {@link com.enterprise.kb.user.service.UserService}，故在此处显式构造。</li>
  *   <li>{@code ingestionExecutor}：基于 JDK 21 虚拟线程的异步执行器，用于文档摄入流水线。</li>
- *   <li>{@code traceExecutor}：基于 JDK 21 虚拟线程的异步执行器，用于 Agent Trace step 写入。</li>
  *   <li>{@link MethodSecurityExpressionHandler}：注册自定义权限评估器，
  *       使 {@code @PreAuthorize("hasPermission(...)")} 能够感知知识空间级别的权限。</li>
  * </ul>
@@ -98,19 +97,6 @@ public class AppConfig {
      */
     @Bean("ingestionExecutor")
     public Executor ingestionExecutor() {
-        return Executors.newVirtualThreadPerTaskExecutor();
-    }
-
-    /**
-     * 基于 JDK 21 虚拟线程的异步执行器，专用于 Agent Trace step 写入。
-     *
-     * <p>Trace 外壳创建与完成状态更新保持同步，细粒度 step 写入走该执行器做 best-effort
-     * 持久化，避免排障日志写入放大用户请求延迟。</p>
-     *
-     * @return 虚拟线程执行器
-     */
-    @Bean("traceExecutor")
-    public Executor traceExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
     }
 

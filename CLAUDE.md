@@ -136,7 +136,7 @@ kb-common → kb-auth → kb-user → kb-document / kb-search → kb-app
 | `kb-auth` | JWT 认证、登录注册、Token 刷新 |
 | `kb-user` | 用户管理、知识空间、权限校验 |
 | `kb-document` | Markdown 文档上传、结构化解析、图片理解、向量入库 |
-| `kb-search` | Markdown 混合检索、问答（标准/Agentic）、客服助手、投诉工作流、Trace/Eval、**会话管理** |
+| `kb-search` | Markdown 混合检索、问答（标准/Agentic）、客服助手、投诉工作流、Eval、**会话管理** |
 | `kb-app` | 启动入口、Bean 装配（AppConfig） |
 
 > `kb-knowledge-graph` 模块已随标准 RAG 退役删除。

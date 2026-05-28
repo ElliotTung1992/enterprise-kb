@@ -6,7 +6,7 @@
 - `MdDocumentIngestionWorkerImpl` downloads the md file, calls `MarkdownStructureIngestionService.parse`, inserts parent/child chunks, and writes vectors.
 - `MarkdownStructureIngestionServiceImpl` currently splits headings, paragraphs, tables, lists, and fenced code blocks. It does not parse image syntax.
 - `MdChildChunk` currently has no `contentType` or `assetId`.
-- `MdVectorSearchServiceImpl` maps vector metadata to `SearchHit`, currently hardcoding `contentType = MD_CHILD`.
+- `MdVectorSearchServiceImpl` maps vector metadata to `SearchHit`; `contentType` now uses content-shape semantics such as `TEXT` / `IMAGE_CAPTION`, not pipeline labels.
 - `SearchHit` and `Citation` currently have `assetId`, but not `assetUrl` or `assetTitle`.
 - Project docs are ignored by `.gitignore`, so `docs/design-md-image-rag.md` exists locally but is not tracked.
 

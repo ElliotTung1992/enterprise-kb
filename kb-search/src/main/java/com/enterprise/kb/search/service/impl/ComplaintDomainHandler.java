@@ -13,14 +13,6 @@ import com.enterprise.kb.search.dto.DomainResult;
 import com.enterprise.kb.search.service.ComplaintEscalationService;
 import com.enterprise.kb.search.service.ComplaintWorkflowService;
 import com.enterprise.kb.search.service.DomainHandler;
-import com.enterprise.kb.search.trace.NoopTraceFacade;
-import com.enterprise.kb.search.trace.TraceContextHolder;
-import com.enterprise.kb.search.trace.TraceEvent;
-import com.enterprise.kb.search.trace.TracePayload;
-import com.enterprise.kb.search.trace.agent.TraceModelInterceptor;
-import com.enterprise.kb.search.trace.agent.TraceReactAgentFactory;
-import com.enterprise.kb.search.trace.agent.TraceReactAgentFactoryImpl;
-import com.enterprise.kb.search.trace.agent.TraceToolInterceptor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -28,7 +20,6 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.tool.function.FunctionToolCallback;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -46,7 +37,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor(onConstructor_ = @Autowired)
+@RequiredArgsConstructor
 public class ComplaintDomainHandler implements DomainHandler {
 
     private static final int MAX_TOOL_CALLS = 5;
@@ -56,15 +47,6 @@ public class ComplaintDomainHandler implements DomainHandler {
     private final RedisSaver agentCheckpointSaver;
     private final ComplaintEscalationService complaintEscalationService;
     private final ComplaintWorkflowService complaintWorkflowService;
-    private final TraceReactAgentFactory traceReactAgentFactory;
-
-    public ComplaintDomainHandler(ModelProviderResolver modelProviderResolver,
-                                  RedisSaver agentCheckpointSaver,
-                                  ComplaintEscalationService complaintEscalationService,
-                                  ComplaintWorkflowService complaintWorkflowService) {
-        this(modelProviderResolver, agentCheckpointSaver, complaintEscalationService,
-                complaintWorkflowService, noopTraceReactAgentFactory());
-    }
 
     @Override
     public Domain domain() {
@@ -150,7 +132,8 @@ public class ComplaintDomainHandler implements DomainHandler {
                 .build();
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(ctx.modelProvider());
-        return traceReactAgentFactory.builder("complaint-domain-agent", TraceContextHolder.currentOrNoop())
+        return ReactAgent.builder()
+                .name("complaint-domain-agent")
                 .chatClient(chatClient)
                 .systemPrompt(SYSTEM_PROMPT)
                 .tools(escalateTool)
@@ -175,11 +158,6 @@ public class ComplaintDomainHandler implements DomainHandler {
             var complaint = complaintEscalationService.createComplaint(
                     ctx.userId(), input.orderId(), input.description());
             complaintWorkflowService.startPlanning(complaint.getId());
-            TraceContextHolder.currentScopeOrNoop().event(new TraceEvent(
-                    "BUSINESS_REF", "escalateComplaint.businessRef", "SUCCEEDED",
-                    TracePayload.map("orderId", input.orderId()),
-                    TracePayload.map("businessRefType", "COMPLAINT", "businessRefId", complaint.getId()),
-                    null, null, "COMPLAINT", complaint.getId(), null, null));
             log.info("投诉升级已提交：complaintId={}，orderId={}，userId={}",
                     complaint.getId(), input.orderId(), ctx.userId());
             return "您的投诉已成功升级，案件编号：" + complaint.getId()
@@ -191,12 +169,6 @@ public class ComplaintDomainHandler implements DomainHandler {
     }
 
     record EscalateComplaintInput(String orderId, String description) {}
-
-    private static TraceReactAgentFactory noopTraceReactAgentFactory() {
-        return new TraceReactAgentFactoryImpl(
-                new TraceToolInterceptor(NoopTraceFacade.INSTANCE),
-                new TraceModelInterceptor(NoopTraceFacade.INSTANCE));
-    }
 
     private static final String SYSTEM_PROMPT = """
             你是商城客服的投诉升级专员助手，专门处理需要升级为正式案件的复杂投诉。

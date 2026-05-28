@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.common.constants.ChunkContentType;
 import com.enterprise.kb.document.mapper.MdDocumentMapper;
 import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
@@ -61,7 +62,7 @@ public class MdVectorSearchServiceImpl implements MdVectorSearchService {
         return new SearchHit(document.getId(), documentId, title(documentId),
                 truncate(document.getText(), 300), null,
                 document.getScore() != null ? document.getScore() : 0.0,
-                "text/markdown", string(document, "contentType", "MD_CHILD"),
+                "text/markdown", string(document, "contentType", ChunkContentType.TEXT.name()),
                 assetId != null ? UUID.fromString(assetId.toString()) : null,
                 string(document, "assetUrl"),
                 string(document, "assetTitle"),

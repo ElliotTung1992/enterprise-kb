@@ -5,7 +5,6 @@
 
     <resultMap id="EvalCaseResultMap" type="com.enterprise.kb.search.model.EvalCase">
         <id property="id" column="id"/>
-        <result property="sourceTraceId" column="source_trace_id"/>
         <result property="caseType" column="case_type"/>
         <result property="name" column="name"/>
         <result property="dataset" column="dataset"/>
@@ -52,12 +51,11 @@
 
     <insert id="insert">
         INSERT INTO eval_cases (
-            id, source_trace_id, case_type, name, dataset,
+            id, case_type, name, dataset,
             input_json, expected_json, mock_outputs_json,
             enabled, created_by, created_at, updated_at
         ) VALUES (
             #{id,jdbcType=OTHER},
-            #{sourceTraceId,jdbcType=OTHER},
             #{caseType},
             #{name},
             #{dataset},

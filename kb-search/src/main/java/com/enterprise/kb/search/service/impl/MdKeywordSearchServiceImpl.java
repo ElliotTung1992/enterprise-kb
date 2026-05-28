@@ -59,7 +59,7 @@ public class MdKeywordSearchServiceImpl implements MdKeywordSearchService {
      * 在 Markdown child 检索文本上执行关键词检索。
      *
      * <p>按 {@code enterprise.kb.md.keyword-mode} 在 TRGM 与 BM25 两条 SQL 间切换：
-     * 二者返回同形 {@link SearchHit} 列表（{@code MD_CHILD} 粒度、字段一致），上游
+     * 二者返回同形 {@link SearchHit} 列表（字段一致，contentType 表示内容形态），上游
      * {@code MdHybridSearchServiceImpl} 按排名 RRF 融合，对分数符号与量纲无感，故无需归一化。</p>
      *
      * @param spaceId 空间 ID

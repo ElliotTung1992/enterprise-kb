@@ -1,5 +1,6 @@
 package com.enterprise.kb.document.service.impl;
 
+import com.enterprise.kb.common.constants.ChunkContentType;
 import com.enterprise.kb.document.markdown.MarkdownStructureIngestionResult;
 import com.enterprise.kb.document.model.MdChildChunk;
 import com.enterprise.kb.document.model.MdDocumentAsset;
@@ -161,7 +162,9 @@ public class MarkdownStructureIngestionServiceImpl implements MarkdownStructureI
             child.setSection(parent.getSection());
             child.setSeqInParent(i);
             child.setEmbedText(slice.embedText());
-            child.setContentType(slice.asset() == null ? "TEXT" : "IMAGE_CAPTION");
+            child.setContentType(slice.asset() == null
+                    ? ChunkContentType.TEXT.name()
+                    : ChunkContentType.IMAGE_CAPTION.name());
             if (slice.asset() != null) {
                 MdDocumentAsset asset = slice.asset();
                 child.setAssetId(asset.getId());

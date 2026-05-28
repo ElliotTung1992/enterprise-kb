@@ -1,7 +1,7 @@
 package com.enterprise.kb.common.constants;
 
 /**
- * 文档分块内容类型。
+ * 文档分块内容形态。
  */
 public enum ChunkContentType {
     /** 普通文本分块。 */
