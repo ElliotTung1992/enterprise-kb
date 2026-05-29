@@ -166,6 +166,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       # JWT
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      # Ragas eval service
+      RAGAS_ENDPOINT: http://kb-ragas:8000
       # Storage
       FILE_STORAGE_PATH: /app/uploads
     volumes:
@@ -180,6 +182,24 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+
+  # ── Ragas evaluation service (on demand) ────────────────────
+  kb-ragas:
+    build:
+      context: .
+      dockerfile: kb-ragas/Dockerfile
+    container_name: kb-ragas
+    profiles:
+      - eval
+    ports:
+      - "8000:8000"
+    environment:
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      KB_RAGAS_MOCK: ${KB_RAGAS_MOCK:-false}
+    networks:
+      - kb-network
+    restart: "no"
 
 
 volumes:

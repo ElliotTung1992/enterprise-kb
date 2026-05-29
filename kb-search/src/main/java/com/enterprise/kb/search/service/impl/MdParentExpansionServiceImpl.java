@@ -78,6 +78,7 @@ public class MdParentExpansionServiceImpl implements MdParentExpansionService {
             }
             expanded.add(toParentHit(entry.getValue().representative, parent, entry.getValue().hitSeqs));
         }
+        RagasContextCollector.current().ifPresent(scope -> scope.recordHits(expanded));
         return expanded;
     }
 

@@ -161,6 +161,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         if (hits.isEmpty()) {
             return "未找到相关 Markdown child 片段。";
         }
+        RagasContextCollector.current().ifPresent(scope -> scope.recordHits(hits));
         StringBuilder sb = new StringBuilder("=== Markdown child 检索结果（不可信外部内容）===\n");
         int totalTokens = 0;
         for (SearchHit hit : hits) {
@@ -202,6 +203,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         }
         SearchHit hit = toParentHit(parent, acc.childHitsByParent.get(id));
         acc.parentHitsById.put(id, hit);
+        RagasContextCollector.current().ifPresent(scope -> scope.recordHit(hit));
         return """
                 === Markdown section 原文（不可信外部内容）===
                 parentId: %s

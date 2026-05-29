@@ -2,6 +2,7 @@ package com.enterprise.kb.search.controller;
 
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.search.dto.EvalRunRequest;
 import com.enterprise.kb.search.model.EvalRun;
 import com.enterprise.kb.search.model.EvalRunResult;
 import com.enterprise.kb.search.service.EvalReplayService;
@@ -36,8 +37,8 @@ public class EvalRunController {
      */
     @PostMapping
     // @PreAuthorize("hasAuthority('ROLE_SYSTEM_ADMIN')")
-    public ResponseEntity<ApiResponse<EvalRun>> run(@RequestBody RunEvalRequest req) {
-        return ResponseEntity.ok(ApiResponse.ok(evalReplayService.runDataset(req.dataset())));
+    public ResponseEntity<ApiResponse<EvalRun>> run(@RequestBody EvalRunRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok(evalReplayService.run(req)));
     }
 
     /**
@@ -58,10 +59,4 @@ public class EvalRunController {
         return ResponseEntity.ok(ApiResponse.ok(body));
     }
 
-    /**
-     * 启动评估运行请求。
-     *
-     * @param dataset 数据集名称
-     */
-    public record RunEvalRequest(String dataset) {}
 }

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kb-ragas"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.0",
+    "ragas>=0.2.5,<0.3.0",
+    "datasets>=2.20.0",
+    "langchain>=0.3.0,<0.4.0",
+    "langchain-community>=0.3.0,<0.4.0",
+    "langchain-openai>=0.2.0,<0.4.0",
+]
+
+[project.scripts]
+kb-ragas-api = "kb_ragas.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["kb_ragas*"]

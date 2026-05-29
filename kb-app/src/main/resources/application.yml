@@ -160,6 +160,28 @@ enterprise:
         max-chars-per-parent: ${MD_PARENT_EXPANSION_MAX_CHARS_PER_PARENT:2000}
         max-windows-per-parent: ${MD_PARENT_EXPANSION_MAX_WINDOWS_PER_PARENT:3}
         max-context-chars: ${MD_PARENT_EXPANSION_MAX_CONTEXT_CHARS:10000}
+    eval:
+      ragas:
+        enabled: ${RAGAS_EVAL_ENABLED:true}
+        endpoint: ${RAGAS_ENDPOINT:http://localhost:8000}
+        judge-provider: ${RAGAS_JUDGE_PROVIDER:DASHSCOPE}
+        judge-model: ${RAGAS_JUDGE_MODEL:qwen-max}
+        embedding-provider: ${RAGAS_EMBEDDING_PROVIDER:DASHSCOPE}
+        embedding-model: ${RAGAS_EMBEDDING_MODEL:text-embedding-v3}
+        poll-interval-seconds: ${RAGAS_POLL_INTERVAL_SECONDS:5}
+        timeout-minutes: ${RAGAS_TIMEOUT_MINUTES:30}
+        max-items-per-batch: ${RAGAS_MAX_ITEMS_PER_BATCH:100}
+        gate-mode: ${RAGAS_GATE_MODE:warn}
+        metrics:
+          - faithfulness
+          - answer_relevancy
+          - context_precision
+          - context_recall
+        thresholds:
+          faithfulness: ${RAGAS_THRESHOLD_FAITHFULNESS:0.85}
+          answer_relevancy: ${RAGAS_THRESHOLD_ANSWER_RELEVANCY:0.80}
+          context_precision: ${RAGAS_THRESHOLD_CONTEXT_PRECISION:0.70}
+          context_recall: ${RAGAS_THRESHOLD_CONTEXT_RECALL:0.75}
     storage:
       base-path: ${FILE_STORAGE_PATH:./uploads}
       minio:

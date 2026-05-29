@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.service;
 
+import com.enterprise.kb.search.dto.EvalRunRequest;
 import com.enterprise.kb.search.model.EvalRun;
 
 /**
@@ -14,4 +15,12 @@ public interface EvalReplayService {
      * @return 评估运行记录
      */
     EvalRun runDataset(String dataset);
+
+    /**
+     * 按请求运行离线评估。
+     *
+     * @param request 评估运行请求
+     * @return 评估运行记录
+     */
+    EvalRun run(EvalRunRequest request);
 }
