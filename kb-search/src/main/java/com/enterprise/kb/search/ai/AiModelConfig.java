@@ -49,6 +49,15 @@ public class AiModelConfig {
     @Value("${enterprise.kb.ai.minimax-openai-base-url:https://api.minimax.chat/v1}")
     private String minimaxOpenAiBaseUrl;
 
+    @Value("${enterprise.kb.ai.llama-cpp.base-url:http://localhost:8080/v1}")
+    private String llamaCppBaseUrl;
+
+    @Value("${enterprise.kb.ai.llama-cpp.api-key:local}")
+    private String llamaCppApiKey;
+
+    @Value("${enterprise.kb.ai.llama-cpp.model:local-model}")
+    private String llamaCppModel;
+
     // ---- DashScope（默认提供商，Spring AI Alibaba 原生接口） ----
 
     /**
@@ -89,7 +98,39 @@ public class AiModelConfig {
     @Bean("minimaxChatClient")
     @ConditionalOnProperty("spring.ai.minimax.api-key")
     public ChatClient minimaxChatClient(ObservationRegistry observationRegistry) {
+        return openAiCompatibleChatClient(
+                minimaxOpenAiBaseUrl,
+                minimaxApiKey,
+                "MiniMax-M2.7-highspeed",
+                observationRegistry);
+    }
 
+    // ---- llama.cpp 本地模型（OpenAI 兼容接口） ----
+
+    /**
+     * 创建 llama.cpp 本地大模型的 {@link ChatClient}。
+     *
+     * <p>llama.cpp server 暴露 OpenAI 兼容接口时，本项目可通过
+     * {@code enterprise.kb.ai.llama-cpp.base-url} 直接接入本地模型。
+     *
+     * @param observationRegistry 容器内的可观测注册表，用于产出 LLM span
+     * @return 封装了 llama.cpp 本地模型的 {@link ChatClient}
+     */
+    @Bean("llamaCppChatClient")
+    @ConditionalOnProperty(name = "enterprise.kb.ai.llama-cpp.enabled", havingValue = "true", matchIfMissing = true)
+    public ChatClient llamaCppChatClient(ObservationRegistry observationRegistry) {
+        return openAiCompatibleChatClient(
+                llamaCppBaseUrl,
+                llamaCppApiKey,
+                llamaCppModel,
+                observationRegistry);
+    }
+
+    private ChatClient openAiCompatibleChatClient(
+            String baseUrl,
+            String apiKey,
+            String model,
+            ObservationRegistry observationRegistry) {
         // 1. 定义一个拦截器，专门负责清洗 <think> 标签
         org.springframework.http.client.ClientHttpRequestInterceptor cleanThinkInterceptor =
                 (request, body, execution) -> {
@@ -126,17 +167,16 @@ public class AiModelConfig {
 
         // 3. 构建 OpenAiApi 时使用自定义的 RestClient
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(minimaxOpenAiBaseUrl)
-                .apiKey(minimaxApiKey)
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
                 .restClientBuilder(restClientBuilder)
                 .build();
 
-        // 4. 放心地把模型名字换回你套餐支持的 M2.7-highspeed
-        //    注入 ObservationRegistry，使该手工模型产出 gen_ai.* LLM span（埋点盲区 A）
+        // 4. 注入 ObservationRegistry，使手工模型产出 gen_ai.* LLM span（埋点盲区 A）
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
-                        .model("MiniMax-M2.7-highspeed")
+                        .model(model)
                         .build())
                 .observationRegistry(observationRegistry)
                 .build();

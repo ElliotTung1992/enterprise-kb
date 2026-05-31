@@ -159,14 +159,19 @@ enterprise:
       access-token-expiry-minutes: 60
       refresh-token-expiry-days: 30
     ai:
-      default-provider: MINIMAX
+      default-provider: ${AI_DEFAULT_PROVIDER:LLAMA_CPP}
       default-embedding-provider: DASHSCOPE
       minimax-openai-base-url: ${MINIMAX_OPENAI_BASE_URL:https://api.minimax.chat}
-      context-limit: ${AI_CONTEXT_LIMIT:204800}
+      llama-cpp:
+        enabled: ${LLAMA_CPP_ENABLED:true}
+        base-url: ${LLAMA_CPP_BASE_URL:http://localhost:8079}
+        api-key: ${LLAMA_CPP_API_KEY:local}
+        model: ${LLAMA_CPP_MODEL:qwen3-vl-8b-instruct}
+      context-limit: ${AI_CONTEXT_LIMIT:8192}
       agentic:
         chunk-token-size: ${AI_AGENTIC_CHUNK_TOKEN_SIZE:512}
       # 两层域路由的 Tier-1 路由器配置
-      router-provider: ${ROUTER_PROVIDER:MINIMAX}
+      router-provider: ${ROUTER_PROVIDER:LLAMA_CPP}
       router-context-turns: ${ROUTER_CONTEXT_TURNS:3}
     customer-assistant:
       # 路由架构 kill-switch：true 走两层路由流水线，false 回退旧单体 ReactAgent 路径

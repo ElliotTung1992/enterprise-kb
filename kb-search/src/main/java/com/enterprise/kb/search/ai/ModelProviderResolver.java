@@ -4,6 +4,7 @@ import com.enterprise.kb.common.exception.InvalidRequestException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.lang.Nullable;
@@ -29,16 +30,27 @@ public class ModelProviderResolver {
     @Value("${enterprise.kb.ai.default-embedding-provider:MINIMAX}")
     private String defaultEmbeddingProvider;
 
+    @Autowired
     public ModelProviderResolver(
             @Nullable @Qualifier("dashscopeChatClient") ChatClient dashscope,
             @Nullable @Qualifier("dashscopeEmbeddingModel") EmbeddingModel dashscopeEmbedding,
             @Nullable @Qualifier("minimaxChatClient") ChatClient minimax,
-            @Nullable @Qualifier("minimaxEmbeddingModel") EmbeddingModel minimaxEmbedding) {
+            @Nullable @Qualifier("minimaxEmbeddingModel") EmbeddingModel minimaxEmbedding,
+            @Nullable @Qualifier("llamaCppChatClient") ChatClient llamaCpp) {
 
         if (dashscope != null) chatClients.put("DASHSCOPE", dashscope);
         if (dashscopeEmbedding != null) embeddingModels.put("DASHSCOPE", dashscopeEmbedding);
         if (minimax != null) chatClients.put("MINIMAX", minimax);
         if (minimaxEmbedding != null) embeddingModels.put("MINIMAX", minimaxEmbedding);
+        if (llamaCpp != null) chatClients.put("LLAMA_CPP", llamaCpp);
+    }
+
+    public ModelProviderResolver(
+            @Nullable ChatClient dashscope,
+            @Nullable EmbeddingModel dashscopeEmbedding,
+            @Nullable ChatClient minimax,
+            @Nullable EmbeddingModel minimaxEmbedding) {
+        this(dashscope, dashscopeEmbedding, minimax, minimaxEmbedding, null);
     }
 
     public ChatClient resolveChatClient(@Nullable String provider) {
