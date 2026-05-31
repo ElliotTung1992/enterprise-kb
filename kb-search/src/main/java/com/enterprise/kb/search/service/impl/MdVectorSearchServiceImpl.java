@@ -67,7 +67,7 @@ public class MdVectorSearchServiceImpl implements MdVectorSearchService {
                 string(document, "assetUrl"),
                 string(document, "assetTitle"),
                 string(document, "section"),
-                seq != null ? Integer.parseInt(seq.toString()) : null);
+                integer(seq));
     }
 
     private String title(UUID documentId) {
@@ -82,6 +82,20 @@ public class MdVectorSearchServiceImpl implements MdVectorSearchService {
     private String string(Document document, String key, String fallback) {
         String value = string(document, key);
         return value == null ? fallback : value;
+    }
+
+    private Integer integer(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        String text = value.toString();
+        if (text.isBlank()) {
+            return null;
+        }
+        return (int) Double.parseDouble(text);
     }
 
     private String truncate(String text, int maxLen) {

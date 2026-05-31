@@ -57,6 +57,19 @@ body { background: var(--kb-bg); font-size: 0.9rem; }
 .chat-bubble.assistant { background: #fff; border: 1px solid #e2e8f0; }
 .chat-input-bar { background: #fff; border-top: 1px solid #e2e8f0; padding: 1rem 1.5rem; }
 
+/* Markdown RAG pages */
+.md-layout { display: grid; grid-template-columns: 340px 1fr; gap: 1rem; height: calc(100vh - 64px); }
+.md-upload-layout { max-width: 1080px; margin: 0 auto; }
+.md-panel { background: #fff; border-right: 1px solid #e2e8f0; overflow: auto; }
+.md-chat { display: flex; flex-direction: column; min-height: 0; }
+.md-messages { flex: 1; overflow: auto; background: #f8fafc; padding: 1rem; }
+.md-upload-zone { border: 2px dashed #a5b4fc; border-radius: 8px; padding: 1.5rem; text-align: center; cursor: pointer; }
+.md-upload-zone:hover { background: #eef2ff; border-color: var(--kb-primary); }
+.md-doc-item { padding: .65rem .25rem; border-bottom: 1px solid #f1f5f9; }
+.md-doc-title { font-size: .84rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-page-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; height: 100%; }
+.md-page-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+
 /* Citation cards */
 .citation-card { border-left: 3px solid var(--kb-primary); background: #f5f3ff; border-radius: 6px; padding: .5rem .75rem; margin-top: .5rem; font-size: .8rem; }
 
