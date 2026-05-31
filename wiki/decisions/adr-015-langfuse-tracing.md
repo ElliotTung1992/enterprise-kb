@@ -5,7 +5,7 @@ tags: [adr, observability, tracing, langfuse, opentelemetry, otlp, micrometer, l
 
 # ADR-015：在线 LLM Tracing 接入 LangFuse（via OpenTelemetry / OTLP）
 
-**状态**：设计中（待二次审核），未实现
+**状态**：代码已落地、全模块编译通过；运行态待联调（LangFuse span 树渲染、prompt/completion event→attribute 映射、跨线程传播 ①②③ 实测均需起栈验证）
 
 > 完整设计与流程图见 `docs/design-langfuse-tracing.md`。本 ADR 接续 [[decisions/adr-014-ragas-integration]] "备选方案" 中标记为"推迟二期"的 **LangFuse 自部署** 选项；与 ADR-014（离线评估）正交——本 ADR 解决**在线链路可观测性**。
 
@@ -115,7 +115,7 @@ graph-core 内部 reactive、classpath 有异步 tool calling manager、`MdHybri
 ## 关联
 
 - 前置 / 评估侧：[[decisions/adr-014-ragas-integration]]（"备选方案"标记的 LangFuse 自部署即本 ADR）
-- 被下线的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 下线）
+- 已退役的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 退役）
 - 评估目标链路：[[decisions/adr-012-markdown-structure-rag]] · [[decisions/adr-013-md-keyword-bm25]]
 - AI Provider 体系：[[ai-rag/providers]]
 - 完整设计与流程图：`docs/design-langfuse-tracing.md`

@@ -1,4 +1,4 @@
-# MD 关键词检索升级 BM25（2026-05-28）
+# md 关键词检索升级 BM25（2026-05-28）
 
 升级 md 竖井**关键词那一路**：pg_trgm → 真正 BM25（VectorChord-bm25 + pg_tokenizer jieba）。改动只在 `MdKeywordSearchServiceImpl` 一个 method——RRF 按排名融合，BM25 负分免归一化。
 

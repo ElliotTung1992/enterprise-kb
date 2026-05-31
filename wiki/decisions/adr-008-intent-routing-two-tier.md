@@ -5,7 +5,7 @@ tags: [adr, architecture, customer-assistant, intent-routing, domain-router]
 
 # ADR-008：客服助手意图识别采用两层域路由架构
 
-**状态**：提议中（待实施）
+**状态**：Phase 0-3 全部实现、未上线（kill-switch `enterprise.kb.customer-assistant.routing-enabled` 默认 false，旧单体路径仍生效）
 
 ## 背景
 

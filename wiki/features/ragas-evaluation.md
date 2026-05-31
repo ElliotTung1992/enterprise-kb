@@ -157,6 +157,6 @@ public final class RagasContextCollector {
 
 - 架构决策：[[decisions/adr-014-ragas-integration]]
 - 评估对象：[[features/markdown-structure-rag]] · [[features/md-keyword-bm25]]
-- 既有评估闭环：`eval_cases` / `eval_runs` / `eval_run_results` 三表（迁移 025，自研 trace 部分已下线、eval 部分保留）
+- 既有评估闭环：`eval_cases` / `eval_runs` / `eval_run_results` 三表（迁移 025；自研 trace 部分随迁移 032 退役，eval 部分保留）
 - 数据库迁移：[[database/migrations]]（032 下线 trace 表 + sourceTraceId 列）
 - AI Provider 体系：[[ai-rag/providers]]

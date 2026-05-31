@@ -5,7 +5,7 @@ tags: [adr, tombstone, deprecated, trace, observability]
 
 # ADR-009：自研 Agent Trace（已废止）
 
-**状态**：**已废止**——随迁移 032 整体下线（2026-05-28）
+**状态**：**已废止**——随迁移 032 整体退役（2026-05-28）
 
 ## 概要
 

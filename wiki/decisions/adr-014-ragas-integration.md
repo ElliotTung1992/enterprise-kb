@@ -5,17 +5,17 @@ tags: [adr, evaluation, ragas, rag, llm-as-judge, ci-gate, langsmith]
 
 # ADR-014：Ragas RAG 评测框架接入
 
-**状态**：设计中（待二次审核），未实现
+**状态**：代码已落地、编译通过；运行态待联调（Python Ragas 服务连通性、`eval_runs` 写回、metric 阈值门禁均需起栈实测）
 
-> 详细设计见 [[features/ragas-evaluation]]。完整推演与接口契约见 `docs/design-ragas-integration.md`。本 ADR 是 [[decisions/adr-012-markdown-structure-rag]] 与 [[decisions/adr-013-md-keyword-bm25]] 的评估侧后续——给 MD 竖井加 LLM-as-judge 答案质量门禁。
+> 详细设计见 [[features/ragas-evaluation]]。完整推演与接口契约见 `docs/design-ragas-integration.md`。本 ADR 是 [[decisions/adr-012-markdown-structure-rag]] 与 [[decisions/adr-013-md-keyword-bm25]] 的评估侧后续——给 md 竖井加 LLM-as-judge 答案质量门禁。
 
 ## 背景
 
-自研 trace 体系（原 ADR-009 / ADR-010 描述的 `agent_traces` / `agent_trace_steps` + `TraceRecorder` + `TraceFacade`）于 2026-05-28 通过迁移 032 全部下线（[[log]] 有完整记录）。下线后保留的评估基础：
+自研 trace 体系（原 ADR-009 / ADR-010 描述的 `agent_traces` / `agent_trace_steps` + `TraceRecorder` + `TraceFacade`）于 2026-05-28 通过迁移 032 全部退役（[[log]] 有完整记录）。退役后保留的评估基础：
 
 - `eval_cases` / `eval_runs` / `eval_run_results` 三表（迁移 025 创建，032 拆掉 `source_trace_id` FK 与列）
 - 两个上线的离线 eval：`MdKeywordEvalTest`（TRGM vs BM25 召回）、`DomainRouterEvalTest`（域路由准确率）
-- `EvalReplayService`（trace replay 能力已下线，剩按 `eval_cases.input_json` 跑目标 RAG 服务的最小静态断言）
+- `EvalReplayService`（trace replay 能力随迁移 032 退役，剩按 `eval_cases.input_json` 跑目标 RAG 服务的最小静态断言）
 - 后台页 `evals.html`
 
 缺口：**答案质量**只有规则断言（`mustContain` / `mustNotContain` / `groundedOnly`），测不到语义级 faithfulness、relevancy、context precision/recall。这些都需要 LLM-as-judge。

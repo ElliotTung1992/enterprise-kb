@@ -68,7 +68,7 @@ Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`�
 
 **Streaming**: `MdQnAController` 暴露 SSE 端点（`text/event-stream`）。
 
-> 此外，`kb-search` 还含**商城客服助手 / 投诉工作流**（`CustomerAssistantService` / `Complaint*` / `DomainHandler`），它们用各自的 `ReactAgent`，**不依赖**知识库检索，与 MD 竖井相互独立。
+> 此外，`kb-search` 还含**商城客服助手 / 投诉工作流**（`CustomerAssistantService` / `Complaint*` / `DomainHandler`），它们用各自的 `ReactAgent`，**不依赖**知识库检索，与 md 竖井相互独立。
 
 ### AI Provider System
 

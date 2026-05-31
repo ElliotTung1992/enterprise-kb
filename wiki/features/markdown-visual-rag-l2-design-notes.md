@@ -1,9 +1,10 @@
-# Markdown 图文 RAG L2 沟通纪要与优化清单
+# Markdown 图文 RAG L2 沟通纪要与优化清单（历史）
 
-> 状态：设计沟通记录  
-> 关联功能方案：[[features/markdown-visual-rag-l2]]  
-> 关联 ADR：[[decisions/adr-011-markdown-visual-rag-l2]]  
+> 状态：设计沟通记录，**仅作历史保留**——所讨论的"在标准竖井内做图文 RAG"思路已被迁移 031 标准竖井整体退役所取代；当前活跃链路是 [[features/markdown-image-rag]]。
+> 关联功能方案：[[features/markdown-visual-rag-l2]]
+> 关联 ADR：[[decisions/adr-011-markdown-visual-rag-l2]]
 > 关联计划：`.planning/2026-05-23-markdown-visual-rag-l2/`
+> 接续：[[features/markdown-image-rag]]
 
 ## 背景问题
 

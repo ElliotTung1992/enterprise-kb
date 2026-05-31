@@ -3,11 +3,11 @@ created: 2026-05-27
 tags: [adr, architecture, rag, search, bm25, keyword-search, markdown, pg_tokenizer, vchord-bm25]
 ---
 
-# ADR-013：MD 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
+# ADR-013：md 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
 
-**状态**：已接受（代码已实现并编译验证；运行态建 model/回填/评估/翻默认待执行，build 脚本截至 2026-05-27 尚未跑）
+**状态**：已接受（代码已实现并编译验证；运行态建 model / 回填 / 评估 / 翻默认待执行，build 脚本截至 2026-05-27 尚未跑）
 
-> 详细功能设计见 [[features/md-keyword-bm25]]。完整选型推演见 `docs/design-md-keyword-bm25.md`，实施计划见 `planning/plan-md-keyword-bm25.md`。本 ADR 是 [[decisions/adr-012-markdown-structure-rag]] 的后续——只升级该竖井的关键词检索一路。
+> 详细功能设计见 [[features/md-keyword-bm25]]。完整选型推演见 `docs/design-md-keyword-bm25.md`，实施计划见 `.planning/2026-05-28-markdown-keyword-bm25/plan.md`。本 ADR 是 [[decisions/adr-012-markdown-structure-rag]] 的后续——只升级该竖井的关键词检索一路。
 
 ## 背景
 

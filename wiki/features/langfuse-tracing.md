@@ -4,7 +4,7 @@
 > 设计文档：`docs/design-langfuse-tracing.md`
 > 架构决策：[[decisions/adr-015-langfuse-tracing]]
 > 前置评估侧 ADR：[[decisions/adr-014-ragas-integration]]（"备选方案"标记的 LangFuse 自部署即本方案）
-> 被下线的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 已下线）
+> 已退役的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 退役，落库形态废弃）
 
 ## 目标
 

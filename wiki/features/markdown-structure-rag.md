@@ -7,10 +7,12 @@
 > 兄弟功能：[[features/markdown-visual-rag-l2]]（图文/视觉 RAG，另一回事）
 > 关键词升级：[[features/md-keyword-bm25]]（本竖井关键词路 trgm → BM25，`keyword-mode` 开关切换）
 
-> [!note] 与 [[features/markdown-visual-rag-l2]] 的区别
-> 两者都叫「Markdown RAG」，但是**两条不同的竖井**：
-> - **图文 RAG L2**：在**标准竖井**内（`documents` / `kb_chunks`），处理 zip 内图片/流程图，做 OCR/caption/视觉理解。
-> - **结构感知 RAG（本页）**：**全新平行竖井**（`md_documents` / `md_kb_chunks`），按 H1-H3 结构切分 + small-to-big 父子索引 + 表格双表示。**本期明确不做视觉/OCR**，图文交给 L2 链路。
+> [!note] 与 [[features/markdown-visual-rag-l2]] 的关系（历史背景）
+> 两者都叫「Markdown RAG」，但**起源不同**：
+> - **图文 RAG L2**（ADR-011）：基于当时仍在的**标准竖井**（`documents` / `kb_chunks`）设计，处理 zip 内图片/流程图的 OCR/caption/视觉理解。**标准竖井随迁移 031 整体退役后**，其图片处理理念被并入 md 竖井（见 [[features/markdown-image-rag]]）。
+> - **结构感知 RAG（本页）**：与图文 L2 同期上线、走全新平行竖井（`md_documents` / `md_kb_chunks`），按 H1-H3 结构切分 + small-to-big 父子索引 + 表格双表示。**当期不做视觉 / OCR**，与 L2 链路解耦。
+
+> 当前 md 竖井是**唯一活跃的 RAG 链路**。原标准竖井（`DocumentController` / `QnAService` / `HybridSearchService` / `document_chunks` / `kb_chunks`）已随迁移 031 整体删除。
 
 ## 目标
 
@@ -18,25 +20,22 @@
 2. **small-to-big 父子索引**：小 child 做召回（精准），完整 parent（整段 section）返回给 LLM（上下文完整）。
 3. 表格**双表示**：检索用逐行自然语言化文本，返回给 LLM 用原始 markdown 表格。
 
-## 两条平行竖井
+## 当前竖井结构
 
-路由发生在 **API 入口层**（独立 controller），不需要 `space.type` 数据标志，也不需要分派器。标准竖井**一行不动**。
+md 竖井是项目内唯一活跃的 RAG 链路，由独立 controller 入口承接，无需 `space.type` 数据标志或分派器。
 
 ```
-标准竖井（不动）
-  DocumentController → DocumentService → DocumentIngestionPipeline
-        → document_chunks / Milvus kb_chunks
-  QnAController → QnAService → HybridSearch(Semantic+Keyword,RRF) → Rerank
-
-MD 竖井（本功能）
+md 竖井
   MdDocumentController → MdDocumentService → md_documents
         → MarkdownStructureIngestion（parent/child 切分 + 表格线性化）
         → md_parent_chunk / md_child_chunk / Milvus md_kb_chunks
   MdQnAController → MdQnAService
-        → MdHybridSearch(RRF，融合不去重) → Rerank → ParentExpansion（回查 parent）→ prompt
+        → MdHybridSearch（RRF，融合不去重）→ Rerank → ParentExpansion（回查 parent）→ prompt
 ```
 
-只读复用、不修改的底座：`EmbeddingModel`、`ModelProviderResolver`/`ChatClient`、`RerankService`、`RedisChatMemory`、`QaChatSession`（会话表）、空间 RBAC。
+历史并存的标准竖井（`DocumentController` / `QnAService` / `HybridSearchService` / `document_chunks` / `kb_chunks`）随迁移 031 整体退役。
+
+只读复用、不修改的底座：`EmbeddingModel`、`ModelProviderResolver` / `ChatClient`、`RerankService`、`RedisChatMemory`、`QaChatSession`（会话表）、空间 RBAC。
 
 ## 数据模型
 
@@ -47,9 +46,9 @@ MD 竖井（本功能）
 | `md_documents` | md 文档元数据，状态机 `PENDING→PROCESSING→READY/FAILED` |
 | `md_parent_chunk` | H1-H3 的 section，**永不进检索**，只按 id 回查正文（含原始 markdown 表格）|
 | `md_child_chunk` | 段落级子块，`embed_text` 进检索；`char_start/char_end` 回指 parent 原文；建 `pg_trgm` GIN 索引 |
-| Milvus `md_kb_chunks` | child 向量（1536 / COSINE / IVF_FLAT），由 `AppConfig.mdVectorStore` 装配，与 `kb_chunks` 物理隔离 |
+| Milvus `md_kb_chunks` | child 向量（1536 / COSINE / IVF_FLAT），由 `AppConfig.mdVectorStore` 手工装配 |
 
-> `AppConfig` 新增 `mdVectorStore` Bean，并用 `vectorStorePrimaryPostProcessor` 把标准竖井自动配置的 `vectorStore` 标为 primary，避免类型注入歧义——标准竖井代码零改动。
+> `AppConfig` 手工建 `mdVectorStore` Bean；Spring AI Milvus 自动配置被 `spring.autoconfigure.exclude` 关闭（标准竖井退役后无需自动建集合）。
 
 ## 入库切分（关键复杂逻辑）
 
@@ -116,7 +115,7 @@ enterprise.kb:
 ## 清理
 
 - 文档删除（`MdDocumentService.deleteDocument`）：清 `md_kb_chunks` 向量 + child + parent，`md_documents` 软删除。
-- 空间删除：`@EventListener handleSpaceDeleted(SpaceDeletedEvent)` 清 md 三表 + md 集合；标准 `handleSpaceDeleted` 不动。
+- 空间删除：`@EventListener handleSpaceDeleted(SpaceDeletedEvent)` 清 md 三表 + Milvus 集合。
 
 ## 实现状态
 

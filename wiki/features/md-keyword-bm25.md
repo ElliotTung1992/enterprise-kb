@@ -3,11 +3,11 @@ created: 2026-05-27
 tags: [feature, rag, search, bm25, keyword-search, markdown, pg_tokenizer, vchord-bm25]
 ---
 
-# MD 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
+# md 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
 
 > 状态：**代码已实现**（编译通过，md 入库单测 7/7 通过）；运行态步骤（建 model/tokenizer、回填、评估、翻默认）**尚未执行**。
 > 设计文档：`docs/design-md-keyword-bm25.md`（含选型 C1/C2 推演）
-> 实施计划：`planning/plan-md-keyword-bm25.md`
+> 实施计划：`.planning/2026-05-28-markdown-keyword-bm25/plan.md`
 > 架构决策：[[decisions/adr-013-md-keyword-bm25]]
 > 所属竖井：[[features/markdown-structure-rag]]（本功能只升级该竖井的**关键词那一路**）
 
@@ -154,7 +154,7 @@ ORDER BY score ASC LIMIT ?               -- BM25 分为负，越负越相关 →
 
 - **改词表/同义词 = 重 tokenize 整列 + REINDEX**：`bm25vector` 按 tokenizer 配置算好存储；改 model 词表/加同义词后已存向量失效，须 flag=TRGM 保护下重跑回填 `UPDATE` + `REINDEX INDEX idx_md_child_bm25`（仅 md 竖井、可离线）。
 - **冷启动**：全新部署 `md_child_chunk` 空，须先 ingest 再建 model；建前 BM25 无数据（`bm25vector` 全 NULL），默认 TRGM 不受影响。
-- **新组件成熟度**：vchord_bm25 / pg_tokenizer 较新，换镜像后需回归 md 入库（7/7）与检索单测、标准竖井基本功能。
+- **新组件成熟度**：vchord_bm25 / pg_tokenizer 较新，换镜像后需回归 md 入库（7/7）与检索单测。
 - **种子评估集偏差**：手造集规模小，仅作解锁默认翻转的最低门槛。
 - **IK 边界**：无 IK 式 user_dict，硬术语收敛靠 custom model 词表 + 同义词表，命中质量以评估为准。
 
@@ -173,6 +173,6 @@ ORDER BY score ASC LIMIT ?               -- BM25 分为负，越负越相关 →
 
 - 所属竖井：[[features/markdown-structure-rag]]（结构感知父子索引，本功能升级其关键词路）
 - 架构决策：[[decisions/adr-013-md-keyword-bm25]]
-- 标准竖井混合检索：[[ai-rag/hybrid-search]]（RRF k=60，md 竖井 RRF 沿用同思路）
+- 混合检索：[[ai-rag/hybrid-search]]（RRF k=60）
 - 混合检索决策：[[decisions/adr-003-hybrid-search-rrf]]
 - 迁移：[[database/migrations]]（029）

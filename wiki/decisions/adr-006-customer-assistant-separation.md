@@ -9,7 +9,7 @@ tags: [adr, architecture, customer-assistant, separation]
 
 ## 背景
 
-HITL 售后工具（`checkAfterSalesEligibility`、`submitAfterSalesReview`）最初集成在 `AgenticQnAServiceImpl` 中，与知识库检索工具（`searchKnowledgeBase`）共存于同一 ReactAgent。
+HITL 售后工具（`checkAfterSalesEligibility`、`submitAfterSalesReview`）最初集成在当时的 `AgenticQnAServiceImpl` 中，与知识库检索工具（`searchKnowledgeBase`）共存于同一 ReactAgent。
 
 问题：
 - 知识库用户可能意外触发售后流程
@@ -23,11 +23,11 @@ HITL 售后工具（`checkAfterSalesEligibility`、`submitAfterSalesReview`）�
 
 | 维度 | 知识库 QA | 商城客服助手 |
 |------|-----------|------------|
-| 服务类 | `AgenticQnAServiceImpl` | `CustomerAssistantServiceImpl` |
+| 服务类 | `MdAgenticQnAServiceImpl`（原 `AgenticQnAServiceImpl` 随迁移 031 退役） | `CustomerAssistantServiceImpl` |
 | 数据表 | `qa_sessions / qa_messages` | `customer_sessions / customer_messages` |
-| ReactAgent 工具 | `searchKnowledgeBase` | `checkAfterSalesEligibility` + `submitAfterSalesReview` |
+| ReactAgent 工具 | `searchKnowledgeBase` + `readFullSection` | `checkAfterSalesEligibility` + `submitAfterSalesReview` |
 | HITL Hook | 无 | `HumanInTheLoopHook` |
-| 知识空间绑定 | 必须（VIEWER 权限） | 无（space_id nullable） |
+| 知识空间绑定 | 必须（VIEWER 权限） | 无（`space_id` nullable） |
 | 前端入口 | `/dashboard.html` | `/customer.html` |
 
 ## `@Transactional` 私有方法问题

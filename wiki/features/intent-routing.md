@@ -95,7 +95,7 @@ ConversationStateStore.load（Redis 路由状态）
 
 ## 情绪累积升级
 
-情绪与诉求分离：路由器输出 `EMOTION` 标记本轮是否纯情绪宣泄。`routedChat` 累计 `emotionStrikes`——纯情绪 +1，进入投诉域归零。累计达阈值（`EMOTION_STRIKE_THRESHOLD`，默认 3）时,即使用户从未明确提诉求,也主动反问"需要我帮您升级为正式投诉吗",并把 `pendingOffer` 置为 `COMPLAINT`、计数归零。这实现 ADR-008 决策 5：情绪不切域,但累积到一定程度要主动兜住。
+情绪与诉求分离：路由器输出 `EMOTION` 标记本轮是否纯情绪宣泄。`routedChat` 累计 `emotionStrikes` —— 纯情绪 +1，进入投诉域归零。累计达阈值（`EMOTION_STRIKE_THRESHOLD`，默认 3）时，即使用户从未明确提诉求，也主动反问"需要我帮您升级为正式投诉吗"，并把 `pendingOffer` 置为 `COMPLAINT`、计数归零。这实现 ADR-008 决策 5：情绪不切域，但累积到一定程度要主动兜住。
 
 ## DomainHandler 接口
 

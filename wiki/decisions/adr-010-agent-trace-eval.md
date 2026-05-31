@@ -5,7 +5,7 @@ tags: [adr, tombstone, deprecated, evaluation, trace, replay]
 
 # ADR-010：自研 Trace 评估回放（已废止）
 
-**状态**：**已废止**——随迁移 032 与 [[decisions/adr-009-agent-trace-foundation]] 一并下线（2026-05-28）
+**状态**：**已废止**——随迁移 032 与 [[decisions/adr-009-agent-trace-foundation]] 一并退役（2026-05-28）
 
 ## 概要
 

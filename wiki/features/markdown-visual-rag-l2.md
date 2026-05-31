@@ -1,9 +1,10 @@
-# Markdown 图文 RAG L2 方案
+# Markdown 图文 RAG L2 方案（历史）
 
-> 状态：已实现至 Phase 5 / 后续保留 L3 扩展  
+> 状态：Phase 5 完成；**基于已退役的标准竖井设计**——随迁移 031 标准竖井整体退役，本方案的图片处理理念被并入 md 竖井 IMAGE_CAPTION 链路（见 [[features/markdown-image-rag]]）。**本页保留作历史架构记录**，L3 多模态向量保留为未来扩展。
 > 关联计划：`.planning/2026-05-23-markdown-visual-rag-l2/`
 > 架构决策：[[decisions/adr-011-markdown-visual-rag-l2]]
 > 沟通纪要：[[features/markdown-visual-rag-l2-design-notes]]
+> 当前活跃接续：[[features/markdown-image-rag]]（md 竖井图片支持）
 
 ## 目标
 
