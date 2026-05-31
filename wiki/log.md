@@ -1,5 +1,19 @@
 # Wiki Ingest Log
 
+## 2026-05-31 | maintenance | API 文档覆盖 + tech-stack 同步
+- Type: lint / coverage
+- Trigger: 二次盘点发现 11 个 controller 仅 5 个有 api 文档，且 search 端点早已删除
+- Pages deleted:
+  - `wiki/api/search.md`（无对应 `SearchController`，端点不存在）
+- Pages created:
+  - [[api/spaces]] · [[api/users]] · [[api/eval]] · [[api/complaints]] — 补齐 SpaceController / UserController / EvalRun + EvalCaseController / ComplaintController 的端点说明
+- Pages rewritten:
+  - [[architecture/tech-stack]] — 删 OpenAI provider，补 LangFuse / ClickHouse / Ragas 依赖，PG 镜像改 vchord-suite，区分默认 profile 与 `--profile tracing`
+  - [[infrastructure/docker-compose]] — 补 `--profile tracing` 启动 + 必填密钥；服务依赖图区分默认 / tracing profile
+  - [[database/entities/users-spaces]] — EDITOR 权限删"管理标签"（已随 `tags` 表退役）
+- Home.md：API 接口行改为 `auth` / `users` / `spaces` / `documents` / `qa` / `after-sales` / `complaints` / `eval`（删 search，加 4 个新页）
+- Key insight: 11 个活跃 controller — `AuthController`、`UserController`、`SpaceController`、`MdDocumentController`、`MdQnAController`、`QnAController`（session 端）、`CustomerAssistantController`、`ReviewController`（空间 scope）、`ComplaintController`、`EvalRunController`、`EvalCaseController`。审核员决策有两个入口：`/after-sales/reviews/*`（全局）和 `/spaces/{spaceId}/reviews/*`（空间内），前者已记 [[api/after-sales]]，后者通过 [[features/hitl-after-sales]] 间接覆盖。
+
 ## 2026-05-31 | maintenance | 全 wiki 对齐标准 RAG 退役 + 文档目录整理
 - Type: lint / cleanup
 - Trigger: 整理 .planning/ docs/ wiki/ 三块文档时发现 25+ 页含已退役概念（标准 RAG 竖井 / `kb_chunks` / `kb-knowledge-graph` / `/qa/ask` 旧端点）

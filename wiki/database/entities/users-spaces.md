@@ -38,8 +38,10 @@ OWNER   ≥ EDITOR ≥ VIEWER
 ```
 
 - **OWNER**：可管理成员、删除空间
-- **EDITOR**：可上传/删除文档、管理标签
+- **EDITOR**：可上传 / 删除 md 文档
 - **VIEWER**：可搜索、问答（只读）
+
+> 原"管理标签"权限随 `kb-knowledge-graph` 模块与 `tags` 表的退役（迁移 031）一并失效。
 
 ## 权限检查方式
 

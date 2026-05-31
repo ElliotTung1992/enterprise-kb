@@ -3,68 +3,131 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Eval 管理 — 企业知识库</title>
+<title>RAG 评测后台 - 企业知识库</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <link href="/assets/css/app.css" rel="stylesheet">
 <style>
 body { visibility:hidden; }
-.workbench { display:grid; grid-template-columns: 380px 1fr; gap:1rem; }
-.case-list { border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden; }
+.eval-layout { display:grid; grid-template-columns: 360px 1fr; gap:1rem; }
+.case-list { border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden; min-height:260px; }
 .case-row { padding:.75rem .9rem; border-bottom:1px solid #f1f5f9; cursor:pointer; }
-.case-row:hover { background:#f8fafc; }
-textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.82rem; }
-.json-box { background:#0f172a; color:#e2e8f0; border-radius:8px; padding:1rem; min-height:180px; overflow:auto; font-size:.78rem; }
-@media (max-width:900px) { .workbench { grid-template-columns:1fr; } }
+.case-row:hover, .case-row.active { background:#f8fafc; }
+.json-input, .jsonl-input, .json-box { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.82rem; }
+.json-box { background:#0f172a; color:#e2e8f0; border-radius:8px; padding:1rem; min-height:220px; max-height:520px; overflow:auto; }
+.metric-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:.5rem; }
+.metric-grid label { border:1px solid #e2e8f0; border-radius:8px; padding:.45rem .55rem; background:#fff; font-size:.82rem; }
+@media (max-width:960px) { .eval-layout, .metric-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
 <nav class="kb-sidebar">
-  <div class="brand"><i class="bi bi-clipboard-data me-2"></i>Eval 后台</div>
+  <div class="brand"><i class="bi bi-clipboard-data me-2"></i>RAG 评测后台</div>
   <ul class="nav flex-column mt-2 flex-grow-1">
-    <li><a class="nav-link active" href="/evals.html"><i class="bi bi-clipboard-data"></i>Eval</a></li>
+    <li><a class="nav-link active" href="/evals.html"><i class="bi bi-clipboard-data"></i>Eval Cases</a></li>
   </ul>
-  <div class="px-3 pb-2"><a href="/index.html" class="nav-link" style="font-size:.82rem;color:#c7d2fe"><i class="bi bi-house me-1"></i>返回首页</a></div>
   <div class="p-3 border-top" style="border-color:#312e81!important">
     <small class="d-block text-truncate mb-2" id="sidebar-username"></small>
     <a href="#" onclick="logout()" style="color:#c7d2fe;font-size:.85rem"><i class="bi bi-box-arrow-right me-1"></i>退出</a>
   </div>
 </nav>
+
 <main class="kb-main">
   <div class="kb-topbar">
-    <h6 class="mb-0 fw-bold"><i class="bi bi-clipboard-data me-2 text-primary"></i>Eval 管理</h6>
+    <h6 class="mb-0 fw-bold"><i class="bi bi-clipboard-data me-2 text-primary"></i>Ragas 评测</h6>
     <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-outline-primary" onclick="runEval()"><i class="bi bi-play-fill"></i></button>
-      <button class="btn btn-sm btn-primary" onclick="saveCase()"><i class="bi bi-save"></i></button>
+      <button class="btn btn-sm btn-outline-primary" onclick="loadCases()"><i class="bi bi-arrow-clockwise me-1"></i>刷新</button>
+      <button class="btn btn-sm btn-primary" onclick="runRagas()"><i class="bi bi-play-fill me-1"></i>运行评测</button>
     </div>
   </div>
+
   <section class="p-4">
-    <div class="filter-bar mb-3">
-      <input class="form-control form-control-sm" id="dataset" value="draft" style="max-width:160px">
-      <input class="form-control form-control-sm" id="case-type-filter" placeholder="caseType" style="max-width:160px">
-      <button class="btn btn-sm btn-outline-primary" onclick="loadCases()"><i class="bi bi-search"></i></button>
-      <a class="btn btn-sm btn-outline-secondary" id="export-link" href="/api/v1/admin/eval-cases/export-jsonl?dataset=draft"><i class="bi bi-download"></i></a>
+    <div class="kb-card mb-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small text-muted">数据集</label>
+          <input class="form-control form-control-sm" id="dataset" value="live-smoke">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted">目标服务</label>
+          <select class="form-select form-select-sm" id="target-service">
+            <option value="MdQnAService">MdQnAService</option>
+            <option value="MdAgenticQnAService">MdAgenticQnAService</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small text-muted">caseType</label>
+          <input class="form-control form-control-sm" id="case-type-filter" placeholder="RAGAS">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small text-muted">状态</label>
+          <select class="form-select form-select-sm" id="enabled-filter">
+            <option value="">全部</option>
+            <option value="true" selected>启用</option>
+            <option value="false">禁用</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary flex-fill" onclick="loadCases()"><i class="bi bi-search"></i></button>
+          <a class="btn btn-sm btn-outline-secondary" id="export-link" href="/api/v1/admin/eval-cases/export-jsonl?dataset=live-smoke"><i class="bi bi-download"></i></a>
+        </div>
+      </div>
     </div>
-    <div class="workbench">
+
+    <div class="kb-card mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0">导入 JSONL</h6>
+        <button class="btn btn-sm btn-outline-primary" onclick="importJsonl()"><i class="bi bi-upload me-1"></i>导入</button>
+      </div>
+      <textarea class="form-control jsonl-input" id="jsonl-input" rows="4" placeholder='{"caseType":"RAGAS","name":"测试问题","dataset":"live-smoke","inputJson":"{\"spaceId\":\"知识空间ID\",\"question\":\"问题\",\"topK\":5}","expectedJson":"{\"referenceAnswer\":\"金标答案\"}","enabled":true}'></textarea>
+    </div>
+
+    <div class="eval-layout">
       <div class="case-list" id="case-list"></div>
       <div>
-        <div class="row g-2 mb-2">
-          <div class="col"><input class="form-control form-control-sm" id="case-name" placeholder="name"></div>
-          <div class="col"><input class="form-control form-control-sm" id="case-type" placeholder="ANSWER"></div>
-          <div class="col-auto"><label class="form-check mt-1"><input class="form-check-input" type="checkbox" id="case-enabled"> 启用</label></div>
+        <div class="kb-card mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Eval Case</h6>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-secondary" onclick="newCase()"><i class="bi bi-plus-lg me-1"></i>新建</button>
+              <button class="btn btn-sm btn-primary" onclick="saveCase()"><i class="bi bi-save me-1"></i>保存</button>
+            </div>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-md-5"><input class="form-control form-control-sm" id="case-name" placeholder="name"></div>
+            <div class="col-md-3"><input class="form-control form-control-sm" id="case-type" value="RAGAS" placeholder="RAGAS"></div>
+            <div class="col-md-4"><label class="form-check mt-1"><input class="form-check-input" type="checkbox" id="case-enabled" checked> 启用</label></div>
+          </div>
+          <label class="form-label small text-muted">inputJson</label>
+          <textarea class="form-control json-input mb-2" id="input-json" rows="5">{"spaceId":"","question":"","topK":5}</textarea>
+          <label class="form-label small text-muted">expectedJson</label>
+          <textarea class="form-control json-input mb-2" id="expected-json" rows="4">{"referenceAnswer":""}</textarea>
+          <label class="form-label small text-muted">mockOutputsJson</label>
+          <textarea class="form-control json-input" id="mock-json" rows="3">{}</textarea>
         </div>
-        <label class="form-label small text-muted">inputJson</label>
-        <textarea class="form-control mb-2" id="input-json" rows="5">{}</textarea>
-        <label class="form-label small text-muted">expectedJson</label>
-        <textarea class="form-control mb-2" id="expected-json" rows="5">{"mustContain":[]}</textarea>
-        <label class="form-label small text-muted">mockOutputsJson</label>
-        <textarea class="form-control mb-3" id="mock-json" rows="4">{}</textarea>
-        <h6>最近运行</h6>
-        <pre class="json-box" id="run-box">{}</pre>
+
+        <div class="kb-card mb-3">
+          <h6>Ragas 指标</h6>
+          <div class="metric-grid">
+            <label><input class="form-check-input me-1 ragas-metric" type="checkbox" value="faithfulness" checked>faithfulness</label>
+            <label><input class="form-check-input me-1 ragas-metric" type="checkbox" value="answer_relevancy" checked>answer_relevancy</label>
+            <label><input class="form-check-input me-1 ragas-metric" type="checkbox" value="context_precision" checked>context_precision</label>
+            <label><input class="form-check-input me-1 ragas-metric" type="checkbox" value="context_recall" checked>context_recall</label>
+          </div>
+        </div>
+
+        <div class="kb-card">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">运行结果</h6>
+            <span class="badge text-bg-secondary" id="run-status">未运行</span>
+          </div>
+          <pre class="json-box" id="run-box">{}</pre>
+        </div>
       </div>
     </div>
   </section>
 </main>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/assets/js/auth.js"></script>
 <script src="/assets/js/api.js"></script>
@@ -72,13 +135,31 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
 requireAuth();
 document.getElementById('sidebar-username').textContent = localStorage.getItem('username') || '';
 let selected = null;
+let lastRunId = null;
+
+function getDataset() {
+  return document.getElementById('dataset').value.trim() || 'live-smoke';
+}
+
+function selectedMetrics() {
+  return [...document.querySelectorAll('.ragas-metric:checked')].map(el => el.value);
+}
+
+function prettyJson(value, fallback) {
+  try {
+    return JSON.stringify(JSON.parse(value || fallback), null, 2);
+  } catch {
+    return value || fallback;
+  }
+}
 
 async function loadCases() {
-  const dataset = document.getElementById('dataset').value.trim();
+  const dataset = getDataset();
   const caseType = document.getElementById('case-type-filter').value.trim();
-  const params = new URLSearchParams();
-  if (dataset) params.set('dataset', dataset);
+  const enabled = document.getElementById('enabled-filter').value;
+  const params = new URLSearchParams({ dataset });
   if (caseType) params.set('caseType', caseType);
+  if (enabled) params.set('enabled', enabled);
   document.getElementById('export-link').href = '/api/v1/admin/eval-cases/export-jsonl?dataset=' + encodeURIComponent(dataset);
   const res = await apiFetch('/admin/eval-cases?' + params.toString());
   renderCases(res.data || []);
@@ -86,45 +167,117 @@ async function loadCases() {
 
 function renderCases(cases) {
   document.getElementById('case-list').innerHTML = cases.map(c => `
-    <div class="case-row" onclick='selectCase(${JSON.stringify(c).replaceAll("'", "&#39;")})'>
-      <div class="fw-semibold">${c.name}</div>
-      <div class="small text-muted">${c.caseType} · ${c.dataset} · ${c.enabled ? 'enabled' : 'disabled'}</div>
+    <div class="case-row ${selected && selected.id === c.id ? 'active' : ''}" onclick='selectCase(${JSON.stringify(c).replaceAll("'", "&#39;")})'>
+      <div class="fw-semibold text-truncate">${escapeHtml(c.name || '(未命名)')}</div>
+      <div class="small text-muted">${escapeHtml(c.caseType || '')} · ${escapeHtml(c.dataset || '')} · ${c.enabled ? 'enabled' : 'disabled'}</div>
     </div>`).join('') || '<div class="p-4 text-muted">暂无 Eval Case</div>';
 }
 
 function selectCase(c) {
   selected = c;
   document.getElementById('case-name').value = c.name || '';
-  document.getElementById('case-type').value = c.caseType || 'ANSWER';
+  document.getElementById('case-type').value = c.caseType || 'RAGAS';
   document.getElementById('case-enabled').checked = !!c.enabled;
-  document.getElementById('input-json').value = c.inputJson || '{}';
-  document.getElementById('expected-json').value = c.expectedJson || '{"mustContain":[]}';
-  document.getElementById('mock-json').value = c.mockOutputsJson || '{}';
+  document.getElementById('input-json').value = prettyJson(c.inputJson, '{}');
+  document.getElementById('expected-json').value = prettyJson(c.expectedJson, '{}');
+  document.getElementById('mock-json').value = prettyJson(c.mockOutputsJson, '{}');
+  loadCases().catch(() => {});
+}
+
+function newCase() {
+  selected = null;
+  document.getElementById('case-name').value = '';
+  document.getElementById('case-type').value = 'RAGAS';
+  document.getElementById('case-enabled').checked = true;
+  document.getElementById('input-json').value = '{\n  "spaceId": "",\n  "question": "",\n  "topK": 5\n}';
+  document.getElementById('expected-json').value = '{\n  "referenceAnswer": ""\n}';
+  document.getElementById('mock-json').value = '{}';
 }
 
 async function saveCase() {
   const body = {
     ...(selected || {}),
     name: document.getElementById('case-name').value.trim(),
-    dataset: document.getElementById('dataset').value.trim() || 'draft',
-    caseType: document.getElementById('case-type').value.trim() || 'ANSWER',
+    dataset: getDataset(),
+    caseType: document.getElementById('case-type').value.trim() || 'RAGAS',
     enabled: document.getElementById('case-enabled').checked,
-    inputJson: document.getElementById('input-json').value,
-    expectedJson: document.getElementById('expected-json').value,
-    mockOutputsJson: document.getElementById('mock-json').value
+    inputJson: minifyJson('input-json'),
+    expectedJson: minifyJson('expected-json'),
+    mockOutputsJson: minifyJson('mock-json')
   };
   const path = selected ? '/admin/eval-cases/' + selected.id : '/admin/eval-cases';
   const method = selected ? 'PUT' : 'POST';
-  await apiFetch(path, { method, body: JSON.stringify(body) });
+  const res = await apiFetch(path, { method, body: JSON.stringify(body) });
+  selected = res.data;
   showToast('已保存');
   await loadCases();
 }
 
-async function runEval() {
-  const dataset = document.getElementById('dataset').value.trim() || 'draft';
-  const res = await apiFetch('/admin/eval-runs', { method:'POST', body: JSON.stringify({ dataset }) });
-  const detail = await apiFetch('/admin/eval-runs/' + res.data.id);
-  document.getElementById('run-box').textContent = JSON.stringify(detail.data, null, 2);
+async function importJsonl() {
+  const text = document.getElementById('jsonl-input').value.trim();
+  if (!text) {
+    showToast('请先粘贴 JSONL', 'error');
+    return;
+  }
+  const res = await apiFetch('/admin/eval-cases/import-jsonl', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: text
+  });
+  const errors = res.data.errors || [];
+  showToast(`导入 ${res.data.imported} 条${errors.length ? '，有失败行' : ''}`, errors.length ? 'error' : 'success');
+  if (errors.length) {
+    document.getElementById('run-box').textContent = JSON.stringify(errors, null, 2);
+  }
+  await loadCases();
+}
+
+async function runRagas() {
+  const metrics = selectedMetrics();
+  if (!metrics.length) {
+    showToast('至少选择一个指标', 'error');
+    return;
+  }
+  setRunStatus('RUNNING');
+  const res = await apiFetch('/admin/eval-runs', {
+    method:'POST',
+    body: JSON.stringify({
+      type: 'RAGAS',
+      dataset: getDataset(),
+      targetService: document.getElementById('target-service').value,
+      metrics
+    })
+  });
+  lastRunId = res.data.id;
+  document.getElementById('run-box').textContent = JSON.stringify(res.data, null, 2);
+  await pollRun(lastRunId);
+}
+
+async function pollRun(runId) {
+  for (let i = 0; i < 360; i++) {
+    const detail = await apiFetch('/admin/eval-runs/' + runId);
+    const run = detail.data.run;
+    document.getElementById('run-box').textContent = JSON.stringify(detail.data, null, 2);
+    setRunStatus(run.status);
+    if (run.status === 'SUCCEEDED' || run.status === 'FAILED') return;
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+  showToast('轮询超时，请稍后刷新查看', 'error');
+}
+
+function setRunStatus(status) {
+  const el = document.getElementById('run-status');
+  el.textContent = status;
+  el.className = 'badge ' + (status === 'SUCCEEDED' ? 'text-bg-success' : status === 'FAILED' ? 'text-bg-danger' : status === 'RUNNING' ? 'text-bg-primary' : 'text-bg-secondary');
+}
+
+function minifyJson(id) {
+  const value = document.getElementById(id).value.trim() || '{}';
+  return JSON.stringify(JSON.parse(value));
+}
+
+function escapeHtml(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 loadCases().catch(e => showToast(e.message, 'error'));
