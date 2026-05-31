@@ -116,16 +116,18 @@ public class MdQnAServiceImpl implements MdQnAService {
      */
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
+        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+        UUID userId = SecurityUtils.getCurrentUserId();
         if (!tracingEnabled) {
-            return doAskStream(spaceId, req);
+            return doAskStream(spaceId, req, sessionId, userId);
         }
         // 流式根 span（ADR-015 D8）：方法立即返回 Flux，不能用同步 scope。
         // 用 reactor 生命周期：subscribe 时 start（Flux.using 的 resource 初始化），
         // doFinally（using 的 cleanup）时 stop；把 Observation 写入 reactor context，
         // 使 Spring AI 流式 chat span 与并行检索 span 挂到本根 span 下。
-        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
         String provider = req.modelProvider() != null ? req.modelProvider() : "DEFAULT";
         Map<String, String> attrs = businessAttrs(currentUserIdQuietly(), sessionId, spaceId, provider);
+        StringBuilder answerBuffer = new StringBuilder();
         Observation observation = Observation.createNotStarted("kb.qa.ask.stream", observationRegistry);
         attrs.forEach((key, value) -> {
             if (TracingAttributes.LANGFUSE_USER_ID.equals(key) || TracingAttributes.LANGFUSE_SESSION_ID.equals(key)) {
@@ -144,10 +146,15 @@ public class MdQnAServiceImpl implements MdQnAService {
                         List<SearchHit> parentHits = obs.scoped(() -> retrieveParentHits(spaceId, req));
                         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
                         return chatClient.prompt()
+                                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
+                                        .conversationId(sessionId.toString()).build())
                                 .system(buildSystemPrompt(parentHits))
                                 .user(req.question())
                                 .stream()
                                 .content()
+                                .doOnNext(answerBuffer::append)
+                                .doOnComplete(() -> saveStreamExchange(
+                                        sessionId, spaceId, userId, req.question(), answerBuffer.toString()))
                                 .contextWrite(ctx -> ctx
                                         .put(ObservationThreadLocalAccessor.KEY, obs)
                                         .put(TracingContextHolder.KEY, attrs));
@@ -158,14 +165,27 @@ public class MdQnAServiceImpl implements MdQnAService {
                 Observation::stop);
     }
 
-    private Flux<String> doAskStream(UUID spaceId, QnARequest req) {
+    private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId) {
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
+        StringBuilder answerBuffer = new StringBuilder();
         return chatClient.prompt()
+                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
+                        .conversationId(sessionId.toString()).build())
                 .system(buildSystemPrompt(parentHits))
                 .user(req.question())
                 .stream()
-                .content();
+                .content()
+                .doOnNext(answerBuffer::append)
+                .doOnComplete(() -> saveStreamExchange(sessionId, spaceId, userId, req.question(), answerBuffer.toString()));
+    }
+
+    private void saveStreamExchange(UUID sessionId, UUID spaceId, UUID userId, String question, String answer) {
+        try {
+            qaChatSessionService.saveExchange(sessionId, spaceId, userId, question, answer);
+        } catch (Exception e) {
+            log.warn("保存 Markdown 流式问答会话失败：sessionId={}", sessionId, e);
+        }
     }
 
     private List<SearchHit> retrieveParentHits(UUID spaceId, QnARequest req) {

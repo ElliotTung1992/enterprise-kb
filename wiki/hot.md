@@ -1,6 +1,6 @@
 # Hot Cache
 
-_Last updated: 2026-05-27_
+_Last updated: 2026-05-31_
 
 ## 最近工作焦点
 
@@ -35,6 +35,14 @@ _Last updated: 2026-05-27_
 - 下一步：标注评估集 → `DomainRouterEvalTest` 达标 → 部署攒影子数据 → 影子达标后开 `routing-enabled` 灰度
 
 ## 最近 ingest（非开发焦点）
+
+**2026-05-31 LangFuse 在线 LLM Tracing 设计** → [[features/langfuse-tracing]] · [[decisions/adr-015-langfuse-tracing]]
+- 形态：纯 Spring AI 自带 Micrometer Observation → OpenTelemetry SDK → OTLP/HTTP → 自部署 LangFuse；代码侧只产 OTLP，后端可换（与 [[decisions/adr-014-ragas-integration]] 评估侧中立立场一致）。**不重建**迁移 032 已下线的 `TraceFacade`/advisor/拦截器那套落库框架。
+- 命门 1：埋点盲区——minimax `OpenAiChatModel.builder()` 与手工 `mdVectorStore` 不注入 `ObservationRegistry` 就落 NOOP，默认链路零 trace；MiniMax 是默认 provider 所以必须先补 A/D。
+- 命门 2：跨线程传播 ①+②+③ 同批做——① `Hooks.enableAutomaticContextPropagation()` + `ObservationThreadLocalAccessor`、② `ContextSnapshot.wrapExecutor` 包 `MdHybridSearchService` 并行检索 executor、③ `spring.ai.alibaba.tool.async.enabled=false`；否则 retrieval/LLM span 脱根成孤儿 trace。
+- Tool span 用框架原生 `ToolInterceptor`（`ReactAgent.builder().interceptors(...)`），业务工具体零侵入；graph/node 子树用 `GraphObservationLifecycleListener` 显式 register 到 service 业务根，避免双根 trace。
+- 业务上下文（`langfuse.user.id` / `langfuse.session.id` / metadata）走本地 thread-local + `LangfuseChildAttributeSpanProcessor` 复制到子 span，**不经 baggage**——避免外发给模型 provider。
+- 状态：代码已落地、全模块编译通过；运行态（LangFuse span 树渲染、prompt/completion event→attribute 映射、跨线程传播实测）待起栈联调。
 
 **2026-05-27 MD 关键词检索升级 BM25** → [[features/md-keyword-bm25]] · [[decisions/adr-013-md-keyword-bm25]]
 - 升级 [[features/markdown-structure-rag]] 竖井的**关键词那一路**：pg_trgm → 真正 BM25（VectorChord-bm25 + pg_tokenizer jieba）。改动只在 `MdKeywordSearchServiceImpl` 一个 method（RRF 按排名融合，BM25 负分免归一化）。

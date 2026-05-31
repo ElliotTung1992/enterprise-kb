@@ -2,6 +2,7 @@ marked.setOptions({ breaks: true, gfm: true });
 
 let mdSessionId = null;
 let mdSending = false;
+let mdCurrentConfig = null;
 
 function initMdPage() {
   requireAuth();
@@ -52,7 +53,7 @@ function renderMdDocumentList(docs) {
     return `
     <div class="md-doc-item">
       <div class="d-flex align-items-center justify-content-between gap-2">
-        <div class="md-doc-title" title="${escHtml(name)}">${escHtml(name)}</div>
+        <div class="md-doc-title" title="${escAttr(name)}">${escHtml(name)}</div>
         <span class="badge ${statusClass(d.status)}">${statusText(d.status)}</span>
       </div>
       <div class="text-muted small mt-1">${d.chunkCount || 0} chunks</div>
@@ -61,13 +62,14 @@ function renderMdDocumentList(docs) {
 }
 
 function initMdQaPage(config) {
+  mdCurrentConfig = config;
   window.onMdSpaceChanged = () => {
-    mdSessionId = null;
-    document.getElementById('chat-messages').innerHTML = '';
-    addMdMessage('assistant', config.welcome);
+    startNewMdChat(false);
+    refreshMdSessionList();
   };
   initMdPage();
 
+  document.getElementById('btn-new-chat')?.addEventListener('click', () => startNewMdChat(true));
   document.getElementById('btn-send').addEventListener('click', () => sendMdQuestion(config));
   document.getElementById('question-input').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -89,23 +91,28 @@ async function sendMdQuestion(config) {
   document.getElementById('citation-panel')?.classList.add('d-none');
   addMdMessage('user', question);
   const bubble = addMdMessage('assistant', config.loading, false);
+  const previousSessionId = mdSessionId;
+  const requestSessionId = mdSessionId || createUuid();
 
   try {
     if (config.stream) {
-      await sendMdStreamQuestion(spaceId, question, bubble);
+      await sendMdStreamQuestion(spaceId, question, bubble, requestSessionId);
+      mdSessionId = requestSessionId;
     } else {
       const topK = parseInt(document.getElementById('topk-select').value);
       const modelProvider = selectedModelProvider();
       const res = await apiFetch(`/spaces/${spaceId}/md-qa/${config.endpoint}`, {
         method: 'POST',
-        body: JSON.stringify({ question, sessionId: mdSessionId, topK, modelProvider })
+        body: JSON.stringify({ question, sessionId: previousSessionId, topK, modelProvider })
       });
       const data = res.data || {};
       mdSessionId = data.sessionId;
       bubble.innerHTML = marked.parse(data.answer || '');
       showMdCitations(data.citations || []);
     }
+    await refreshMdSessionList();
   } catch (e) {
+    if (!previousSessionId) mdSessionId = null;
     bubble.textContent = '问答失败：' + e.message;
   } finally {
     mdSending = false;
@@ -114,7 +121,7 @@ async function sendMdQuestion(config) {
   }
 }
 
-async function sendMdStreamQuestion(spaceId, question, bubble) {
+async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   const token = localStorage.getItem('access_token');
   const topK = parseInt(document.getElementById('topk-select').value);
   const modelProvider = selectedModelProvider();
@@ -125,7 +132,7 @@ async function sendMdStreamQuestion(spaceId, question, bubble) {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
     },
-    body: JSON.stringify({ question, sessionId: mdSessionId, topK, modelProvider })
+    body: JSON.stringify({ question, sessionId, topK, modelProvider })
   });
   if (!res.ok) throw new Error(await readStreamError(res));
 
@@ -157,6 +164,114 @@ async function sendMdStreamQuestion(spaceId, question, bubble) {
   }
 }
 
+async function refreshMdSessionList() {
+  const spaceId = document.getElementById('space-select')?.value;
+  const list = document.getElementById('sessions-list');
+  if (!spaceId || !list) return;
+  try {
+    const res = await apiFetch(`/spaces/${spaceId}/qa/sessions`);
+    renderMdSessionList(res.data || []);
+  } catch (e) {
+    list.innerHTML = '<div class="text-center text-muted p-3" style="font-size:.78rem">加载会话失败</div>';
+    console.warn('加载问答会话失败', e);
+  }
+}
+
+function renderMdSessionList(sessions) {
+  const list = document.getElementById('sessions-list');
+  if (!list) return;
+  if (!sessions.length) {
+    list.innerHTML = '<div class="text-center text-muted p-3" style="font-size:.78rem">暂无问答记录</div>';
+    return;
+  }
+  list.innerHTML = sessions.map(s => {
+    const active = s.id === mdSessionId ? ' active' : '';
+    return `<div class="session-item${active}" onclick="switchMdSession('${s.id}')">
+      <div class="session-actions">
+        <button onclick="renameMdSession(event,'${s.id}')" title="重命名"><i class="bi bi-pencil"></i></button>
+        <button class="btn-del" onclick="deleteMdSession(event,'${s.id}')" title="删除"><i class="bi bi-x"></i></button>
+      </div>
+      <div class="session-title" title="${escAttr(s.title)}">${escHtml(s.title || '未命名会话')}</div>
+      <div class="session-time">${formatMdTime(s.updatedAt || s.createdAt)} · ${s.messageCount || 0} 条</div>
+    </div>`;
+  }).join('');
+}
+
+async function switchMdSession(id) {
+  const spaceId = document.getElementById('space-select').value;
+  if (!spaceId || mdSending) return;
+  mdSessionId = id;
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('citation-panel')?.classList.add('d-none');
+  renderMdSessionListFromDom();
+  try {
+    const res = await apiFetch(`/spaces/${spaceId}/qa/sessions/${id}/messages`);
+    const messages = res.data || [];
+    if (messages.length) {
+      messages.forEach(m => addMdMessage(m.role, m.content));
+    } else {
+      addMdWelcome();
+    }
+  } catch (e) {
+    addMdMessage('assistant', '加载历史消息失败：' + e.message);
+  }
+  document.getElementById('question-input').focus();
+}
+
+async function renameMdSession(event, id) {
+  event.stopPropagation();
+  const oldTitle = event.currentTarget.closest('.session-item')?.querySelector('.session-title')?.textContent || '';
+  const title = prompt('请输入新的会话标题', oldTitle || '');
+  if (title === null) return;
+  const trimmed = title.trim();
+  if (!trimmed) {
+    showToast('会话标题不能为空', 'error');
+    return;
+  }
+  const spaceId = document.getElementById('space-select').value;
+  try {
+    await apiFetch(`/spaces/${spaceId}/qa/sessions/${id}/title`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: trimmed })
+    });
+    await refreshMdSessionList();
+  } catch (e) {
+    showToast('重命名失败：' + e.message, 'error');
+  }
+}
+
+async function deleteMdSession(event, id) {
+  event.stopPropagation();
+  const spaceId = document.getElementById('space-select').value;
+  try {
+    await apiFetch(`/spaces/${spaceId}/qa/sessions/${id}`, { method: 'DELETE' });
+  } catch (e) {
+    showToast('删除失败：' + e.message, 'error');
+    return;
+  }
+  if (mdSessionId === id) startNewMdChat(false);
+  await refreshMdSessionList();
+}
+
+function startNewMdChat(focusInput) {
+  mdSessionId = null;
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('citation-panel')?.classList.add('d-none');
+  addMdWelcome();
+  renderMdSessionListFromDom();
+  if (focusInput) document.getElementById('question-input').focus();
+}
+
+function addMdWelcome() {
+  if (mdCurrentConfig?.welcome) addMdMessage('assistant', mdCurrentConfig.welcome);
+}
+
+function renderMdSessionListFromDom() {
+  document.querySelectorAll('.session-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick') === `switchMdSession('${mdSessionId}')`);
+  });
+}
+
 async function readStreamError(res) {
   const err = await res.json().catch(() => null);
   return err?.message || 'Request failed';
@@ -186,7 +301,7 @@ function showMdCitations(citations) {
   }
   panel.classList.remove('d-none');
   list.innerHTML = citations.map(c => `
-    <div class="citation-card" title="${escHtml(c.excerpt || '')}">
+    <div class="citation-card" title="${escAttr(c.excerpt || '')}">
       <div class="fw-semibold">${escHtml(c.documentTitle || 'Markdown 文档')}</div>
       <div class="text-muted text-truncate" style="max-width:220px">${escHtml(c.section || c.excerpt || '')}</div>
     </div>`).join('');
@@ -210,4 +325,25 @@ function selectedModelProvider() {
 
 function escHtml(s) {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escAttr(s) {
+  return escHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function createUuid() {
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+
+function formatMdTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso), now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return '刚刚';
+  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+  if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+  if (diff < 172800) return '昨天';
+  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
 }

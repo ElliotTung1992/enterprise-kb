@@ -127,8 +127,8 @@ MyBatis mapper XMLs live in each module's `src/main/resources/mapper/`. The glob
 | `docs/operation.md` | 用户操作手册：功能说明、API 接口速查、部署运维 |
 | `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，基础用户/空间/会话体系；标准 RAG 表已退役不再绘制） |
 | `docs/design-md-structure-rag.md` | Markdown 结构感知 RAG（small-to-big 父子索引）设计文档 |
-| `planning/plan.md` | 可扩展内容与优化点规划（技术向：RAG/性能/质量） |
-| `planning/plan2.md` | 可扩展内容与优化点规划（产品向：体验/安全/集成） |
+| `.planning/roadmaps/plan.md` | 可扩展内容与优化点规划（技术向：RAG/性能/质量） |
+| `.planning/roadmaps/plan2.md` | 可扩展内容与优化点规划（产品向：体验/安全/集成） |
 
 ---
 

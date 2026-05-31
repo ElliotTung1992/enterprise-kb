@@ -19,3 +19,6 @@ uploads/
 *.log
 logs/
 /docs/
+
+# macOS
+.DS_Store
