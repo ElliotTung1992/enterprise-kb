@@ -35,12 +35,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Tier-1 域路由器离线评估 harness。
  *
- * <p>读取 {@code intent-eval/frozen-testset.jsonl}，逐 user 轮跑真实 MINIMAX 路由器，
+ * <p>读取 {@code intent-eval/frozen-testset.jsonl}，逐 user 轮跑真实 llama.cpp 路由器，
  * 输出域级混淆矩阵 + 记分卡，并按 ADR-008 的门控指标断言（误判域率 &lt; 3%、
  * UNCLEAR &lt; 15%、HANDOFF 漏判 &lt; 5%）。
  *
  * <p>默认跳过（需真实 API Key、产生真实调用费用）。手动运行：
- * <pre>INTENT_EVAL=true MINIMAX_API_KEY=xxx mvn test -pl kb-search -Dtest=DomainRouterEvalTest</pre>
+ * <pre>INTENT_EVAL=true mvn test -pl kb-search -Dtest=DomainRouterEvalTest</pre>
  *
  * <p>注意：门控指标只有在 frozen-testset.jsonl 被运营测试同学填充至目标规模
  * （80~120 段配额覆盖的对话）后才有统计意义；当前仓库内是模板示例。
@@ -150,13 +150,14 @@ class DomainRouterEvalTest {
         return conversations;
     }
 
-    // ---- 真实路由器构建（镜像 AiModelConfig 的 MINIMAX 装配） ----
+    // ---- 真实路由器构建（镜像 AiModelConfig 的 llama.cpp 装配） ----
 
     private DomainRouterServiceImpl buildRealRouter() {
-        String apiKey = System.getenv("MINIMAX_API_KEY");
-        assertThat(apiKey).as("环境变量 MINIMAX_API_KEY").isNotBlank();
+        String apiKey = System.getenv().getOrDefault("LLAMA_CPP_API_KEY", "local");
         String baseUrl = System.getenv().getOrDefault(
-                "MINIMAX_BASE_URL", "https://api.minimax.chat/v1");
+                "LLAMA_CPP_BASE_URL", "http://localhost:8079");
+        String model = System.getenv().getOrDefault(
+                "LLAMA_CPP_MODEL", "qwen3-vl-8b-instruct");
 
         RestClient.Builder restClientBuilder = RestClient.builder()
                 .requestInterceptor((request, body, execution) -> {
@@ -192,13 +193,13 @@ class DomainRouterEvalTest {
                 .build();
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
-                .defaultOptions(OpenAiChatOptions.builder().model("MiniMax-M2.7-highspeed").build())
+                .defaultOptions(OpenAiChatOptions.builder().model(model).build())
                 .build();
-        ChatClient minimax = ChatClient.builder(chatModel).build();
+        ChatClient llamaCpp = ChatClient.builder(chatModel).build();
 
-        ModelProviderResolver resolver = new ModelProviderResolver(null, null, minimax, null);
+        ModelProviderResolver resolver = new ModelProviderResolver(null, null, llamaCpp);
         DomainRouterServiceImpl router = new DomainRouterServiceImpl(resolver);
-        ReflectionTestUtils.setField(router, "routerProvider", "MINIMAX");
+        ReflectionTestUtils.setField(router, "routerProvider", "LLAMA_CPP");
         ReflectionTestUtils.setField(router, "contextTurns", 3);
         return router;
     }

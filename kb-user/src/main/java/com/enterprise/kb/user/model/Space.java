@@ -19,7 +19,7 @@ public class Space {
     private String description;
     /** 所有者用户 ID */
     private UUID ownerId;
-    /** 首选 AI 提供商（如 MINIMAX、DASHSCOPE） */
+    /** 首选 AI 提供商（如 LLAMA_CPP、DASHSCOPE） */
     private String preferredModelProvider;
     /** 是否启用 */
     private boolean active = true;

@@ -24,33 +24,21 @@ public class ModelProviderResolver {
     private final Map<String, ChatClient> chatClients = new HashMap<>();
     private final Map<String, EmbeddingModel> embeddingModels = new HashMap<>();
 
-    @Value("${enterprise.kb.ai.default-provider:MINIMAX}")
+    @Value("${enterprise.kb.ai.default-provider:LLAMA_CPP}")
     private String defaultChatProvider;
 
-    @Value("${enterprise.kb.ai.default-embedding-provider:MINIMAX}")
+    @Value("${enterprise.kb.ai.default-embedding-provider:DASHSCOPE}")
     private String defaultEmbeddingProvider;
 
     @Autowired
     public ModelProviderResolver(
             @Nullable @Qualifier("dashscopeChatClient") ChatClient dashscope,
             @Nullable @Qualifier("dashscopeEmbeddingModel") EmbeddingModel dashscopeEmbedding,
-            @Nullable @Qualifier("minimaxChatClient") ChatClient minimax,
-            @Nullable @Qualifier("minimaxEmbeddingModel") EmbeddingModel minimaxEmbedding,
             @Nullable @Qualifier("llamaCppChatClient") ChatClient llamaCpp) {
 
         if (dashscope != null) chatClients.put("DASHSCOPE", dashscope);
         if (dashscopeEmbedding != null) embeddingModels.put("DASHSCOPE", dashscopeEmbedding);
-        if (minimax != null) chatClients.put("MINIMAX", minimax);
-        if (minimaxEmbedding != null) embeddingModels.put("MINIMAX", minimaxEmbedding);
         if (llamaCpp != null) chatClients.put("LLAMA_CPP", llamaCpp);
-    }
-
-    public ModelProviderResolver(
-            @Nullable ChatClient dashscope,
-            @Nullable EmbeddingModel dashscopeEmbedding,
-            @Nullable ChatClient minimax,
-            @Nullable EmbeddingModel minimaxEmbedding) {
-        this(dashscope, dashscopeEmbedding, minimax, minimaxEmbedding, null);
     }
 
     public ChatClient resolveChatClient(@Nullable String provider) {

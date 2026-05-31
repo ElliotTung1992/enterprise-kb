@@ -43,12 +43,7 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-vector-store-milvus</artifactId>
         </dependency>
-        <!-- MiniMax embedding（native 适配器，仅用于向量化） -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-minimax</artifactId>
-        </dependency>
-        <!-- MiniMax chat 走 OpenAI 兼容接口（native tool calling 支持更完整） -->
+        <!-- llama.cpp chat 走 OpenAI 兼容接口 -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai</artifactId>

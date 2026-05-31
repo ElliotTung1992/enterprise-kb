@@ -36,7 +36,7 @@ class DomainRouterServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new DomainRouterServiceImpl(modelProviderResolver);
-        ReflectionTestUtils.setField(service, "routerProvider", "MINIMAX");
+        ReflectionTestUtils.setField(service, "routerProvider", "LLAMA_CPP");
         ReflectionTestUtils.setField(service, "contextTurns", 3);
     }
 

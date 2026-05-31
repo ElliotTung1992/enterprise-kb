@@ -51,12 +51,6 @@ spring:
       max-request-size: 200MB
 
   ai:
-    minimax:
-      api-key: ${MINIMAX_API_KEY:}
-      chat:
-        options:
-          model: MiniMax-M2.7-highspeed
-
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:}
       chat:
@@ -161,7 +155,6 @@ enterprise:
     ai:
       default-provider: ${AI_DEFAULT_PROVIDER:LLAMA_CPP}
       default-embedding-provider: DASHSCOPE
-      minimax-openai-base-url: ${MINIMAX_OPENAI_BASE_URL:https://api.minimax.chat}
       llama-cpp:
         enabled: ${LLAMA_CPP_ENABLED:true}
         base-url: ${LLAMA_CPP_BASE_URL:http://localhost:8079}

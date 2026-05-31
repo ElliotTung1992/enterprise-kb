@@ -20,10 +20,9 @@ import java.util.List;
 /**
  * Tier-1 域路由服务实现。
  *
- * <p>用一次便宜模型（默认 MINIMAX）调用完成域分类。LLM 被要求输出单行管道格式
+ * <p>用一次轻量模型调用完成域分类。LLM 被要求输出单行管道格式
  * {@code PRIMARY|SECONDARY_CSV|RUNNER_UP|EVIDENCE|EMOTION}，与本项目既有的 LLM
- * 结构化输出风格（见 {@code ComplaintResponsibilityInferenceServiceImpl}）一致，
- * 避免依赖在 MiniMax OpenAI 兼容接口上不稳定的 JSON Schema 模式。
+ * 结构化输出风格（见 {@code ComplaintResponsibilityInferenceServiceImpl}）一致。
  *
  * <p>任何解析失败或调用异常都降级为 {@code UNCLEAR}：误判域会让子 Agent 拿错工具集，
  * 代价远高于多反问一轮。
@@ -34,7 +33,7 @@ import java.util.List;
 public class DomainRouterServiceImpl implements DomainRouterService {
 
     /** 路由调用使用的模型提供商；路由是轻量分类，用便宜快模型即可。 */
-    @Value("${enterprise.kb.ai.router-provider:MINIMAX}")
+    @Value("${enterprise.kb.ai.router-provider:LLAMA_CPP}")
     private String routerProvider;
 
     /** 喂给路由器的上下文轮数，按评估集校准。 */
