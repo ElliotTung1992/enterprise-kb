@@ -1,5 +1,26 @@
 # Wiki Ingest Log
 
+## 2026-05-31 | maintenance | 全 wiki 对齐标准 RAG 退役 + 文档目录整理
+- Type: lint / cleanup
+- Trigger: 整理 .planning/ docs/ wiki/ 三块文档时发现 25+ 页含已退役概念（标准 RAG 竖井 / `kb_chunks` / `kb-knowledge-graph` / `/qa/ask` 旧端点）
+- Pages deleted:
+  - `wiki/features/knowledge-graph.md`（描述已删 `AutoTaggingService` / `DocumentRelationService` / `TagController`）
+  - `wiki/database/entities/tags-graph.md`（描述已 drop 的 `tags` / `document_relations`）
+  - `wiki/database/entities/documents-chunks.md`（描述已 drop 的 `documents` / `document_chunks`）
+- Pages created:
+  - [[decisions/adr-009-agent-trace-foundation]] / [[decisions/adr-010-agent-trace-eval]] — 自研 trace 体系 tombstone（迁移 032 下线，接续 ADR-014 / ADR-015）
+  - [[features/markdown-image-rag]] — 补齐 `docs/design-md-image-rag.md` 对应 feature 页
+- Pages rewritten (md-only 现状)：
+  - [[api/qa]] · [[api/documents]] · [[ai-rag/agentic-qa]] · [[ai-rag/hybrid-search]] · [[ai-rag/providers]] · [[ai-rag/session-memory]]
+  - [[architecture/overview]] · [[architecture/module-dependency]] · [[architecture/data-flow]]
+  - [[database/schema-overview]] · [[database/migrations]]
+  - [[features/document-ingestion]] · [[features/hitl-after-sales]] · [[infrastructure/services]]
+- ADR 修订：
+  - ADR-001 ~ 004 补 frontmatter + 标注退役范围（`kb-knowledge-graph` / `kb_chunks` / `HybridSearchService` / `AgenticQnAServiceImpl` 各自接续到 md 竖井）
+  - ADR-011 状态由"已接受（待实施）"改为"Phase 5 实现，理念并入 md 图片 RAG"
+- Home.md：补 [[api/auth]] / ADR-002 / 003 / 004 / 009 / 010 / [[features/markdown-image-rag]]；删 `modules/kb-*` 死链（modules/ 目录从不存在）
+- Key insight: 标准 RAG 竖井（`documents` / `document_chunks` / `kb_chunks` / `QnAService` / `HybridSearchService` / `kb-knowledge-graph` 模块）随迁移 031、自研 trace 随迁移 032 整体退役。当前唯一活跃 RAG 竖井 = **Markdown 结构感知 RAG**（small-to-big 父子索引，`md_documents` / `md_parent_chunk` / `md_child_chunk` / `md_document_assets` + Milvus `md_kb_chunks`）。剩余 ADR/历史 acceptance/design-notes 中的 `kb_chunks` 引用是合法的历史上下文（已在状态行标记），保留不改写。
+
 ## 2026-05-31 | save | LangFuse 在线 LLM Tracing 设计
 - Type: feature
 - Source: `docs/design-langfuse-tracing.md`（已落地编译通过、运行态未验证）

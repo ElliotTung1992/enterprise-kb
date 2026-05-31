@@ -1,11 +1,14 @@
-# QA 问答 API
+# QA 问答与会话 API
 
-基础路径：`/api/v1/spaces/{spaceId}/qa`
+QA 接口分两组路径，**问答** 在 `/md-qa` 下，**会话管理** 在 `/qa/sessions` 下（路径前缀不同但底层共用 `qa_sessions` / `qa_messages` 两张表）。
+
 权限要求：`VIEWER`（最低）
 
-## 问答接口
+## 问答接口 — `/api/v1/spaces/{spaceId}/md-qa`
 
-### POST `/ask/advanced` — 标准 RAG 问答
+`MdQnAController`，针对 Markdown 结构感知 RAG 竖井。
+
+### POST `/ask` — 标准 md QA（单次检索 → parent expansion → LLM）
 
 同步阻塞，一次性返回完整答案。
 
@@ -30,26 +33,29 @@
       {
         "chunkId": "uuid",
         "documentId": "uuid",
-        "documentName": "退款政策.pdf",
-        "content": "...",
-        "score": 0.92
+        "documentTitle": "退款政策.md",
+        "excerpt": "...",
+        "section": "H2 — 退款条件",
+        "score": 0.92,
+        "assetUrl": "https://minio/...",
+        "assetTitle": "示例配图"
       }
     ]
   }
 }
 ```
 
-### POST `/ask` — Agentic RAG 问答
+### POST `/ask/agentic` — Agentic md QA（ReactAgent 多轮）
 
-LLM 自主多轮检索，适合复杂问题。请求/响应结构同上。
+`MdAgenticQnAServiceImpl`：`ReactAgent` 暴露双工具 `searchKnowledgeBase`（搜 child）+ `readFullSection`（按 parentId 回查整段）。请求 / 响应结构同 `/ask`。
 
-### GET `/ask/stream` — 流式问答 (SSE)
+### POST `/ask/stream` — 流式问答（SSE）
 
 `Content-Type: text/event-stream`，逐 token 推送。
 
----
+## 会话管理接口 — `/api/v1/spaces/{spaceId}/qa/sessions`
 
-## 会话管理接口
+`QnAController`，与问答端点路径前缀不同，但底层 `qa_sessions` / `qa_messages` 表共用。
 
 ### GET `/sessions` — 会话列表
 
@@ -63,7 +69,7 @@ LLM 自主多轮检索，适合复杂问题。请求/响应结构同上。
       "id": "uuid",
       "title": "如何申请退款",
       "messageCount": 6,
-      "updatedAt": "2024-01-01T12:00:00Z"
+      "updatedAt": "2026-05-30T12:00:00Z"
     }
   ]
 }
@@ -92,3 +98,10 @@ LLM 自主多轮检索，适合复杂问题。请求/响应结构同上。
 ### DELETE `/sessions/{sessionId}` — 删除会话
 
 软删除会话 + 清空对应 Redis 历史。
+
+## 相关页面
+
+- [[ai-rag/agentic-qa]] — Agentic md QA 实现细节
+- [[ai-rag/session-memory]] — 会话记忆与多轮对话存储
+- [[features/markdown-structure-rag]] — md 竖井检索链路
+- [[decisions/adr-004-agentic-rag]] — Agentic 决策

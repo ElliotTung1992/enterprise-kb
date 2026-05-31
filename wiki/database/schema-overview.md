@@ -3,30 +3,37 @@
 数据库：PostgreSQL 16，数据库名：`enterprise_kb`
 Schema 通过 **Liquibase** 管理，changelog: `kb-app/src/main/resources/db/changelog/`
 
-## 表清单
+## 当前活跃表清单
 
-| 迁移文件 | 表名 | 说明 |
-|---------|------|------|
-| 001 | `roles` | 系统角色定义 |
-| 002 | `users` | 用户账户 (BCrypt 密码) |
-| 003 | `spaces` | 知识空间 |
-| 004 | `user_space_roles` | 用户-空间-角色三元组 |
-| 005 | `documents` | 文档元数据 |
-| 006 | `document_chunks` | 文档分块元数据 |
-| 007 | `tags` | 标签树 |
-| 008 | `document_tags` | 文档-标签关联 |
-| 009 | `document_relations` | 文档关系图 |
-| 010 | `refresh_tokens` | JWT RefreshToken |
-| 011 | `audit_logs` | 操作审计日志 |
-| 012 | (default data) | 初始角色等默认数据 |
-| 013 | `mcp_api_keys` | (已在017删除) |
-| 014 | (drop FK) | 降低约束，提升摄入性能 |
-| 015 | (trgm) | 安装 pg_trgm 扩展，建全文索引 |
-| 016 | `qa_sessions` + `qa_messages` | QA 会话持久化 |
-| 017 | (drop mcp_api_keys) | 删除 MCP API Key 表 |
-| 018 | `review_requests` | HITL 售后审核申请（含对话快照、订单详情 JSONB） |
-| 019 | `customer_sessions` + `customer_messages` | 商城客服对话会话与消息 |
-| 020 | (alter review_requests) | `space_id` 改为可空（客户助手无知识空间） |
+| 表名 | 建表迁移 | 说明 |
+|------|---------|------|
+| `roles` | 001 | 系统角色定义 |
+| `users` | 002 | 用户账户（BCrypt 密码） |
+| `spaces` | 003 | 知识空间 |
+| `user_space_roles` | 004 | 用户-空间-角色三元组 |
+| `refresh_tokens` | 010 | JWT RefreshToken |
+| `audit_logs` | 011 | 操作审计日志 |
+| `qa_sessions` + `qa_messages` | 016 | QA 会话与消息（md QA 共用） |
+| `review_requests` | 018 / 020 | HITL 售后审核申请（含对话快照、订单详情 JSONB；`space_id` 可空） |
+| `customer_sessions` + `customer_messages` | 019 / 021 / 024 | 商城客服对话会话与消息（含 domain 列、复合索引） |
+| `complaint_*`（多表） | 022 / 023 | 投诉升级 StateGraph 状态 / 计划 |
+| `eval_*`（多表） | 025 | 离线评估用例 / 运行 |
+| `md_documents` + `md_parent_chunk` + `md_child_chunk` | 027 / 028 / 029 | Markdown 结构感知 RAG（含 child `pg_trgm` GIN 索引 + `bm25vector` 列） |
+| `md_document_assets` | 030 | md 竖井图片资产 |
+
+## 已退役表（迁移 031 / 032）
+
+| 表名 | 退役迁移 | 接续 |
+|------|---------|------|
+| `documents` | 031 | `md_documents` |
+| `document_chunks` | 031 | `md_child_chunk` / `md_parent_chunk` |
+| `document_assets` | 031 | `md_document_assets` |
+| `document_relations` | 031 | （无接续，知识图谱模块整体下线） |
+| `document_tags` / `tags` | 031 | （无接续） |
+| `agent_traces` / `agent_trace_steps` | 032 | LangFuse OTLP（不再落库；见 [[features/langfuse-tracing]]） |
+| `mcp_api_keys` | 017 | — |
+
+完整迁移列表见 [[database/migrations]]。
 
 ## 通用规范
 
@@ -38,7 +45,5 @@ Schema 通过 **Liquibase** 管理，changelog: `kb-app/src/main/resources/db/ch
 ## 实体详情
 
 - [[database/entities/users-spaces]] — 用户、空间、权限
-- [[database/entities/documents-chunks]] — 文档、分块
 - [[database/entities/qa-sessions]] — QA 会话与消息
-- [[database/entities/tags-graph]] — 标签与知识图谱
 - [[database/entities/after-sales-tables]] — 售后审核、商城客服会话

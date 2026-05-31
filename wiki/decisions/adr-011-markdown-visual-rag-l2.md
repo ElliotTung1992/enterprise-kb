@@ -5,7 +5,7 @@ tags: [adr, architecture, rag, document-ingestion, markdown, visual, minio]
 
 # ADR-011：Markdown 图文 RAG L2 资产化摄取方案
 
-**状态**：已接受（待实施）
+**状态**：实现至 Phase 5；**本 ADR 基于已退役的标准竖井设计**（`documents` / `document_chunks` / `kb_chunks`），随迁移 031 退役后，相关图片处理理念被并入 md 竖井的 IMAGE_CAPTION 链路（[[features/markdown-structure-rag]] + [.planning/2026-05-27-markdown-image-rag/](#)）；不再单独承载图文 RAG。L3 多模态向量保留为未来扩展。
 
 > 详细功能设计见 [[features/markdown-visual-rag-l2]]。沟通纪要与未来优化点见 [[features/markdown-visual-rag-l2-design-notes]]。实施计划见 `.planning/2026-05-23-markdown-visual-rag-l2/`。
 

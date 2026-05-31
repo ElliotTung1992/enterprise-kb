@@ -81,7 +81,7 @@ review_requests.session_id == ReactAgent threadId (checkpoint key in Redis)
 |------|-------------|------------------|
 | 绑定知识空间 | 是（space_id NOT NULL） | 否（无 space_id） |
 | HITL 审核 | 无 | 通过 review_requests |
-| 服务层 | QnAServiceImpl | CustomerAssistantServiceImpl |
+| 服务层 | `MdQnAServiceImpl` / `MdAgenticQnAServiceImpl` | `CustomerAssistantServiceImpl` |
 
 ## 相关页面
 

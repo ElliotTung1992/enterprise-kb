@@ -45,18 +45,18 @@ tags: [feature, hitl, after-sales, customer-assistant]
 
 商城客服助手与知识库 QA **完全独立**：
 
-| 维度 | 知识库 QA | 商城客服助手 |
+| 维度 | 知识库 QA（md 竖井） | 商城客服助手 |
 |------|-----------|------------|
-| 数据表 | qa_sessions / qa_messages | customer_sessions / customer_messages |
-| 服务 | AgenticQnAServiceImpl | CustomerAssistantServiceImpl |
-| 控制器 | QnAController | CustomerAssistantController |
-| 路由前缀 | /api/v1/spaces/{spaceId}/qa | /api/v1/after-sales |
+| 数据表 | `qa_sessions` / `qa_messages` | `customer_sessions` / `customer_messages` |
+| 服务 | `MdAgenticQnAServiceImpl` | `CustomerAssistantServiceImpl` |
+| 控制器 | `MdQnAController` / `QnAController`（session 端） | `CustomerAssistantController` |
+| 路由前缀 | `/api/v1/spaces/{spaceId}/md-qa` 问答 + `/qa/sessions` 会话 | `/api/v1/after-sales` |
 | 知识空间绑定 | 必须 | 无（spaceId = null） |
-| HITL | 无 | 有（submitAfterSalesReview） |
-| 前端入口 | /dashboard.html → qa.html | /customer.html |
+| HITL | 无 | 有（`submitAfterSalesReview`） |
+| 前端入口 | `/dashboard.html` → `qa.html` | `/customer.html` |
 
 > [!key-insight] 分离原则
-> HITL 工具和售后逻辑必须从 AgenticQnAServiceImpl 中彻底剥离，避免知识库用户触发售后流程。见 [[decisions/adr-006-customer-assistant-separation]]
+> HITL 工具和售后逻辑必须独立于知识库 QA，由 `CustomerAssistantServiceImpl` 承载，避免知识库用户触发售后流程。见 [[decisions/adr-006-customer-assistant-separation]]
 
 ## 关键组件
 

@@ -11,10 +11,10 @@
 | 系统架构 | [[architecture/overview]] · [[architecture/module-dependency]] · [[architecture/data-flow]] |
 | AI / RAG | [[ai-rag/hybrid-search]] · [[ai-rag/agentic-qa]] · [[ai-rag/providers]] · [[ai-rag/hitl-hook]] |
 | 数据库 | [[database/schema-overview]] · [[database/migrations]] |
-| API 接口 | [[api/qa]] · [[api/documents]] · [[api/search]] · [[api/after-sales]] |
-| 功能 | [[features/document-ingestion]] · [[features/markdown-visual-rag-l2]] · [[features/markdown-structure-rag]] · [[features/md-keyword-bm25]] · [[features/hitl-after-sales]] · [[features/complaint-escalation]] · [[features/intent-routing]] · [[features/ragas-evaluation]] · [[features/langfuse-tracing]] |
+| API 接口 | [[api/auth]] · [[api/qa]] · [[api/documents]] · [[api/search]] · [[api/after-sales]] |
+| 功能 | [[features/document-ingestion]] · [[features/markdown-structure-rag]] · [[features/markdown-image-rag]] · [[features/markdown-visual-rag-l2]] · [[features/md-keyword-bm25]] · [[features/hitl-after-sales]] · [[features/complaint-escalation]] · [[features/intent-routing]] · [[features/ragas-evaluation]] · [[features/langfuse-tracing]] |
 | 基础设施 | [[infrastructure/docker-compose]] · [[infrastructure/services]] |
-| 架构决策 | [[decisions/adr-001-multi-module-maven]] · [[decisions/adr-005-hitl-transaction-ordering]] · [[decisions/adr-006-customer-assistant-separation]] · [[decisions/adr-007-complaint-escalation-stategraph]] · [[decisions/adr-008-intent-routing-two-tier]] · [[decisions/adr-011-markdown-visual-rag-l2]] · [[decisions/adr-012-markdown-structure-rag]] · [[decisions/adr-013-md-keyword-bm25]] · [[decisions/adr-014-ragas-integration]] · [[decisions/adr-015-langfuse-tracing]] |
+| 架构决策 | [[decisions/adr-001-multi-module-maven]] · [[decisions/adr-002-milvus-vector-store]] · [[decisions/adr-003-hybrid-search-rrf]] · [[decisions/adr-004-agentic-rag]] · [[decisions/adr-005-hitl-transaction-ordering]] · [[decisions/adr-006-customer-assistant-separation]] · [[decisions/adr-007-complaint-escalation-stategraph]] · [[decisions/adr-008-intent-routing-two-tier]] · [[decisions/adr-009-agent-trace-foundation]] · [[decisions/adr-010-agent-trace-eval]] · [[decisions/adr-011-markdown-visual-rag-l2]] · [[decisions/adr-012-markdown-structure-rag]] · [[decisions/adr-013-md-keyword-bm25]] · [[decisions/adr-014-ragas-integration]] · [[decisions/adr-015-langfuse-tracing]] |
 
 ---
 
