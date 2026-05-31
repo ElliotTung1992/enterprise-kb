@@ -6,6 +6,7 @@ import com.enterprise.kb.auth.service.JwtService;
 import com.enterprise.kb.auth.service.impl.JwtServiceImpl;
 import com.enterprise.kb.user.security.SpacePermissionEvaluator;
 import com.enterprise.kb.user.service.UserService;
+import io.micrometer.observation.ObservationRegistry;
 import io.milvus.client.MilvusServiceClient;
 import io.milvus.param.ConnectParam;
 import io.milvus.param.IndexType;
@@ -106,17 +107,23 @@ public class AppConfig {
      * <p>标准 RAG 竖井退役后，{@code md_kb_chunks} 是系统唯一的 Milvus 集合。
      * 入库和查询均通过 {@code mdVectorStore} 显式注入。</p>
      *
-     * @param milvusClient   Milvus 客户端
-     * @param embeddingModel 默认 embedding 模型
-     * @param databaseName   Milvus database
-     * @param collectionName Markdown 专用集合名
-     * @param dimension      embedding 维度
+     * <p><b>Tracing（ADR-015 埋点盲区 D）：</b>该 {@link VectorStore} 为手工 bean（Milvus 自动配置已被
+     * exclude），默认不带 {@link ObservationRegistry}，导致 {@code similaritySearch} 不产 span。
+     * 注入容器内 registry 后，向量检索/写入会自动产出 {@code db <op>} span，挂入检索漏斗。</p>
+     *
+     * @param milvusClient        Milvus 客户端
+     * @param embeddingModel      默认 embedding 模型
+     * @param observationRegistry 可观测注册表，使向量操作自动产 span
+     * @param databaseName        Milvus database
+     * @param collectionName      Markdown 专用集合名
+     * @param dimension           embedding 维度
      * @return Markdown 专用向量存储
      */
     @Bean("mdVectorStore")
     public VectorStore mdVectorStore(
             MilvusServiceClient milvusClient,
             @Qualifier("dashscopeEmbeddingModel") EmbeddingModel embeddingModel,
+            ObservationRegistry observationRegistry,
             @Value("${spring.ai.vectorstore.milvus.database-name:default}") String databaseName,
             @Value("${enterprise.kb.milvus.md-collection:md_kb_chunks}") String collectionName,
             @Value("${spring.ai.vectorstore.milvus.embedding-dimension:1536}") int dimension) {
@@ -127,6 +134,7 @@ public class AppConfig {
                 .indexType(IndexType.IVF_FLAT)
                 .metricType(MetricType.COSINE)
                 .initializeSchema(true)
+                .observationRegistry(observationRegistry)
                 .build();
     }
 

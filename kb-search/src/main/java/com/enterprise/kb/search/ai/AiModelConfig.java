@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.ai;
 
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -77,11 +78,17 @@ public class AiModelConfig {
      *
      * <p>仅当配置文件中存在 {@code spring.ai.minimax.api-key} 时生效。
      *
+     * <p><b>Tracing（ADR-015 埋点盲区 A）：</b>手工构建的 {@link OpenAiChatModel} 默认落
+     * {@code ObservationRegistry.NOOP}，而 MiniMax 是默认 chat provider，会导致默认链路零 trace。
+     * 故将容器内的 {@link ObservationRegistry} 同时注入 {@link OpenAiChatModel.Builder} 与
+     * {@link ChatClient}，使 MiniMax 调用也能产出 {@code gen_ai.*} LLM span。
+     *
+     * @param observationRegistry 容器内的可观测注册表，用于产出 LLM span
      * @return 封装了 MiniMax 模型（via OpenAI 兼容接口）的 {@link ChatClient}
      */
     @Bean("minimaxChatClient")
     @ConditionalOnProperty("spring.ai.minimax.api-key")
-    public ChatClient minimaxChatClient() {
+    public ChatClient minimaxChatClient(ObservationRegistry observationRegistry) {
 
         // 1. 定义一个拦截器，专门负责清洗 <think> 标签
         org.springframework.http.client.ClientHttpRequestInterceptor cleanThinkInterceptor =
@@ -125,14 +132,17 @@ public class AiModelConfig {
                 .build();
 
         // 4. 放心地把模型名字换回你套餐支持的 M2.7-highspeed
+        //    注入 ObservationRegistry，使该手工模型产出 gen_ai.* LLM span（埋点盲区 A）
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()
                         .model("MiniMax-M2.7-highspeed")
                         .build())
+                .observationRegistry(observationRegistry)
                 .build();
 
-        return ChatClient.builder(chatModel).build();
+        // ChatClient 层同样带上 registry（conventions 传 null 走默认），使 ChatClient span 生效
+        return ChatClient.builder(chatModel, observationRegistry, null, null).build();
     }
 
     /**

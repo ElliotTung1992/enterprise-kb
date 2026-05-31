@@ -34,5 +34,16 @@
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
         </dependency>
+
+        <!-- 在线 Tracing（ADR-015）：共享的 tracing 工具（根 span 助手、跨线程业务上下文 holder）
+             面向 Micrometer Observation 抽象与 context-propagation SPI 编程；版本由 BOM 管理。 -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-observation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>context-propagation</artifactId>
+        </dependency>
     </dependencies>
 </project>

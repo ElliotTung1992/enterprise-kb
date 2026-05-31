@@ -5,6 +5,7 @@ import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.document.mapper.MdChildChunkMapper;
 import com.enterprise.kb.document.mapper.MdDocumentMapper;
@@ -13,6 +14,7 @@ import com.enterprise.kb.document.model.MdChildChunk;
 import com.enterprise.kb.document.model.MdParentChunk;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
+import com.enterprise.kb.search.ai.TracingToolInterceptor;
 import com.enterprise.kb.search.dto.Citation;
 import com.enterprise.kb.search.dto.KnowledgeSearchInput;
 import com.enterprise.kb.search.dto.QnARequest;
@@ -27,6 +29,7 @@ import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.RerankService;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingType;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -71,9 +74,16 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     private final MdChildChunkMapper childChunkMapper;
     private final MdParentChunkMapper parentChunkMapper;
     private final MdDocumentMapper documentMapper;
+    private final ObservationRegistry observationRegistry;
 
     @Value("${enterprise.kb.search.md-parent-expansion.max-chars-per-parent:2000}")
     private int maxCharsPerParent;
+
+    @Value("${enterprise.kb.tracing.enabled:false}")
+    private boolean tracingEnabled;
+
+    @Value("${enterprise.kb.tracing.max-tool-chars:4000}")
+    private int maxToolChars;
 
     private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
             .getEncoding(EncodingType.CL100K_BASE);
@@ -88,19 +98,39 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+        // 业务根 span（ADR-015）：agentic 问答的唯一 trace root，graph/node/tool/LLM span 均挂其下
+        return TracingSupport.root(observationRegistry, tracingEnabled, "kb.qa.ask.agentic")
+                .userId(currentUserIdQuietly())
+                .sessionId(sessionId)
+                .spaceId(spaceId)
+                .modelProvider(req.modelProvider() != null ? req.modelProvider() : "DEFAULT")
+                .observe(() -> doAsk(spaceId, req, sessionId));
+    }
+
+    private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
         List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
         AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
         List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
         MdAccumulator acc = new MdAccumulator();
 
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        ReactAgent reactAgent = ReactAgent.builder()
+        // graph/node 子树：tracing 开启时给 CompileConfig 注入 registry，由 graph-core 的
+        // GraphObservationLifecycleListener 产 graph/node span，挂在当前 agentic 业务根下（ADR-015 C2）
+        CompileConfig.Builder compileConfigBuilder = CompileConfig.builder().recursionLimit(MAX_RECURSION_LIMIT);
+        if (tracingEnabled) {
+            compileConfigBuilder.observationRegistry(observationRegistry);
+        }
+        var agentBuilder = ReactAgent.builder()
                 .name("md-kb-search-agent")
                 .chatClient(chatClient)
                 .systemPrompt(systemPrompt())
                 .tools(buildSearchTool(spaceId, budget, acc), buildReadFullSectionTool(spaceId, acc))
-                .compileConfig(CompileConfig.builder().recursionLimit(MAX_RECURSION_LIMIT).build())
-                .build();
+                .compileConfig(compileConfigBuilder.build());
+        // tool span：原生 ToolInterceptor，per-tool-call 粒度，业务工具体零侵入（ADR-015 C2）
+        if (tracingEnabled) {
+            agentBuilder.interceptors(new TracingToolInterceptor(observationRegistry, maxToolChars));
+        }
+        ReactAgent reactAgent = agentBuilder.build();
 
         List<Message> messages = new ArrayList<>(trimmedHistory);
         messages.add(new UserMessage(req.question()));
@@ -239,6 +269,18 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         }
         return new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
+    }
+
+    /**
+     * 获取当前用户 ID，无认证上下文时静默返回 {@code null}（仅用于 trace tag，不影响业务）。
+     */
+    private String currentUserIdQuietly() {
+        try {
+            UUID userId = SecurityUtils.getCurrentUserId();
+            return userId != null ? userId.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String systemPrompt() {

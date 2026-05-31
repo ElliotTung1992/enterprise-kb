@@ -75,6 +75,21 @@ spring:
         options:
           model: claude-sonnet-4-5
 
+    # 在线 Tracing（ADR-015）：LLM 调用正文进 trace 的开关，随总开关联动；
+    # 进 trace 的正文由 SensitiveDataObservationFilter 做 MVP 级脱敏 + 长度硬上限。
+    chat:
+      observations:
+        log-prompt: ${KB_TRACING_ENABLED:false}
+        log-completion: ${KB_TRACING_ENABLED:false}
+        include-error-logging: ${KB_TRACING_ENABLED:false}
+
+    # ADR-015 跨线程传播 ③：关闭 DashScope 异步 tool calling manager，
+    # 工具同步在调用线程执行，最大化 thread-local 直接命中、减少 span 脱树的不确定性。
+    alibaba:
+      tool:
+        async:
+          enabled: false
+
     # Milvus 自动配置已被 spring.autoconfigure.exclude 排除（标准 RAG 退役）。
     # 以下仅供 AppConfig.milvusClient 与 mdVectorStore（md_kb_chunks）读取连接信息。
     vectorstore:
@@ -111,9 +126,34 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  # 在线 LLM Tracing（ADR-015）。总开关 KB_TRACING_ENABLED 默认 false：
+  # 关闭时 Micrometer tracing 不装配，Observation 不产 span，运行态零额外开销；
+  # 开启时按 sampling.probability 采样，并仅在 OTLP traces endpoint 就绪时才真正导出到 LangFuse。
+  tracing:
+    enabled: ${KB_TRACING_ENABLED:false}
+    sampling:
+      probability: ${KB_TRACING_SAMPLE_RATIO:1.0}
+  otlp:
+    tracing:
+      # 直连 LangFuse 时使用 trace-specific endpoint /api/public/otel/v1/traces；
+      # 经 OTel Collector 转发时可改用通用 /api/public/otel。为空则不装配导出器。
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:}
+      headers:
+        Authorization: "Basic ${LANGFUSE_OTLP_BASIC_AUTH:}"
+        x-langfuse-ingestion-version: "4"
 
 enterprise:
   kb:
+    # 在线 LLM Tracing（ADR-015）总开关 + 自定义 tracing bean 的脱敏/截断参数。
+    # enabled 默认 false：关闭时 reactor 传播 hook、脱敏 filter、业务属性 SpanProcessor、
+    # 各 service 入口根 span 均不生效，应用照常启动（LangFuse 未起也不影响）。
+    tracing:
+      enabled: ${KB_TRACING_ENABLED:false}
+      # 进入 trace 的各类正文字符数硬上限（超出仅保留截断标记 + 原始长度）
+      max-prompt-chars: ${KB_TRACING_MAX_PROMPT_CHARS:8000}
+      max-completion-chars: ${KB_TRACING_MAX_COMPLETION_CHARS:8000}
+      max-tool-chars: ${KB_TRACING_MAX_TOOL_CHARS:4000}
+      max-retrieval-chars: ${KB_TRACING_MAX_RETRIEVAL_CHARS:4000}
     jwt:
       secret: ${JWT_SECRET:e25007bd691e02e014a1809d87fcda0fa1e9800f0accd3d2a5be68298b96833f}
       access-token-expiry-minutes: 60

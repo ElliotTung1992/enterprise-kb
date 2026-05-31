@@ -1,12 +1,16 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
 import com.enterprise.kb.search.dto.SearchResponse;
 import com.enterprise.kb.search.service.MdHybridSearchService;
 import com.enterprise.kb.search.service.MdKeywordSearchService;
 import com.enterprise.kb.search.service.MdVectorSearchService;
+import io.micrometer.context.ContextSnapshot;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -14,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * Markdown 混合检索服务实现。
@@ -30,6 +36,10 @@ public class MdHybridSearchServiceImpl implements MdHybridSearchService {
 
     private final MdVectorSearchService vectorSearchService;
     private final MdKeywordSearchService keywordSearchService;
+    private final ObservationRegistry observationRegistry;
+
+    @Value("${enterprise.kb.tracing.enabled:false}")
+    private boolean tracingEnabled;
 
     /**
      * 融合 Markdown 语义检索和关键词检索结果。
@@ -41,10 +51,21 @@ public class MdHybridSearchServiceImpl implements MdHybridSearchService {
     @Override
     public SearchResponse search(UUID spaceId, SearchRequest req) {
         long start = System.currentTimeMillis();
-        CompletableFuture<SearchResponse> semanticFuture =
-                CompletableFuture.supplyAsync(() -> vectorSearchService.search(spaceId, req));
-        CompletableFuture<SearchResponse> keywordFuture =
-                CompletableFuture.supplyAsync(() -> keywordSearchService.search(spaceId, req));
+        // 跨线程传播 ②（ADR-015）：tracing 开启时用 ContextSnapshot 包装并行检索的 executor，
+        // 把根 span 上下文与业务 holder 带进 ForkJoinPool 工作线程，否则两段检索 span 会脱离根 span。
+        Executor executor = tracingEnabled
+                ? ContextSnapshot.captureAll().wrapExecutor(ForkJoinPool.commonPool())
+                : ForkJoinPool.commonPool();
+        CompletableFuture<SearchResponse> semanticFuture = CompletableFuture.supplyAsync(
+                () -> TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.vector")
+                        .tag("kb.retrieval.top_k", String.valueOf(req.topK()))
+                        .observe(() -> vectorSearchService.search(spaceId, req)),
+                executor);
+        CompletableFuture<SearchResponse> keywordFuture = CompletableFuture.supplyAsync(
+                () -> TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.keyword")
+                        .tag("kb.retrieval.top_k", String.valueOf(req.topK()))
+                        .observe(() -> keywordSearchService.search(spaceId, req)),
+                executor);
         SearchResponse semantic = semanticFuture.join();
         SearchResponse keyword = keywordFuture.join();
         List<SearchHit> fused = reciprocalRankFusion(semantic.hits(), keyword.hits(), req.topK());

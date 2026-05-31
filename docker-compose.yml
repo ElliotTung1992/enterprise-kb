@@ -170,6 +170,12 @@ services:
       RAGAS_ENDPOINT: http://kb-ragas:8000
       # Storage
       FILE_STORAGE_PATH: /app/uploads
+      # ── 在线 LLM Tracing → LangFuse（ADR-015）──
+      # 默认关闭；置 true 且 endpoint 就绪时才导出 trace。LangFuse 未起不影响应用启动。
+      KB_TRACING_ENABLED: ${KB_TRACING_ENABLED:-false}
+      KB_TRACING_SAMPLE_RATIO: ${KB_TRACING_SAMPLE_RATIO:-1.0}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://langfuse-web:3000/api/public/otel/v1/traces}
+      LANGFUSE_OTLP_BASIC_AUTH: ${LANGFUSE_OTLP_BASIC_AUTH:-}
     volumes:
       - uploads_data:/app/uploads
     networks:
@@ -201,6 +207,110 @@ services:
       - kb-network
     restart: "no"
 
+  # ── ClickHouse (LangFuse trace 存储，ADR-015) ────────────────
+  # 新增容器；LangFuse 用它存 trace/observation。复用现有 PG/Redis/MinIO，仅 CH 是净增。
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: kb-clickhouse
+    profiles:
+      - tracing
+    environment:
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
+      CLICKHOUSE_DB: default
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    networks:
+      - kb-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── LangFuse worker (异步摄取 trace 写 ClickHouse) ───────────
+  langfuse-worker:
+    image: langfuse/langfuse-worker:3
+    container_name: kb-langfuse-worker
+    profiles:
+      - tracing
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment: &langfuse-env
+      # 复用现有 PostgreSQL 实例上的独立库 langfuse（由 postgres-init.sql 创建）
+      DATABASE_URL: postgresql://${PG_USER:-kb_user}:${PG_PASSWORD}@postgres:5432/langfuse
+      # 必需密钥：由部署环境生成注入，禁止使用示例默认值
+      SALT: ${LANGFUSE_SALT:?LANGFUSE_SALT is required}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?LANGFUSE_ENCRYPTION_KEY is required (64 hex chars)}
+      # ClickHouse
+      CLICKHOUSE_MIGRATION_URL: clickhouse://clickhouse:9000
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      # 复用现有 Redis 实例（独立 db index 隔离）
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_AUTH: ${REDIS_PASSWORD}
+      REDIS_DB: ${LANGFUSE_REDIS_DB:-3}
+      # 复用现有 MinIO 实例上的独立 bucket langfuse（需预先创建）
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+    networks:
+      - kb-network
+    restart: unless-stopped
+
+  # ── LangFuse web (UI + OTLP /api/public/otel ingestion) ──────
+  langfuse-web:
+    image: langfuse/langfuse:3
+    container_name: kb-langfuse-web
+    profiles:
+      - tracing
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *langfuse-env
+      # web 额外需要 NextAuth 配置
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3001}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?LANGFUSE_NEXTAUTH_SECRET is required}
+      # 可选：首次启动自动初始化组织/项目与 API key（用于 OTLP Basic Auth 的 pk:sk）
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    ports:
+      # attu 已占用宿主 3000，LangFuse web 映射到 3001
+      - "3001:3000"
+    networks:
+      - kb-network
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
@@ -209,6 +319,8 @@ volumes:
   milvus_data:
   uploads_data:
   redis_data:
+  clickhouse_data:
+  clickhouse_logs:
 
 networks:
   kb-network:

@@ -80,6 +80,22 @@ Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`�
 
 > **Embedding dimension warning**: All providers use 1536-dim vectors. Switching embedding providers requires rebuilding the `md_kb_chunks` collection and re-ingesting all documents.
 
+### Online LLM Tracing (LangFuse via OTLP) — ADR-015
+
+在线分布式 LLM tracing：**Micrometer Observation → OpenTelemetry SDK → OTLP/HTTP → 自部署 LangFuse**。「一次请求 = 一棵 span 树」。设计见 `docs/design-langfuse-tracing.md`，决策见 `wiki/decisions/adr-015-langfuse-tracing.md`。
+
+- **总开关**：`enterprise.kb.tracing.enabled`（环境变量 `KB_TRACING_ENABLED`，默认 **false**）。关闭时 `management.tracing.enabled=false` → Observation 不产 span，零开销；自定义 tracing bean（reactor 传播 hook / 脱敏 filter / 业务属性 SpanProcessor）均经 `@ConditionalOnProperty` 不装配。导出器仅当 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 就绪时才装配（Spring Boot OTLP 自动配置）。
+- **依赖**：`kb-app` 引 `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`（版本由 Spring Boot BOM 管理）。
+- **共享 tracing 工具**（`kb-common` 的 `com.enterprise.kb.common.tracing`）：`TracingSupport`（根/子 span 命令式助手，开关关闭时直接跑业务体）、`TracingContextHolder`（业务属性 thread-local + 注册到 context-propagation，供跨线程传播）、`TracingAttributes`（LangFuse 属性 key）、`SensitiveDataRedactor`（MVP 正则脱敏 + 截断）。
+- **span 模型**：根 span（service 入口自建：`kb.qa.ask` / `kb.qa.ask.agentic` / `kb.qa.ask.stream` / `kb.ingest.document`）→ LLM span（Spring AI 自动 `gen_ai.*`）+ tool span（`TracingToolInterceptor`，`ReactAgent.builder().interceptors(...)`）+ graph/node 子树（`CompileConfig.observationRegistry`）+ 检索四段 span（`kb.retrieval.vector/keyword/rerank/parent_expansion`）。
+- **埋点盲区已补**：minimax `OpenAiChatModel`/`ChatClient`（`AiModelConfig`）与 `mdVectorStore`（`AppConfig`）均注入 `ObservationRegistry`。
+- **跨线程传播**：① `TracingConfig` 在 enabled 时 `Hooks.enableAutomaticContextPropagation()`；② `MdHybridSearchServiceImpl` 用 `ContextSnapshot.wrapExecutor` 包并行检索的 executor；③ `spring.ai.alibaba.tool.async.enabled=false` 关异步 tool manager。
+- **业务属性下传**：根 span 把 `langfuse.user.id`/`langfuse.session.id`/metadata 写入 `TracingContextHolder`，`LangfuseChildAttributeSpanProcessor`（OTel `SpanProcessor` bean）在每个子 span `onStart` 复制上去。走本地 thread-local，**不**经 baggage，不外发给模型 provider。
+- **脱敏 / 截断（D5）**：正文进 trace 前经 `SensitiveDataObservationFilter`（高基数 tag 兜底）+ 源头按 `enterprise.kb.tracing.max-*-chars` 截断。
+- **基础设施**：`docker compose --profile tracing up -d` 起 `clickhouse` + `langfuse-web`（宿主 3001，attu 占用 3000）+ `langfuse-worker`；复用现有 PG（独立库 `langfuse`，由 `postgres-init.sql` 建）/ Redis（独立 db index）/ MinIO（独立 bucket `langfuse`，需预先创建）。LangFuse 必需密钥（`LANGFUSE_SALT` / `LANGFUSE_ENCRYPTION_KEY` / `LANGFUSE_NEXTAUTH_SECRET` / `CLICKHOUSE_PASSWORD`）见 `.env.example`，禁止用示例默认值。
+
+> **状态**：代码已落地、全模块编译通过；运行态（LangFuse span 树渲染、prompt/completion event→attribute 映射、跨线程传播实测）仍属 ADR-015 §11「待验证」，需起栈联调。
+
 ### Permission Model
 
 Space-level RBAC enforced via `@PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")`. `SpacePermissionEvaluator` resolves the authenticated user's `RoleType` (OWNER/EDITOR/VIEWER) against `user_space_roles` table. Wired in `AppConfig` to avoid circular cross-module dependencies.

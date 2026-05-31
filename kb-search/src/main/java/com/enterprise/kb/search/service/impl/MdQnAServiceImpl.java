@@ -1,5 +1,8 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.common.tracing.TracingAttributes;
+import com.enterprise.kb.common.tracing.TracingContextHolder;
+import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
@@ -15,6 +18,9 @@ import com.enterprise.kb.search.service.MdQnAService;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.service.RerankService;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -25,7 +31,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -44,6 +52,9 @@ public class MdQnAServiceImpl implements MdQnAService {
     @Value("${enterprise.kb.search.md-parent-expansion.max-parents:5}")
     private int maxParents;
 
+    @Value("${enterprise.kb.tracing.enabled:false}")
+    private boolean tracingEnabled;
+
     private final ModelProviderResolver modelProviderResolver;
     private final MdHybridSearchService hybridSearchService;
     private final MdParentExpansionService parentExpansionService;
@@ -52,6 +63,7 @@ public class MdQnAServiceImpl implements MdQnAService {
     private final RerankService rerankService;
     private final RedisChatMemory redisChatMemory;
     private final QaChatSessionService qaChatSessionService;
+    private final ObservationRegistry observationRegistry;
 
     /**
      * 基于 Markdown 父子索引进行问答。
@@ -63,6 +75,16 @@ public class MdQnAServiceImpl implements MdQnAService {
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+        // 业务根 span（ADR-015）：单轮问答的唯一 trace root，挂 LangFuse user/session/metadata
+        return TracingSupport.root(observationRegistry, tracingEnabled, "kb.qa.ask")
+                .userId(currentUserIdQuietly())
+                .sessionId(sessionId)
+                .spaceId(spaceId)
+                .modelProvider(req.modelProvider() != null ? req.modelProvider() : "DEFAULT")
+                .observe(() -> doAsk(spaceId, req, sessionId));
+    }
+
+    private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(redisChatMemory)
@@ -94,6 +116,49 @@ public class MdQnAServiceImpl implements MdQnAService {
      */
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
+        if (!tracingEnabled) {
+            return doAskStream(spaceId, req);
+        }
+        // 流式根 span（ADR-015 D8）：方法立即返回 Flux，不能用同步 scope。
+        // 用 reactor 生命周期：subscribe 时 start（Flux.using 的 resource 初始化），
+        // doFinally（using 的 cleanup）时 stop；把 Observation 写入 reactor context，
+        // 使 Spring AI 流式 chat span 与并行检索 span 挂到本根 span 下。
+        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+        String provider = req.modelProvider() != null ? req.modelProvider() : "DEFAULT";
+        Map<String, String> attrs = businessAttrs(currentUserIdQuietly(), sessionId, spaceId, provider);
+        Observation observation = Observation.createNotStarted("kb.qa.ask.stream", observationRegistry);
+        attrs.forEach((key, value) -> {
+            if (TracingAttributes.LANGFUSE_USER_ID.equals(key) || TracingAttributes.LANGFUSE_SESSION_ID.equals(key)) {
+                observation.highCardinalityKeyValue(key, value);
+            } else {
+                observation.lowCardinalityKeyValue(key, value);
+            }
+        });
+        return Flux.using(
+                observation::start,
+                obs -> {
+                    Map<String, String> previous = TracingContextHolder.peek();
+                    TracingContextHolder.set(attrs);
+                    try {
+                        // 检索为同步阻塞，在根 span scope + holder 下执行，使检索子 span 挂树
+                        List<SearchHit> parentHits = obs.scoped(() -> retrieveParentHits(spaceId, req));
+                        ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
+                        return chatClient.prompt()
+                                .system(buildSystemPrompt(parentHits))
+                                .user(req.question())
+                                .stream()
+                                .content()
+                                .contextWrite(ctx -> ctx
+                                        .put(ObservationThreadLocalAccessor.KEY, obs)
+                                        .put(TracingContextHolder.KEY, attrs));
+                    } finally {
+                        TracingContextHolder.set(previous);
+                    }
+                },
+                Observation::stop);
+    }
+
+    private Flux<String> doAskStream(UUID spaceId, QnARequest req) {
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         return chatClient.prompt()
@@ -111,8 +176,39 @@ public class MdQnAServiceImpl implements MdQnAService {
                 new SearchRequest(retrievalQuery, recallSize, req.modelProvider(), null, hypotheticalDoc)).hits();
         // rerank 的 child 数放宽到 maxParents*2，给「同一 parent 命中多个 child → 多窗节选」留出空间
         int childRerankTopN = Math.max(req.topK(), maxParents * 2);
-        List<SearchHit> childHits = rerankService.rerank(req.question(), candidates, childRerankTopN);
-        return parentExpansionService.expand(childHits);
+        List<SearchHit> childHits = TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.rerank")
+                .tag("kb.rerank.candidates", String.valueOf(candidates.size()))
+                .tag("kb.rerank.top_n", String.valueOf(childRerankTopN))
+                .observe(() -> rerankService.rerank(req.question(), candidates, childRerankTopN));
+        return TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.parent_expansion")
+                .tag("kb.parent_expansion.child_hits", String.valueOf(childHits.size()))
+                .observe(() -> parentExpansionService.expand(childHits));
+    }
+
+    /**
+     * 获取当前用户 ID，无认证上下文时静默返回 {@code null}（仅用于 trace tag，不影响业务）。
+     */
+    private String currentUserIdQuietly() {
+        try {
+            UUID userId = SecurityUtils.getCurrentUserId();
+            return userId != null ? userId.toString() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 构建业务根 span 的 LangFuse 属性集合（user/session 高基数，space/provider metadata）。
+     */
+    private Map<String, String> businessAttrs(String userId, UUID sessionId, UUID spaceId, String provider) {
+        Map<String, String> attrs = new LinkedHashMap<>();
+        if (userId != null) {
+            attrs.put(TracingAttributes.LANGFUSE_USER_ID, userId);
+        }
+        attrs.put(TracingAttributes.LANGFUSE_SESSION_ID, sessionId.toString());
+        attrs.put(TracingAttributes.META_SPACE_ID, spaceId.toString());
+        attrs.put(TracingAttributes.META_MODEL_PROVIDER, provider);
+        return attrs;
     }
 
     private String buildSystemPrompt(List<SearchHit> hits) {

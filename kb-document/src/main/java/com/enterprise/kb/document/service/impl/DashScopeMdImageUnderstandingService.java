@@ -1,11 +1,13 @@
 package com.enterprise.kb.document.service.impl;
 
 import com.enterprise.kb.common.exception.InvalidRequestException;
+import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.document.service.MdImageInput;
 import com.enterprise.kb.document.service.MdImageUnderstandingResult;
 import com.enterprise.kb.document.service.MdImageUnderstandingService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +29,10 @@ import java.util.Map;
 public class DashScopeMdImageUnderstandingService implements MdImageUnderstandingService {
 
     private final ObjectMapper objectMapper;
+    private final ObservationRegistry observationRegistry;
+
+    @Value("${enterprise.kb.tracing.enabled:false}")
+    private boolean tracingEnabled;
 
     @Value("${spring.ai.dashscope.api-key:}")
     private String apiKey;
@@ -42,8 +48,11 @@ public class DashScopeMdImageUnderstandingService implements MdImageUnderstandin
         if (!StringUtils.hasText(apiKey)) {
             throw new InvalidRequestException("未配置 DASHSCOPE_API_KEY，无法执行 Markdown 图片理解");
         }
-        String content = callDashScope(image);
-        return parseResult(content);
+        // 图片理解 span（ADR-015 C6）：挂在入库 trace 的 parse 子树下
+        return TracingSupport.span(observationRegistry, tracingEnabled, "kb.ingest.image_understanding")
+                .tag("gen_ai.request.model", model)
+                .tag("kb.image.mime_type", image.mimeType())
+                .observe(() -> parseResult(callDashScope(image)));
     }
 
     private String callDashScope(MdImageInput image) {
