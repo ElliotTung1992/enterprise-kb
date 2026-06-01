@@ -12,6 +12,8 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
+      - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
+      - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
       # 标准 RAG 退役：排除会创建并初始化 kb_chunks 集合的自动配置；
       # Milvus 客户端改由 AppConfig.milvusClient 手动声明，仅供 md_kb_chunks 使用。
       - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration

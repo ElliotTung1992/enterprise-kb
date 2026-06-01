@@ -12,7 +12,6 @@ COPY kb-auth/pom.xml      kb-auth/pom.xml
 COPY kb-user/pom.xml      kb-user/pom.xml
 COPY kb-document/pom.xml  kb-document/pom.xml
 COPY kb-search/pom.xml    kb-search/pom.xml
-COPY kb-knowledge-graph/pom.xml kb-knowledge-graph/pom.xml
 COPY kb-app/pom.xml       kb-app/pom.xml
 
 # Pre-download dependencies (cached unless pom.xml changes)
@@ -24,7 +23,6 @@ COPY kb-auth/src        kb-auth/src
 COPY kb-user/src        kb-user/src
 COPY kb-document/src    kb-document/src
 COPY kb-search/src      kb-search/src
-COPY kb-knowledge-graph/src kb-knowledge-graph/src
 COPY kb-app/src         kb-app/src
 
 # Build fat JAR
