@@ -11,11 +11,11 @@ tags: [adr, observability, tracing, langfuse, opentelemetry, otlp, micrometer, l
 
 ## 背景
 
-自研 trace 体系（原 ADR-009 / ADR-010 的 `agent_traces` / `agent_trace_steps` + `TraceRecorder` + `TraceFacade` + ChatClient advisor + agent 拦截器 + AOP）于 2026-05-28 经迁移 032 **全部下线**。下线后：
+自研 trace 体系（原 ADR-009 / ADR-010 的 `agent_traces` / `agent_trace_steps` + `TraceRecorder` + `TraceFacade` + ChatClient advisor + agent 拦截器 + AOP）于 2026-05-28 经迁移 032 **整体退役**。退役后：
 
 - 生产请求路径**无任何 trace**，agentic 多步链路、RAG 检索漏斗均不可观测
 - ADR-014 的 Ragas 是**离线评估**（在 `eval_cases` 上跑 LLM-as-judge），不覆盖线上真实请求
-- `production-sample` 评估数据源因 trace 下线而断流（ADR-014 C6）
+- `production-sample` 评估数据源因 trace 退役而断流（ADR-014 C6）
 
 需求：为 MD 问答竖井与文档入库建立**在线分布式 LLM tracing**，"一次请求 = 一棵 span 树"。
 
@@ -91,7 +91,7 @@ graph-core 内部 reactive、classpath 有异步 tool calling manager、`MdHybri
 
 **正面**：
 
-- 补回 trace 下线后生产侧"零可观测性"的缺口；agentic 链路与 RAG 检索漏斗可视
+- 补回 trace 退役后生产侧"零可观测性"的缺口；agentic 链路与 RAG 检索漏斗可视
 - 厂商中立 OTLP 管线，后端可换零代码改动，与 ADR-014 评估侧中立立场一致
 - tool span 由框架原生 `ToolInterceptor` 产、graph/node 子树由 `GraphObservationLifecycleListener` 或自写 `GraphLifecycleListener` 挂到 service 业务根下，业务工具体零侵入，无需 hook 框架内部
 - 复用现有基础设施实例，净增 3 个容器；schema 完全隔离
@@ -106,7 +106,7 @@ graph-core 内部 reactive、classpath 有异步 tool calling manager、`MdHybri
 ## 备选方案
 
 - **接 LangFuse Cloud**：合规 + 中国区稳定性 → 否决（C1）
-- **复活落库自研 trace（指向 LangFuse）**：等于重建刚删的框架，违背下线决策 → 否决
+- **复活落库自研 trace（指向 LangFuse）**：等于重建刚删的框架，违背退役决策 → 否决
 - **只做自动埋点（不建根/tool span）**：agentic 链路扁平无父子，最需要看链路处恰恰最弱 → 否决（C2）
 - **在 tool lambda 体内手工开 span**：污染业务工具体，且 1.1.2.2 已提供原生 `ToolInterceptor` → 否决（改用 C2 的拦截器方案）
 - **入库 trace 推迟二期**：评审中决定一期纳入（C6）

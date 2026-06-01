@@ -40,7 +40,7 @@ tags: [adr, evaluation, ragas, rag, llm-as-judge, ci-gate, langsmith]
 
 ### 4. contexts 收集：运行时 ThreadLocal hook，不依赖任何持久化 trace（C4）
 
-自研 trace 下线后，原计划"从 `agent_trace_steps` 反查 tool output_json" 整条路径失效。新方案 `RagasContextCollector`：
+自研 trace 退役后，原计划"从 `agent_trace_steps` 反查 tool output_json" 整条路径失效。新方案 `RagasContextCollector`：
 
 - ThreadLocal 持有当次评估的 Scope，业务代码以 `current().ifPresent(c -> c.recordParents(...))` 写入
 - **生产请求路径无 scope 时是 no-op、零开销**——hook 只在 `EvalReplayService` 通过 `try-with-resources` 显式 `openScope()` 时激活
@@ -57,7 +57,7 @@ tags: [adr, evaluation, ragas, rag, llm-as-judge, ci-gate, langsmith]
 
 - `regression`：人工标注小集（MdQnA 30 + Agentic 20），用于 CI 门禁
 - `synthetic-{spaceId}`：Ragas `TestsetGenerator` 从 `md_parent_chunk` 自动合成，仅用于趋势监控，**永远不进 hard gate**（合成 GT 是 LLM 生成的）
-- `production-sample`：原计划从 `agent_traces` 抽样，自研 trace 下线后推迟到外部 trace 平台接入后重新设计
+- `production-sample`：原计划从 `agent_traces` 抽样，自研 trace 退役后推迟到外部 trace 平台接入后重新设计
 
 ### 7. 三阶段门禁，环境变量切换（C7）
 
@@ -87,13 +87,13 @@ Phase A (1 月) warn-only → Phase B (1 月) soft gate → Phase C (持续) har
 - 不做生产实时评估（每次问答不触发 Ragas）
 - 不重新实现 Ragas 指标（不在 Java 侧造轮子）
 - 不做自动调度（一期仅手动 + CI 触发）
-- 不重启 `production-sample` 数据源（trace 下线后推迟二期）
+- 不重启 `production-sample` 数据源（trace 退役后推迟二期）
 
 ## 影响
 
 **正面**：
 
-- 补 ADR-009 留下的 LLM-as-judge 缺口，语义级 faithfulness / relevancy / context 质量可量化
+- 补已退役自研 trace 评估能力留下的 LLM-as-judge 缺口，语义级 faithfulness / relevancy / context 质量可量化
 - 通用 evaluation 接口契约让未来切 LangSmith / LangFuse / Phoenix 时 Java 零改动
 - 表复用，schema 增量 = 0，后台页面与 CI 退出码逻辑全部沿用
 - `RagasContextCollector` ThreadLocal 模式 hook 化业务代码侵入到一行
@@ -103,7 +103,7 @@ Phase A (1 月) warn-only → Phase B (1 月) soft gate → Phase C (持续) har
 - 引入 Python 服务（新增运维面）：4 个容器之外的第 5 个，但走 `profile=eval` 平时不起
 - judge LLM 调用费：100 题 × 4 指标 × 4-10 次/指标 ≈ 数千次 LLM 调用/次评估，需账单审计
 - 人工标注 GT 周期长：regression 小集 50 题需两人交叉审核
-- 自研 trace 下线后 `production-sample` 数据源断流，**生产侧持续监控能力暂停**
+- 自研 trace 退役后 `production-sample` 数据源断流，**生产侧持续监控能力暂停**
 
 ## 备选方案
 
@@ -116,6 +116,6 @@ Phase A (1 月) warn-only → Phase B (1 月) soft gate → Phase C (持续) har
 
 - 功能方案：[[features/ragas-evaluation]]
 - 评估目标：[[decisions/adr-012-markdown-structure-rag]] · [[features/markdown-structure-rag]] · [[features/md-keyword-bm25]]
-- 前置：原 ADR-009 / ADR-010（自研 trace 体系）已于 2026-05-28 下线（迁移 032），eval 三表保留
+- 前置：原 ADR-009 / ADR-010（自研 trace 体系）已于 2026-05-28 退役（迁移 032），eval 三表保留
 - AI Provider 体系：[[ai-rag/providers]]
 - 数据库迁移：[[database/migrations]]

@@ -50,7 +50,7 @@ flowchart LR
     LFWK --> MIN
 ```
 
-代码侧只产 OTLP，后端是 endpoint 决策，保持厂商中立——与 [[decisions/adr-014-ragas-integration]] 评估侧的中立立场一致。**不重新引入**已被迁移 032 下线的 `TraceFacade` / advisor / 拦截器那套落库框架。
+代码侧只产 OTLP，后端是 endpoint 决策，保持厂商中立——与 [[decisions/adr-014-ragas-integration]] 评估侧的中立立场一致。**不重新引入**已随迁移 032 退役的 `TraceFacade` / advisor / 拦截器那套落库框架。
 
 ## 配置门禁
 

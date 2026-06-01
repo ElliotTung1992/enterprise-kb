@@ -5,14 +5,14 @@ tags: [feature, evaluation, ragas, rag, llm-as-judge, ci-gate]
 
 # Ragas RAG 评测框架接入
 
-> 状态：**设计中（待二次审核）**。代码未实现，仅设计文档。
+> 状态：**代码已落地、编译通过**（Java `RagasEvaluationServiceImpl` + Python `kb-ragas/`，对应 commit `7b1f0ad`）；运行态待联调（Python 服务连通性、metric 阈值门禁、CI gate 切换均需起栈实测）。
 > 设计文档：`docs/design-ragas-integration.md`（含完整接口契约、phase 拆分、附录）
 > 架构决策：[[decisions/adr-014-ragas-integration]]
 > 评估目标：[[features/markdown-structure-rag]]（仅 `MdQnAService` + `MdAgenticQnAService`）
 
 ## 目标
 
-给 MD 结构感知 RAG 的两条链路打 4 个 Ragas 经典指标分，**补 ADR-009 留下的 LLM-as-judge 缺口**（原规则断言 `mustContain`/`groundedOnly` 测不出语义级 faithfulness 和 relevancy）：
+给 md 结构感知 RAG 的两条链路打 4 个 Ragas 经典指标分，**补已退役的自研 trace 评估留下的 LLM-as-judge 缺口**（原规则断言 `mustContain` / `groundedOnly` 测不出语义级 faithfulness 和 relevancy）：
 
 | 指标 | 测什么 | 需要 GT |
 |------|--------|---------|
@@ -48,7 +48,7 @@ EvalReplayService ─► MdQnAService / MdAgenticQnAService
 
 ## 核心模式：RagasContextCollector
 
-自研 trace 下线后，contexts（"答案依据文本"）改为 **运行时 ThreadLocal hook** 收集：
+自研 trace 退役后，contexts（"答案依据文本"）改为 **运行时 ThreadLocal hook** 收集：
 
 ```java
 public final class RagasContextCollector {
@@ -82,7 +82,7 @@ public final class RagasContextCollector {
 
 业务代码只写一行 `RagasContextCollector.current().ifPresent(c -> c.recordParents(parents))`，**生产路径无 scope 时是 no-op、零开销**。`EvalReplayService` 用 `try-with-resources` 包裹评估、scope 关闭时取 `snapshot()`。
 
-> 之所以不复用 trace step 表反查：自研 trace 已于 2026-05-28（迁移 032）下线，[[log]] 有记录；外部 trace 平台（LangSmith/LangFuse）接入是二期独立项目。
+> 之所以不复用 trace step 表反查：自研 trace 已于 2026-05-28 经迁移 032 整体退役，[[log]] 有记录；外部 trace 平台（LangFuse via OTLP，见 [[features/langfuse-tracing]]）作为在线 tracing 接续，Ragas eval 与之统一为 v2 待办。
 
 ## 数据集
 
@@ -158,5 +158,5 @@ public final class RagasContextCollector {
 - 架构决策：[[decisions/adr-014-ragas-integration]]
 - 评估对象：[[features/markdown-structure-rag]] · [[features/md-keyword-bm25]]
 - 既有评估闭环：`eval_cases` / `eval_runs` / `eval_run_results` 三表（迁移 025；自研 trace 部分随迁移 032 退役，eval 部分保留）
-- 数据库迁移：[[database/migrations]]（032 下线 trace 表 + sourceTraceId 列）
+- 数据库迁移：[[database/migrations]]（032 退役 trace 表 + `sourceTraceId` 列）
 - AI Provider 体系：[[ai-rag/providers]]

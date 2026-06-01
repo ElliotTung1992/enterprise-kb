@@ -28,4 +28,11 @@
 
 ## 已退役
 
-原 `/api/v1/spaces/{spaceId}/documents` 端点（`DocumentController`，承载 PDF/DOCX/MD/TXT/HTML 等多格式上传 + 文档关系 + 标签）已随迁移 031 标准 RAG 退役整体删除。
+原 `/api/v1/spaces/{spaceId}/documents` 端点（`DocumentController`，承载 PDF / DOCX / MD / TXT / HTML 等多格式上传 + 文档关系 + 标签）已随迁移 031 标准 RAG 退役整体删除。
+
+## 相关页面
+
+- [[features/document-ingestion]] — 摄入流程
+- [[features/markdown-structure-rag]] — 结构感知 RAG 完整设计
+- [[features/markdown-image-rag]] — 图片资产 / IMAGE_CAPTION
+- [[architecture/data-flow]] — 数据流图

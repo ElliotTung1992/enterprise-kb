@@ -13,7 +13,7 @@ tags: [adr, tombstone, deprecated, trace, observability]
 
 ## 废止原因
 
-落库形态的 trace 维护成本高，且在跨线程 / reactor / virtual thread 场景上下文传播脆弱；线上请求路径与离线评估之间的复用度低。下线后通过迁移 032 删除 `agent_traces` / `agent_trace_steps` 两张表，并清理相关 advisor / 拦截器 / AOP 代码。
+落库形态的 trace 维护成本高，且在跨线程 / reactor / virtual thread 场景上下文传播脆弱；线上请求路径与离线评估之间的复用度低。退役时通过迁移 032 删除 `agent_traces` / `agent_trace_steps` 两张表，并清理相关 advisor / 拦截器 / AOP 代码。
 
 ## 接续
 

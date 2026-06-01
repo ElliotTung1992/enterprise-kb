@@ -13,7 +13,7 @@ tags: [adr, architecture, rag, search, bm25, keyword-search, markdown, pg_tokeni
 
 [[features/markdown-structure-rag]] 竖井的关键词路 `MdKeywordSearchServiceImpl` 用 `similarity(query, embed_text) + ILIKE '%query%'`，本质是 **pg_trgm 三元组相似度 + 子串匹配**，不是 BM25：无 IDF（高频词不降权）、无文档长度归一、无真正词级匹配；中文仅靠子串命中，长 query 易整串匹配不到。需要引入真正的 BM25 + jieba 中文分词。
 
-> 前置：非 md 场景即将下线，故标准竖井（`document_chunks` / `KeywordSearchServiceImpl`）的同类改造**不做**。
+> 前置：决策当时已计划退役非 md 场景，故标准竖井（`document_chunks` / `KeywordSearchServiceImpl`）的同类改造**不做**——标准竖井已于其后随迁移 031 整体退役。
 
 ## 决策
 
@@ -58,7 +58,7 @@ pre_tokenizer 用 jieba（`[pre_tokenizer.jieba]`），但 jieba **无法用预�
 
 ## 非目标
 
-- 标准竖井（`document_chunks` / `KeywordSearchServiceImpl`）任何改造（非 md 场景下线）。
+- 标准竖井（`document_chunks` / `KeywordSearchServiceImpl`）任何改造——其后整体随迁移 031 退役。
 - dense 语义检索改造（`MdVectorSearch` 继续走 Milvus `md_kb_chunks`，不迁向量到 Postgres）。
 - RRF 融合策略调整、section 加权（本期保持输入与融合不变，只换算法）。
 - 种子同义词表（`create_synonym`）——作为评估暴露 OOV 术语后的跟进项，不阻塞默认翻转。

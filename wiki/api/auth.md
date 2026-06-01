@@ -46,3 +46,9 @@
 | 密钥长度 | ≥ 32 字节，启动时校验 |
 
 所有需要鉴权的接口：请求头 `Authorization: Bearer {accessToken}`
+
+## 相关页面
+
+- [[api/users]] — 用户管理
+- [[api/spaces]] — 知识空间与 RBAC（接口侧的权限校验入口）
+- [[database/entities/users-spaces]] — `users` / `refresh_tokens` 表结构

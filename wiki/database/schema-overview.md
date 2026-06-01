@@ -28,7 +28,7 @@ Schema 通过 **Liquibase** 管理，changelog: `kb-app/src/main/resources/db/ch
 | `documents` | 031 | `md_documents` |
 | `document_chunks` | 031 | `md_child_chunk` / `md_parent_chunk` |
 | `document_assets` | 031 | `md_document_assets` |
-| `document_relations` | 031 | （无接续，知识图谱模块整体下线） |
+| `document_relations` | 031 | （无接续，知识图谱模块整体退役） |
 | `document_tags` / `tags` | 031 | （无接续） |
 | `agent_traces` / `agent_trace_steps` | 032 | LangFuse OTLP（不再落库；见 [[features/langfuse-tracing]]） |
 | `mcp_api_keys` | 017 | — |
