@@ -29,7 +29,7 @@ ConversationStateStore.load（Redis 路由状态）
    │
    ├─ 上轮 awaiting_slot=true ──→ 跳过路由（硬规则），沿用 current_domain
    │
-   └─ 否则 ──→ DomainRouterService.route（一次 MINIMAX 调用）
+   └─ 否则 ──→ DomainRouterService.route（一次路由模型调用，默认 LLAMA_CPP）
                      │
                      ▼
               RoutingDecision{primaryDomain, secondary[], runnerUp, evidence}
@@ -77,8 +77,8 @@ ConversationStateStore.load（Redis 路由状态）
 
 ## 路由器机制
 
-- **模型**：路由是 5~13 路轻量分类，用便宜快模型（默认 MINIMAX，配置 `router-provider`）。
-- **输出格式**：单行管道 `PRIMARY|SECONDARY_CSV|RUNNER_UP|EVIDENCE|EMOTION`，与本项目既有 LLM 结构化输出风格（`ComplaintResponsibilityInferenceServiceImpl`）一致，不依赖在 MiniMax 兼容接口上不稳定的 JSON Schema 模式。`EMOTION` 标记本轮是否为纯情绪宣泄。
+- **模型**：路由是 5~13 路轻量分类，用便宜快模型（默认 `LLAMA_CPP`，配置 `router-provider`）。
+- **输出格式**：单行管道 `PRIMARY|SECONDARY_CSV|RUNNER_UP|EVIDENCE|EMOTION`，与本项目既有 LLM 结构化输出风格（`ComplaintResponsibilityInferenceServiceImpl`）一致，不依赖在 OpenAI 兼容接口上不稳定的 JSON Schema 模式。`EMOTION` 标记本轮是否为纯情绪宣泄。
 - **证据判 UNCLEAR**：要求路由器摘出用户原话证据；摘不出 → `UNCLEAR`。不信 LLM 自报置信度。
 - **降级**：任何解析失败或调用异常都降级为 `UNCLEAR`——误判域代价远高于多反问一轮。
 - **few-shot**：内联手写，刻意不与冻结测试集重叠（防污染）。
@@ -135,7 +135,7 @@ TTL 24 小时，与对话历史一致。职责边界：Redis 存易变路由态�
 |--------|------|------|
 | `enterprise.kb.customer-assistant.routing-enabled` | `false` | kill-switch：true 走两层路由，false 回退旧单体路径 |
 | `enterprise.kb.customer-assistant.shadow-routing-enabled` | `true` | 影子模式：旁路跑路由并打 `【SHADOW】` 日志，不影响响应 |
-| `enterprise.kb.ai.router-provider` | `MINIMAX` | Tier-1 路由调用的模型提供商 |
+| `enterprise.kb.ai.router-provider` | `LLAMA_CPP` | Tier-1 路由调用的模型提供商 |
 | `enterprise.kb.ai.router-context-turns` | `3` | 喂给路由器的上下文轮数 |
 
 ## 数据库

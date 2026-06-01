@@ -108,6 +108,7 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
         }
     }
 
+    // 上传文档 - 状态更新为处理中 - 支持重复导入或者中途失败场景
     private void markProcessingAndClearChunks(MdDocument document) {
         transactionTemplate.executeWithoutResult(status -> {
             document.setStatus(DocumentStatus.PROCESSING);

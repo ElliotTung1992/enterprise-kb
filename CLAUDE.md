@@ -74,9 +74,11 @@ Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`�
 
 `ModelProviderResolver` injects named beans (`@Qualifier`) for each provider and switches at runtime based on `modelProvider` in the request:
 
-- **Chat**: `dashscopeChatClient`, `minimaxChatClient`, `anthropicChatClient`
-- **Embedding**: `dashscopeEmbeddingModel` (marked `@Primary` via `BeanFactoryPostProcessor`), `minimaxEmbeddingModel`
-- Default chat provider: `MINIMAX`; default embedding: `DASHSCOPE`
+- **Chat**: `dashscopeChatClient`, `llamaCppChatClient` (llama.cpp 本地模型，OpenAI 兼容接口)
+- **Embedding**: `dashscopeEmbeddingModel` (marked `@Primary` via `BeanFactoryPostProcessor`)
+- Default chat provider: `LLAMA_CPP`; default embedding: `DASHSCOPE`（`ModelProvider` 枚举：`LLAMA_CPP` / `OPENAI` / `ANTHROPIC`）
+
+> **MiniMax 已退役**：项目不再使用 MiniMax，相关 bean / 依赖 / 配置 / API Key 均已移除。
 
 > **Embedding dimension warning**: All providers use 1536-dim vectors. Switching embedding providers requires rebuilding the `md_kb_chunks` collection and re-ingesting all documents.
 
@@ -88,7 +90,7 @@ Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`�
 - **依赖**：`kb-app` 引 `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`（版本由 Spring Boot BOM 管理）。
 - **共享 tracing 工具**（`kb-common` 的 `com.enterprise.kb.common.tracing`）：`TracingSupport`（根/子 span 命令式助手，开关关闭时直接跑业务体）、`TracingContextHolder`（业务属性 thread-local + 注册到 context-propagation，供跨线程传播）、`TracingAttributes`（LangFuse 属性 key）、`SensitiveDataRedactor`（MVP 正则脱敏 + 截断）。
 - **span 模型**：根 span（service 入口自建：`kb.qa.ask` / `kb.qa.ask.agentic` / `kb.qa.ask.stream` / `kb.ingest.document`）→ LLM span（Spring AI 自动 `gen_ai.*`）+ tool span（`TracingToolInterceptor`，`ReactAgent.builder().interceptors(...)`）+ graph/node 子树（`CompileConfig.observationRegistry`）+ 检索四段 span（`kb.retrieval.vector/keyword/rerank/parent_expansion`）。
-- **埋点盲区已补**：minimax `OpenAiChatModel`/`ChatClient`（`AiModelConfig`）与 `mdVectorStore`（`AppConfig`）均注入 `ObservationRegistry`。
+- **埋点盲区已补**：llama.cpp `OpenAiChatModel`/`ChatClient`（`AiModelConfig`，OpenAI 兼容接口）与 `mdVectorStore`（`AppConfig`）均注入 `ObservationRegistry`。
 - **跨线程传播**：① `TracingConfig` 在 enabled 时 `Hooks.enableAutomaticContextPropagation()`；② `MdHybridSearchServiceImpl` 用 `ContextSnapshot.wrapExecutor` 包并行检索的 executor；③ `spring.ai.alibaba.tool.async.enabled=false` 关异步 tool manager。
 - **业务属性下传**：根 span 把 `langfuse.user.id`/`langfuse.session.id`/metadata 写入 `TracingContextHolder`，`LangfuseChildAttributeSpanProcessor`（OTel `SpanProcessor` bean）在每个子 span `onStart` 复制上去。走本地 thread-local，**不**经 baggage，不外发给模型 provider。
 - **脱敏 / 截断（D5）**：正文进 trace 前经 `SensitiveDataObservationFilter`（高基数 tag 兜底）+ 源头按 `enterprise.kb.tracing.max-*-chars` 截断。
@@ -449,7 +451,7 @@ User user = userMapper.findById(id)
 
 ### 多 EmbeddingModel 冲突处理
 
-系统同时启用 DashScope 和 MiniMax，两个自动配置各自注册了 `EmbeddingModel` bean，加上 `AiModelConfig` 手工声明的 `minimaxEmbeddingModel`，共 3 个候选，导致 MilvusVectorStore 自动装配歧义。
+DashScope embedding 自动配置注册 `dashscopeEmbeddingModel`。当 classpath 上同时存在其他 `EmbeddingModel` 候选（如 OpenAI embedding 自动配置在配了 `OPENAI_API_KEY` 时也会注册一个 bean）时，MilvusVectorStore 按类型注入会产生歧义。
 
 **解决方案**（`AiModelConfig.embeddingModelPrimaryPostProcessor`）：使用 `BeanFactoryPostProcessor` 在 bean 实例化前将 `dashscopeEmbeddingModel` 的 bean 定义设为 `primary = true`，Milvus 即可唯一选中它。其他 EmbeddingModel bean 仍可通过 `@Qualifier` 按名称注入，供 `ModelProviderResolver` 使用。
 
@@ -461,7 +463,7 @@ User user = userMapper.findById(id)
 
 | 配置项 | 默认值 |
 |--------|--------|
-| `enterprise.kb.ai.default-provider` | `DASHSCOPE` |
+| `enterprise.kb.ai.default-provider` | `LLAMA_CPP` |
 | `enterprise.kb.ai.default-embedding-provider` | `DASHSCOPE` |
 
 ---

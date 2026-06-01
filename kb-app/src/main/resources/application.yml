@@ -12,8 +12,6 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
-      - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
-      - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
       # 标准 RAG 退役：排除会创建并初始化 kb_chunks 集合的自动配置；
       # Milvus 客户端改由 AppConfig.milvusClient 手动声明，仅供 md_kb_chunks 使用。
       - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration
@@ -133,6 +131,7 @@ management:
     tracing:
       # 直连 LangFuse 时使用 trace-specific endpoint /api/public/otel/v1/traces；
       # 经 OTel Collector 转发时可改用通用 /api/public/otel。为空则不装配导出器。
+      # x-langfuse-ingestion-version 是 Langfuse 的 OTLP 摄取版本声明 header
       endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:}
       headers:
         Authorization: "Basic ${LANGFUSE_OTLP_BASIC_AUTH:}"

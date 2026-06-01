@@ -68,10 +68,10 @@ LangFuse 未起或本地开发时应用照常启动。
 
 | # | 位置 | 问题 | 处理 |
 |---|------|------|------|
-| A | `AiModelConfig.minimaxChatClient` | 手工 `OpenAiChatModel.builder()` **未注入 ObservationRegistry** → 落 NOOP；而 MiniMax 是**默认 chat provider**，默认链路零 trace | 注入容器 `ObservationRegistry`，`OpenAiChatModel.builder()` 与 `ChatClient.builder()` 两处都带上 |
+| A | `AiModelConfig.llamaCppChatClient` | 手工 `OpenAiChatModel.builder()` **未注入 ObservationRegistry** → 落 NOOP；而 llama.cpp 是**默认 chat provider**，默认链路零 trace | 注入容器 `ObservationRegistry`，`OpenAiChatModel.builder()` 与 `ChatClient.builder()` 两处都带上 |
 | B | `dashscopeChatClient` | DashScope 自动配置已注入 registry（jar 内自带 `DashScopeChatModelObservationConvention`） | 无需改动 |
 | C | `spring-ai-alibaba-agent-framework` 1.1.2.2 | ReactAgent 默认不产 tool span，graph observation 若独立开根可能与 service 根形成双根 trace。jar 字节码核实有 `ToolInterceptor`/`ModelInterceptor` 与 graph-core `GraphObservationLifecycleListener` | service 入口自建唯一业务根 span；`GraphObservationLifecycleListener` 显式挂到该根下；`ToolInterceptor` 产 tool span（`.interceptors(...)`，零业务污染） |
-| D | `AppConfig.mdVectorStore` | 手工建 `VectorStore` bean（Milvus 自动配置被 exclude），同 minimax 一类坑 | 建 bean 时注入 `ObservationRegistry`，使 `VectorStore.similaritySearch` 自动产 span |
+| D | `AppConfig.mdVectorStore` | 手工建 `VectorStore` bean（Milvus 自动配置被 exclude），同 llama.cpp 一类坑 | 建 bean 时注入 `ObservationRegistry`，使 `VectorStore.similaritySearch` 自动产 span |
 
 ## Span 模型与命名
 
@@ -297,7 +297,7 @@ management:
 ## 实施步骤建议顺序
 
 1. 依赖：`micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp` + `micrometer-context-propagation`
-2. 补埋点盲区 A/D（minimax + `mdVectorStore` 注入 registry）
+2. 补埋点盲区 A/D（llama.cpp `OpenAiChatModel` + `mdVectorStore` 注入 registry）
 3. docker-compose 起 LangFuse 栈，建独立库 / bucket / index + ClickHouse TTL
 4. 配置门禁 + OTLP exporter + BatchSpanProcessor（失败 WARN）+ `ObservationFilter`/`SpanProcessor` 脱敏截断
 5. ① reactor 自动传播 + ② `ContextSnapshot` 包装 `MdHybridSearchService` 并行检索 + ③ 关异步 tool manager → 验证 LLM/retrieval span 挂树

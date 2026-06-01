@@ -329,7 +329,7 @@ User user = userMapper.findById(id)
 
 ### 多 EmbeddingModel 冲突处理
 
-系统同时启用 DashScope 和 MiniMax，两个自动配置各自注册了 `EmbeddingModel` bean，加上 `AiModelConfig` 手工声明的 `minimaxEmbeddingModel`，共 3 个候选，导致 MilvusVectorStore 自动装配歧义。
+DashScope embedding 自动配置注册 `dashscopeEmbeddingModel`。当 classpath 上同时存在其他 `EmbeddingModel` 候选（如 OpenAI embedding 自动配置在配了 `OPENAI_API_KEY` 时也会注册一个 bean）时，MilvusVectorStore 按类型注入会产生歧义。
 
 **解决方案**（`AiModelConfig.embeddingModelPrimaryPostProcessor`）：使用 `BeanFactoryPostProcessor` 在 bean 实例化前将 `dashscopeEmbeddingModel` 的 bean 定义设为 `primary = true`，Milvus 即可唯一选中它。其他 EmbeddingModel bean 仍可通过 `@Qualifier` 按名称注入，供 `ModelProviderResolver` 使用。
 
@@ -341,7 +341,7 @@ User user = userMapper.findById(id)
 
 | 配置项 | 默认值 |
 |--------|--------|
-| `enterprise.kb.ai.default-provider` | `DASHSCOPE` |
+| `enterprise.kb.ai.default-provider` | `LLAMA_CPP` |
 | `enterprise.kb.ai.default-embedding-provider` | `DASHSCOPE` |
 
 ---

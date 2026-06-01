@@ -22,7 +22,7 @@
 ┌──────▼──┐  ┌────▼──────┐  ┌────▼──────────┐
 │ MyBatis │  │  Milvus   │  │ AI Providers  │
 │  (PG)   │  │ md_kb_chunks │ DashScope     │
-│         │  │ (Spring AI│  │ MiniMax       │
+│         │  │ (Spring AI│  │ llama.cpp     │
 │         │  │ 自动配置  │  │ Anthropic     │
 │         │  │ excluded) │  │               │
 └──────┬──┘  └───────────┘  └───────────────┘

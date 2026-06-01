@@ -35,7 +35,7 @@ POST /api/v1/admin/eval-runs
 {
   "caseTag": "after-sales",
   "service": "MdAgenticQnAService",
-  "modelProvider": "MINIMAX",
+  "modelProvider": "LLAMA_CPP",
   "ragasMetrics": ["faithfulness", "answer_relevancy", "context_precision"]
 }
 ```

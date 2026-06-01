@@ -17,7 +17,7 @@ QA 接口分两组路径，**问答** 在 `/md-qa` 下，**会话管理** 在 `/
 {
   "question": "如何申请退款？",
   "sessionId": "uuid（可选，传入延续多轮对话）",
-  "modelProvider": "MINIMAX",
+  "modelProvider": "LLAMA_CPP",
   "topK": 5
 }
 ```

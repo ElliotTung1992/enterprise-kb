@@ -23,7 +23,7 @@ _Last updated: 2026-05-31_
 
 ### 关键代码路径
 - 流水线：`CustomerAssistantServiceImpl.routedChat`（攻击守卫 → 状态/硬规则 → `DomainRouterService` → `DomainHandler` 分派 → secondary 反问 → 持久化）
-- 路由器：`DomainRouterServiceImpl`，一次 MINIMAX 调用，输出 `PRIMARY|SECONDARY_CSV|RUNNER_UP|EVIDENCE`，证据判 UNCLEAR
+- 路由器：`DomainRouterServiceImpl`，一次路由模型调用（默认 LLAMA_CPP），输出 `PRIMARY|SECONDARY_CSV|RUNNER_UP|EVIDENCE`，证据判 UNCLEAR
 - 域处理器：`AfterSalesDomainHandler`（2 工具 + HITL）、`ComplaintDomainHandler`（触发投诉 StateGraph）
 - 路由状态：`ConversationStateStore`，Redis `qa:state:{sessionId}`
 - 评估：`kb-search/src/test/resources/intent-eval/` + `DomainRouterEvalTest`（`INTENT_EVAL=true` 门控）
@@ -38,7 +38,7 @@ _Last updated: 2026-05-31_
 
 **2026-05-31 LangFuse 在线 LLM Tracing 设计** → [[features/langfuse-tracing]] · [[decisions/adr-015-langfuse-tracing]]
 - 形态：纯 Spring AI 自带 Micrometer Observation → OpenTelemetry SDK → OTLP/HTTP → 自部署 LangFuse；代码侧只产 OTLP，后端可换（与 [[decisions/adr-014-ragas-integration]] 评估侧中立立场一致）。**不重建**迁移 032 已退役的 `TraceFacade`/advisor/拦截器那套落库框架。
-- 命门 1：埋点盲区——minimax `OpenAiChatModel.builder()` 与手工 `mdVectorStore` 不注入 `ObservationRegistry` 就落 NOOP，默认链路零 trace；MiniMax 是默认 provider 所以必须先补 A/D。
+- 命门 1：埋点盲区——llama.cpp `OpenAiChatModel.builder()` 与手工 `mdVectorStore` 不注入 `ObservationRegistry` 就落 NOOP，默认链路零 trace；llama.cpp 是默认 provider 所以必须先补 A/D。
 - 命门 2：跨线程传播 ①+②+③ 同批做——① `Hooks.enableAutomaticContextPropagation()` + `ObservationThreadLocalAccessor`、② `ContextSnapshot.wrapExecutor` 包 `MdHybridSearchService` 并行检索 executor、③ `spring.ai.alibaba.tool.async.enabled=false`；否则 retrieval/LLM span 脱根成孤儿 trace。
 - Tool span 用框架原生 `ToolInterceptor`（`ReactAgent.builder().interceptors(...)`），业务工具体零侵入；graph/node 子树用 `GraphObservationLifecycleListener` 显式 register 到 service 业务根，避免双根 trace。
 - 业务上下文（`langfuse.user.id` / `langfuse.session.id` / metadata）走本地 thread-local + `LangfuseChildAttributeSpanProcessor` 复制到子 span，**不经 baggage**——避免外发给模型 provider。

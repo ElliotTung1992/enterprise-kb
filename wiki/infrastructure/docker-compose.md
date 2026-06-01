@@ -15,7 +15,7 @@ curl http://127.0.0.1:8081/actuator/health
 | `PG_PASSWORD` | PostgreSQL 密码 |
 | `JWT_SECRET` | JWT 密钥（≥32 字符，`openssl rand -hex 32`） |
 | `REDIS_PASSWORD` | Redis 密码 |
-| `MINIMAX_API_KEY` | MiniMax API Key（默认 Chat 提供商 + 路由器 Tier-1） |
+| `LLAMA_CPP_BASE_URL` / `LLAMA_CPP_MODEL` / `LLAMA_CPP_API_KEY` | llama.cpp 本地模型（默认 Chat 提供商 + 路由器 Tier-1，OpenAI 兼容接口） |
 | `DASHSCOPE_API_KEY` | DashScope API Key（默认 Embedding 提供商；rerank / 图片理解也用此） |
 
 可选：`ANTHROPIC_API_KEY`

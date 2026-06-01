@@ -83,7 +83,7 @@ POST /api/v1/customer-assistant/chat
     │
     ├─ 攻击守卫
     ├─ 状态 / 硬规则（awaiting_slot → 跳过路由）
-    ├─ DomainRouterService（Tier-1, 一次 MINIMAX 调用）
+    ├─ DomainRouterService（Tier-1, 一次路由模型调用，默认 LLAMA_CPP）
     │   → PRIMARY | SECONDARY_CSV | RUNNER_UP | EVIDENCE
     │   证据不足 → UNCLEAR
     ├─ DomainHandler 分派（Tier-2）

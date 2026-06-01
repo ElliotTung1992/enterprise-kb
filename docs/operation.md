@@ -17,6 +17,7 @@
 8. [系统管理（管理员）](#8-系统管理管理员)
 9. [API 参考](#9-api-参考)
 10. [部署与运维](#10-部署与运维)
+11. [Langfuse Tracing 启动调试](operation-langfuse-tracing.md)
 
 ---
 
@@ -797,3 +798,10 @@ logging:
     com.enterprise.kb: WARN
     org.springframework.ai: WARN
 ```
+
+### 10.9 Langfuse Tracing 运维
+
+在线 LLM tracing 使用自部署 Langfuse，经 OpenTelemetry OTLP 上报。启动、初始化、登录、trace 验证和常见故障处理见：
+
+- [Langfuse Tracing 启动调试操作手册](operation-langfuse-tracing.md)
+- [Langfuse Tracing 验收报告](acceptance-langfuse-tracing.md)
