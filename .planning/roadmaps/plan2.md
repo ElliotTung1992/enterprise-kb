@@ -235,7 +235,7 @@ Payload 格式：
 - Top 10 高频查询词（了解用户关注热点）
 - 无结果查询（识别知识盲区，指导文档补充方向）
 - 问答平均响应时间趋势
-- 各模型调用占比（DashScope / MiniMax / OpenAI）
+- 各模型调用占比（DashScope / llama.cpp / OpenAI）
 
 ---
 
