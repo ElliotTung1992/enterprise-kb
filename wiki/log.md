@@ -1,5 +1,13 @@
 # Wiki Ingest Log
 
+## 2026-06-02 | ingest | LangFuse Input/Output 映射设计
+- Source: `docs/design-langfuse-io-mapping.md`（+ `docs/design-langfuse-tracing.md` 已由现有页覆盖，仅交叉引用）
+- Summary: [[features/langfuse-io-mapping]]
+- Pages created: [[features/langfuse-io-mapping]]
+- Pages updated: [[features/langfuse-tracing]]（加子设计链接 + event/attribute 待验证项补注）、[[Home]]（功能行加新页）
+- Key insight: io-mapping 是 langfuse-tracing 落地后的补齐子设计——现状是 trace 结构有了但 `observations.input/output` 全 NULL，只知"调用发生"不知"问了/答了什么"。方案两阶段：Phase 1 给项目自建业务 span（`kb.qa.ask*` / `kb.retrieval.*` / `gen_ai.tool.execution` / `kb.ingest.*`）经 `TracingSupport` 直写 `langfuse.observation.input/output`（脱敏收口在 TracingSupport，绕开 Spring AI event/attribute 不确定性）；Phase 2 才用 `ObservationHandler<ChatModelObservationContext>` PoC 评估自动 generation span。embedding span 明确不写 input/output。
+- 注：`design-langfuse-tracing.md` 内容已由 [[features/langfuse-tracing]] + [[decisions/adr-015-langfuse-tracing]] 完整覆盖，本轮未重复建页。
+
 ## 2026-05-31 | maintenance | API 文档覆盖 + tech-stack 同步
 - Type: lint / coverage
 - Trigger: 二次盘点发现 11 个 controller 仅 5 个有 api 文档，且 search 端点早已删除

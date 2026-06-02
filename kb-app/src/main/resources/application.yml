@@ -151,6 +151,18 @@ enterprise:
       max-completion-chars: ${KB_TRACING_MAX_COMPLETION_CHARS:8000}
       max-tool-chars: ${KB_TRACING_MAX_TOOL_CHARS:4000}
       max-retrieval-chars: ${KB_TRACING_MAX_RETRIEVAL_CHARS:4000}
+      # 基础设施 span 黑名单：observation name 命中以下任一前缀即不进 trace（大小写不敏感前缀匹配）。
+      # 面向 Langfuse 使用场景过滤已知基础设施噪音；业务链路（kb.* / chat * / embedding * / gen_ai.* /
+      # md-documents/upload / md-qa）与未知 observation 默认放行。
+      # 排查 Security/Scheduler 问题时，可临时清空 KB_TRACING_EXCLUDED_OBSERVATION_NAME_PREFIXES（逗号分隔，
+      # 整体覆盖此列表）恢复基础设施 span 可见。
+      excluded-observation-name-prefixes:
+        - "task complaint-deadline-scheduler"
+        - "security filterchain"
+        - "authorize request"
+        - "authorize method"
+        - "secured request"
+        - "http get /actuator/health"
     jwt:
       secret: ${JWT_SECRET:e25007bd691e02e014a1809d87fcda0fa1e9800f0accd3d2a5be68298b96833f}
       access-token-expiry-minutes: 60

@@ -56,7 +56,7 @@ FORMAT Vertical"
 
 ### 2. 过滤非业务链路噪音
 
-**状态**：未完成
+**状态**：代码已落地（编译通过、单测 24/24 通过），运行态待起栈联调验收。设计见 `docs/design-langfuse-noise-filter.md`。实现：`ExcludedObservationNamePredicate`（按 observation name 大小写不敏感前缀黑名单 → NOOP）+ `TracingProperties.excludedObservationNamePrefixes` + `application.yml` 默认黑名单（env `KB_TRACING_EXCLUDED_OBSERVATION_NAME_PREFIXES` 整体覆盖）。
 
 **现象**：
 

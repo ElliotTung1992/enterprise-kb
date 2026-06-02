@@ -69,7 +69,8 @@ public class MdDocumentServiceImpl implements MdDocumentService {
         document.setId(UUID.randomUUID());
         document.setSpaceId(spaceId);
         document.setUploadedBy(userId);
-        document.setTitle(sanitizeFilename(file.getOriginalFilename()));
+        // 标题用于展示/引用，直接保留原始文件名（含中文）；sanitizeFilename 仅用于对象存储 key
+        document.setTitle(file.getOriginalFilename());
         document.setOriginalFilename(file.getOriginalFilename());
         document.setFileSizeBytes(file.getSize());
         document.setMimeType(detectMimeType(file));

@@ -2,6 +2,7 @@
 
 > 状态：代码已落地编译通过，运行态未验证
 > 设计文档：`docs/design-langfuse-tracing.md`
+> 子设计：[[features/langfuse-io-mapping]]（补齐 input/output 正文，Phase 1 待实现）
 > 架构决策：[[decisions/adr-015-langfuse-tracing]]
 > 前置评估侧 ADR：[[decisions/adr-014-ragas-integration]]（"备选方案"标记的 LangFuse 自部署即本方案）
 > 已退役的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 退役，落库形态废弃）
@@ -203,7 +204,7 @@ graph-core 内部为 reactive/异步生成器，classpath 上有 `DashScopeAsync
 
 **风险边界**：自部署 + 区内 + 访问控制只能降低数据出境与第三方可见性风险，**不能替代脱敏**；LangFuse、ClickHouse 备份和运维账号仍可能看到 trace 内容。
 
-**待验证**：tracer 在场时 Spring AI 把 prompt/completion 写成 span **event**，而 LangFuse 认 `gen_ai.*` / `langfuse.observation.input/output` **attribute**——可能导致 LangFuse 详情页 input/output 为空。先按默认跑一版验证，必要时加自定义 `SpanProcessor` 做 attribute 映射。
+**待验证**：tracer 在场时 Spring AI 把 prompt/completion 写成 span **event**，而 LangFuse 认 `gen_ai.*` / `langfuse.observation.input/output` **attribute**——可能导致 LangFuse 详情页 input/output 为空。先按默认跑一版验证，必要时加自定义 `SpanProcessor` 做 attribute 映射。子设计 [[features/langfuse-io-mapping]] 的 Phase 1 已确定走业务 span 直写 `langfuse.observation.input/output` 绕开 event/attribute 不确定性；自动 generation span 的补齐留在 Phase 2 PoC。
 
 ## 共享 tracing 工具（`kb-common`）
 

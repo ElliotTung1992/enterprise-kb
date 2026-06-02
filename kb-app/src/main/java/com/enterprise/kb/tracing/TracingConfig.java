@@ -17,7 +17,8 @@ import reactor.core.publisher.Hooks;
  *   <li><b>①</b> reactor 自动上下文传播开关，使根 Observation 与 {@link com.enterprise.kb.common.tracing.TracingContextHolder}
  *       顺 reactor context 流进 graph-core 内部线程（覆盖 LLM span）；</li>
  *   <li>{@link SensitiveDataObservationFilter}：进 trace 高基数 tag 的脱敏 + 截断兜底；</li>
- *   <li>{@link LangfuseChildAttributeSpanProcessor}：把业务根 span 的 LangFuse 属性复制到子 span。</li>
+ *   <li>{@link LangfuseChildAttributeSpanProcessor}：把业务根 span 的 LangFuse 属性复制到子 span；</li>
+ *   <li>{@link ExcludedObservationNamePredicate}：基础设施 span 噪音黑名单过滤。</li>
  * </ul>
  *
  * <p>OTLP 导出器、采样器、{@code BatchSpanProcessor} 由 Spring Boot 的 OTLP tracing 自动配置依据
@@ -65,5 +66,17 @@ public class TracingConfig {
     @Bean
     public LangfuseChildAttributeSpanProcessor langfuseChildAttributeSpanProcessor() {
         return new LangfuseChildAttributeSpanProcessor();
+    }
+
+    /**
+     * 基础设施 span 噪音黑名单过滤 predicate（design-langfuse-noise-filter）。命中黑名单前缀的
+     * observation 直接 NOOP，不生成 span。作为 {@code ObservationPredicate} bean 被 Spring Boot
+     * 的 {@code ObservationAutoConfiguration} 自动收集进 {@code ObservationRegistry}。
+     *
+     * @return ObservationPredicate
+     */
+    @Bean
+    public ExcludedObservationNamePredicate excludedObservationNamePredicate() {
+        return new ExcludedObservationNamePredicate(properties.getExcludedObservationNamePrefixes());
     }
 }

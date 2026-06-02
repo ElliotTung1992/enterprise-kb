@@ -2,6 +2,9 @@ package com.enterprise.kb.tracing;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 在线 LLM Tracing 配置（ADR-015）。
  *
@@ -25,6 +28,13 @@ public class TracingProperties {
 
     /** 检索上下文进 trace 的字符上限。 */
     private int maxRetrievalChars = 4000;
+
+    /**
+     * 基础设施 span 黑名单前缀（design-langfuse-noise-filter）。observation name 命中以下任一
+     * 前缀即不进 trace（大小写不敏感前缀匹配）。默认空，规则值见 {@code application.yml}；
+     * 清空即恢复全部基础设施 observation 可见，用于排查 Security/Scheduler 问题。
+     */
+    private List<String> excludedObservationNamePrefixes = new ArrayList<>();
 
     public boolean isEnabled() {
         return enabled;
@@ -64,5 +74,13 @@ public class TracingProperties {
 
     public void setMaxRetrievalChars(int maxRetrievalChars) {
         this.maxRetrievalChars = maxRetrievalChars;
+    }
+
+    public List<String> getExcludedObservationNamePrefixes() {
+        return excludedObservationNamePrefixes;
+    }
+
+    public void setExcludedObservationNamePrefixes(List<String> excludedObservationNamePrefixes) {
+        this.excludedObservationNamePrefixes = excludedObservationNamePrefixes;
     }
 }
