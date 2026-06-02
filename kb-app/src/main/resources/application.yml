@@ -61,7 +61,7 @@ spring:
           model: text-embedding-v2
       rerank:
         options:
-          model: gte-rerank
+          model: gte-rerank-v2
 
     anthropic:
       api-key: ${ANTHROPIC_API_KEY:}
