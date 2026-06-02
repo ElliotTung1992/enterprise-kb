@@ -1,6 +1,13 @@
 # Hot Cache
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-02_
+
+## 最近 ingest
+
+**2026-06-02 LangFuse Input/Output 映射设计** → [[features/langfuse-io-mapping]]
+- [[features/langfuse-tracing]] 的补齐子设计：trace 结构有了但 `observations.input/output` 全 NULL，看不到问/答/检索/工具/入库正文。
+- Phase 1：项目自建业务 span（`kb.qa.ask*` / `kb.retrieval.*` / `gen_ai.tool.execution` / `kb.ingest.*`）经 `TracingSupport` 直写 `langfuse.observation.input/output`，脱敏收口在 TracingSupport，绕开 Spring AI event/attribute 不确定性。Phase 2 才 PoC 自动 generation span。embedding span 不写 input/output（D4）。
+- 姊妹设计待办：基础设施 span 噪音过滤 `docs/design-langfuse-noise-filter.md`（尚未建页 / 实现）。
 
 ## 最近工作焦点
 
