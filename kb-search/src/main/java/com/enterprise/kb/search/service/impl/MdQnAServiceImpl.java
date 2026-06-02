@@ -1,5 +1,6 @@
 package com.enterprise.kb.search.service.impl;
 
+import com.enterprise.kb.common.tracing.SensitiveDataRedactor;
 import com.enterprise.kb.common.tracing.TracingAttributes;
 import com.enterprise.kb.common.tracing.TracingContextHolder;
 import com.enterprise.kb.common.tracing.TracingSupport;
@@ -35,6 +36,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Markdown 结构感知问答服务实现。
@@ -54,6 +57,15 @@ public class MdQnAServiceImpl implements MdQnAService {
 
     @Value("${enterprise.kb.tracing.enabled:false}")
     private boolean tracingEnabled;
+
+    @Value("${enterprise.kb.tracing.max-prompt-chars:8000}")
+    private int maxPromptChars;
+
+    @Value("${enterprise.kb.tracing.max-completion-chars:8000}")
+    private int maxCompletionChars;
+
+    @Value("${enterprise.kb.tracing.max-retrieval-chars:4000}")
+    private int maxRetrievalChars;
 
     private final ModelProviderResolver modelProviderResolver;
     private final MdHybridSearchService hybridSearchService;
@@ -81,6 +93,8 @@ public class MdQnAServiceImpl implements MdQnAService {
                 .sessionId(sessionId)
                 .spaceId(spaceId)
                 .modelProvider(req.modelProvider() != null ? req.modelProvider() : "DEFAULT")
+                .traceInput(req.question(), maxPromptChars)
+                .traceOutputFrom((QnAResponse resp) -> resp.answer(), maxCompletionChars)
                 .observe(() -> doAsk(spaceId, req, sessionId));
     }
 
@@ -128,6 +142,8 @@ public class MdQnAServiceImpl implements MdQnAService {
         String provider = req.modelProvider() != null ? req.modelProvider() : "DEFAULT";
         Map<String, String> attrs = businessAttrs(currentUserIdQuietly(), sessionId, spaceId, provider);
         StringBuilder answerBuffer = new StringBuilder();
+        AtomicBoolean completed = new AtomicBoolean(false);
+        AtomicReference<Throwable> errorRef = new AtomicReference<>();
         Observation observation = Observation.createNotStarted("kb.qa.ask.stream", observationRegistry);
         attrs.forEach((key, value) -> {
             if (TracingAttributes.LANGFUSE_USER_ID.equals(key) || TracingAttributes.LANGFUSE_SESSION_ID.equals(key)) {
@@ -136,6 +152,9 @@ public class MdQnAServiceImpl implements MdQnAService {
                 observation.lowCardinalityKeyValue(key, value);
             }
         });
+        // trace input：用户问题，进 span 前脱敏截断（input/output 映射 D2 / D3）
+        observation.highCardinalityKeyValue(TracingAttributes.TRACE_INPUT,
+                SensitiveDataRedactor.redactAndTruncate(req.question(), maxPromptChars));
         return Flux.using(
                 observation::start,
                 obs -> {
@@ -155,6 +174,8 @@ public class MdQnAServiceImpl implements MdQnAService {
                                 .doOnNext(answerBuffer::append)
                                 .doOnComplete(() -> saveStreamExchange(
                                         sessionId, spaceId, userId, req.question(), answerBuffer.toString()))
+                                .doOnComplete(() -> completed.set(true))
+                                .doOnError(errorRef::set)
                                 .contextWrite(ctx -> ctx
                                         .put(ObservationThreadLocalAccessor.KEY, obs)
                                         .put(TracingContextHolder.KEY, attrs));
@@ -162,7 +183,21 @@ public class MdQnAServiceImpl implements MdQnAService {
                         TracingContextHolder.set(previous);
                     }
                 },
-                Observation::stop);
+                // 流终止后、span 停止前写 trace output（聚合答案），再停止
+                obs -> {
+                    Throwable error = errorRef.get();
+                    if (error != null) {
+                        obs.error(error);
+                        obs.lowCardinalityKeyValue(TracingAttributes.TRACE_METADATA_PREFIX + "status", "ERROR");
+                    } else if (completed.get()) {
+                        obs.lowCardinalityKeyValue(TracingAttributes.TRACE_METADATA_PREFIX + "status", "COMPLETED");
+                        obs.highCardinalityKeyValue(TracingAttributes.TRACE_OUTPUT,
+                                SensitiveDataRedactor.redactAndTruncate(answerBuffer.toString(), maxCompletionChars));
+                    } else {
+                        obs.lowCardinalityKeyValue(TracingAttributes.TRACE_METADATA_PREFIX + "status", "CANCELLED");
+                    }
+                    obs.stop();
+                });
     }
 
     private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId) {
@@ -199,9 +234,12 @@ public class MdQnAServiceImpl implements MdQnAService {
         List<SearchHit> childHits = TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.rerank")
                 .tag("kb.rerank.candidates", String.valueOf(candidates.size()))
                 .tag("kb.rerank.top_n", String.valueOf(childRerankTopN))
+                .input(req.question(), maxRetrievalChars)
+                .outputFrom((List<SearchHit> hits) -> RetrievalTraceSummary.summarize(hits), maxRetrievalChars)
                 .observe(() -> rerankService.rerank(req.question(), candidates, childRerankTopN));
         return TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.parent_expansion")
                 .tag("kb.parent_expansion.child_hits", String.valueOf(childHits.size()))
+                .outputFrom((List<SearchHit> parents) -> RetrievalTraceSummary.summarize(parents), maxRetrievalChars)
                 .observe(() -> parentExpansionService.expand(childHits));
     }
 

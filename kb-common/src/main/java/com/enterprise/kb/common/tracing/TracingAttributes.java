@@ -30,6 +30,27 @@ public final class TracingAttributes {
     /** 文档 ID（入库 trace 用，metadata）。 */
     public static final String META_DOCUMENT_ID = "langfuse.trace.metadata.document_id";
 
+    /**
+     * trace / observation 的 input、output 与 metadata 属性 key（design-langfuse-io-mapping D1）。
+     *
+     * <p>LangFuse OTLP ingestion 直接识别下列原生 namespace：写在 trace 根 span 的
+     * {@code langfuse.trace.input/output} 抬升为 trace 级 input/output；写在任意 span 的
+     * {@code langfuse.observation.input/output} 作为该 observation 的 input/output。
+     * metadata 以 {@code langfuse.trace.metadata.*} / {@code langfuse.observation.metadata.*} 前缀挂业务维度。</p>
+     */
+    /** trace 级 input（写在根 span）。 */
+    public static final String TRACE_INPUT = "langfuse.trace.input";
+    /** trace 级 output（写在根 span）。 */
+    public static final String TRACE_OUTPUT = "langfuse.trace.output";
+    /** observation 级 input（写在任意 span）。 */
+    public static final String OBSERVATION_INPUT = "langfuse.observation.input";
+    /** observation 级 output（写在任意 span）。 */
+    public static final String OBSERVATION_OUTPUT = "langfuse.observation.output";
+    /** trace 级 metadata 前缀。 */
+    public static final String TRACE_METADATA_PREFIX = "langfuse.trace.metadata.";
+    /** observation 级 metadata 前缀。 */
+    public static final String OBSERVATION_METADATA_PREFIX = "langfuse.observation.metadata.";
+
     private TracingAttributes() {
     }
 }

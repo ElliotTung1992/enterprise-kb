@@ -85,6 +85,12 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     @Value("${enterprise.kb.tracing.max-tool-chars:4000}")
     private int maxToolChars;
 
+    @Value("${enterprise.kb.tracing.max-prompt-chars:8000}")
+    private int maxPromptChars;
+
+    @Value("${enterprise.kb.tracing.max-completion-chars:8000}")
+    private int maxCompletionChars;
+
     private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
             .getEncoding(EncodingType.CL100K_BASE);
 
@@ -104,6 +110,8 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                 .sessionId(sessionId)
                 .spaceId(spaceId)
                 .modelProvider(req.modelProvider() != null ? req.modelProvider() : "DEFAULT")
+                .traceInput(req.question(), maxPromptChars)
+                .traceOutputFrom((QnAResponse resp) -> resp.answer(), maxCompletionChars)
                 .observe(() -> doAsk(spaceId, req, sessionId));
     }
 

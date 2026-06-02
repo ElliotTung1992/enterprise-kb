@@ -47,6 +47,9 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
     @Value("${enterprise.kb.tracing.enabled:false}")
     private boolean tracingEnabled;
 
+    @Value("${enterprise.kb.tracing.max-retrieval-chars:4000}")
+    private int maxIngestChars;
+
     /**
      * 异步执行 Markdown 结构化入库。
      *
@@ -57,14 +60,20 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
     public void ingest(UUID documentId) {
         MdDocument document = documentMapper.findByIdAndDeletedAtIsNull(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Markdown 文档不存在: " + documentId));
-        // 入库独立根 trace（ADR-015 C6）：在虚拟线程 worker 内开根 span，不挂在上传 HTTP 请求下
+        // 入库独立根 trace（ADR-015 C6）：在虚拟线程 worker 内开根 span，不挂在上传 HTTP 请求下。
+        // trace input 写文件名 + documentId；trace output 写处理结果（状态 / chunk 数 / 错误，
+        // 经脱敏截断）；metadata 挂 filename/documentId（design-langfuse-io-mapping D6）。
         TracingSupport.root(observationRegistry, tracingEnabled, "kb.ingest.document")
                 .documentId(documentId)
                 .spaceId(document.getSpaceId())
+                .traceInput(document.getOriginalFilename() + " (" + documentId + ")", maxIngestChars)
+                .metadata("filename", document.getOriginalFilename())
+                .metadata("document_id", documentId)
+                .traceOutputFrom((IngestOutcome outcome) -> outcome.toTraceOutput(), maxIngestChars)
                 .observe(() -> doIngest(document));
     }
 
-    private void doIngest(MdDocument document) {
+    private IngestOutcome doIngest(MdDocument document) {
         UUID documentId = document.getId();
         Path localMarkdown = null;
         try {
@@ -74,6 +83,10 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
             Path markdownPath = localMarkdown;
             MarkdownStructureIngestionResult result =
                     TracingSupport.span(observationRegistry, tracingEnabled, "kb.ingest.parse")
+                            .metadata("status", "PARSED")
+                            .outputFrom((MarkdownStructureIngestionResult r) -> String.format(
+                                    "parentCount=%d, childCount=%d, assetCount=%d",
+                                    r.parents().size(), r.children().size(), r.assets().size()), maxIngestChars)
                             .observe(() -> ingestionService.parse(
                                     document.getId(), document.getSpaceId(), markdownPath.toString()));
 
@@ -81,13 +94,34 @@ public class MdDocumentIngestionWorkerImpl implements MdDocumentIngestionWorker 
             if (!result.vectorDocuments().isEmpty()) {
                 vectorStoreService.upsert(result.vectorDocuments());
             }
-            markReady(document, result.children().size());
+            int chunkCount = result.children().size();
+            markReady(document, chunkCount);
+            return new IngestOutcome(DocumentStatus.READY, chunkCount, null);
         } catch (Exception e) {
             log.warn("Markdown 文档入库失败：documentId={}", documentId, e);
             cleanupPartialIngestion(documentId);
             markFailed(document, e);
+            return new IngestOutcome(DocumentStatus.FAILED, 0, e.getMessage());
         } finally {
             deleteTempFileQuietly(localMarkdown);
+        }
+    }
+
+    /**
+     * 入库结果摘要，供 trace output 使用。
+     *
+     * @param status     最终文档状态
+     * @param chunkCount 生成的 child chunk 数
+     * @param error      失败原因（成功时为 {@code null}）
+     */
+    private record IngestOutcome(DocumentStatus status, int chunkCount, String error) {
+
+        /** 折叠成 trace output 文本：成功写状态 + chunk 数，失败写状态 + 错误。 */
+        private String toTraceOutput() {
+            if (status == DocumentStatus.FAILED) {
+                return "status=FAILED, error=" + (error != null ? error : "");
+            }
+            return "status=" + status + ", chunks=" + chunkCount;
         }
     }
 

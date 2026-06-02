@@ -41,6 +41,9 @@ public class MdHybridSearchServiceImpl implements MdHybridSearchService {
     @Value("${enterprise.kb.tracing.enabled:false}")
     private boolean tracingEnabled;
 
+    @Value("${enterprise.kb.tracing.max-retrieval-chars:4000}")
+    private int maxRetrievalChars;
+
     /**
      * 融合 Markdown 语义检索和关键词检索结果。
      *
@@ -59,11 +62,15 @@ public class MdHybridSearchServiceImpl implements MdHybridSearchService {
         CompletableFuture<SearchResponse> semanticFuture = CompletableFuture.supplyAsync(
                 () -> TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.vector")
                         .tag("kb.retrieval.top_k", String.valueOf(req.topK()))
+                        .input(req.query(), maxRetrievalChars)
+                        .outputFrom((SearchResponse r) -> RetrievalTraceSummary.summarize(r.hits()), maxRetrievalChars)
                         .observe(() -> vectorSearchService.search(spaceId, req)),
                 executor);
         CompletableFuture<SearchResponse> keywordFuture = CompletableFuture.supplyAsync(
                 () -> TracingSupport.span(observationRegistry, tracingEnabled, "kb.retrieval.keyword")
                         .tag("kb.retrieval.top_k", String.valueOf(req.topK()))
+                        .input(req.query(), maxRetrievalChars)
+                        .outputFrom((SearchResponse r) -> RetrievalTraceSummary.summarize(r.hits()), maxRetrievalChars)
                         .observe(() -> keywordSearchService.search(spaceId, req)),
                 executor);
         SearchResponse semantic = semanticFuture.join();

@@ -4,7 +4,6 @@ import com.alibaba.cloud.ai.graph.agent.interceptor.ToolCallHandler;
 import com.alibaba.cloud.ai.graph.agent.interceptor.ToolCallRequest;
 import com.alibaba.cloud.ai.graph.agent.interceptor.ToolCallResponse;
 import com.alibaba.cloud.ai.graph.agent.interceptor.ToolInterceptor;
-import com.enterprise.kb.common.tracing.SensitiveDataRedactor;
 import com.enterprise.kb.common.tracing.TracingSupport;
 import io.micrometer.observation.ObservationRegistry;
 
@@ -15,7 +14,9 @@ import io.micrometer.observation.ObservationRegistry;
  * per-tool-call 粒度产出 {@code gen_ai.tool.execution} span，业务工具体（{@code searchKnowledgeBase} /
  * {@code readFullSection}）零侵入。挂载方式：{@code ReactAgent.builder().interceptors(...)}。</p>
  *
- * <p>入参经 {@link SensitiveDataRedactor} 脱敏 + 截断后入 span；工具执行抛异常时由 Observation 自动记录。</p>
+ * <p>入参（tool arguments）写 {@code langfuse.observation.input}、返回（tool result）写
+ * {@code langfuse.observation.output}，均由 {@link TracingSupport} 内置脱敏 + 截断
+ * （design-langfuse-io-mapping D2）；工具执行抛异常时由 Observation 自动记录。</p>
  */
 public class TracingToolInterceptor extends ToolInterceptor {
 
@@ -37,8 +38,8 @@ public class TracingToolInterceptor extends ToolInterceptor {
         return TracingSupport.span(observationRegistry, true, "gen_ai.tool.execution")
                 .tag("gen_ai.tool.name", request.getToolName())
                 .tag("gen_ai.tool.call.id", request.getToolCallId())
-                .highTag("gen_ai.tool.input",
-                        SensitiveDataRedactor.redactAndTruncate(request.getArguments(), maxToolChars))
+                .input(request.getArguments(), maxToolChars)
+                .outputFrom((ToolCallResponse resp) -> resp.getResult(), maxToolChars)
                 .observe(() -> handler.call(request));
     }
 }

@@ -69,13 +69,15 @@ spring:
         options:
           model: claude-sonnet-4-5
 
-    # 在线 Tracing（ADR-015）：LLM 调用正文进 trace 的开关，随总开关联动；
-    # 进 trace 的正文由 SensitiveDataObservationFilter 做 MVP 级脱敏 + 长度硬上限。
+    # Spring AI 官方 prompt/completion 应用日志开关（design-langfuse-io-mapping D3）。
+    # 与 tracing 总开关解耦，默认全关：这些开关只把正文打进【应用日志】，不会让 LangFuse
+    # 出现 input/output，也不经项目的脱敏收口。LangFuse input/output 由本项目业务 span
+    # （TracingSupport.traceInput/outputFrom 等，内置脱敏截断）负责写入。
     chat:
       observations:
-        log-prompt: ${KB_TRACING_ENABLED:false}
-        log-completion: ${KB_TRACING_ENABLED:false}
-        include-error-logging: ${KB_TRACING_ENABLED:false}
+        log-prompt: ${KB_AI_LOG_PROMPT:false}
+        log-completion: ${KB_AI_LOG_COMPLETION:false}
+        include-error-logging: ${KB_AI_LOG_ERROR:false}
 
     # ADR-015 跨线程传播 ③：关闭 DashScope 异步 tool calling manager，
     # 工具同步在调用线程执行，最大化 thread-local 直接命中、减少 span 脱树的不确定性。
