@@ -3,7 +3,7 @@
 > **重要变更（标准 RAG 退役）**：标准（非 Markdown）RAG 竖井已全部下线。文档上传与问答仅支持
 > **Markdown 结构感知 RAG**，接口前缀由 `/documents`、`/qa`、`/search` 迁移为 `/md-documents`、
 > `/md-qa`（会话管理仍为两竖井共享的 `/qa/sessions`）。原“搜索”“标签与知识图谱”功能及其接口已移除。
-> 设计见 `docs/design-md-structure-rag.md`。
+> 设计见 `docs/md-structure-rag.md`。
 
 ## 目录
 
@@ -17,7 +17,7 @@
 8. [系统管理（管理员）](#8-系统管理管理员)
 9. [API 参考](#9-api-参考)
 10. [部署与运维](#10-部署与运维)
-11. [Langfuse Tracing 启动调试](operation-langfuse-tracing.md)
+11. [Langfuse Tracing 启动调试](langfuse-tracing.md#第四部分--操作手册启动--调试)
 
 ---
 
@@ -69,10 +69,14 @@ docker compose build app
 ```bash
 PG_PASSWORD=your_strong_password          # 数据库密码（必填）
 JWT_SECRET=your_random_256bit_hex         # JWT 密钥，至少 32 字符（必填）
-DASHSCOPE_API_KEY=your_dashscope_key      # 默认 AI 提供商——通义千问（必填）
+DASHSCOPE_API_KEY=your_dashscope_key      # 默认 embedding / rerank 提供商——通义千问（必填）
 
-# 可选 AI 提供商（至少配置一个）
-MINIMAX_API_KEY=
+# 默认 chat 提供商——本地 llama.cpp（OpenAI 兼容接口）
+LLAMA_CPP_BASE_URL=http://localhost:8079
+LLAMA_CPP_MODEL=qwen3-vl-8b-instruct
+LLAMA_CPP_API_KEY=local
+
+# 可选 AI 提供商
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 ```
@@ -274,7 +278,7 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId} \
 ## 4. Markdown 文档管理
 
 > 系统仅支持 **Markdown（`.md`）文档**。接口前缀为 `/api/v1/spaces/{spaceId}/md-documents`。
-> 入库按文档结构（H1-H3）做 small-to-big 父子切分（设计见 `docs/design-md-structure-rag.md`）。
+> 入库按文档结构（H1-H3）做 small-to-big 父子切分（设计见 `docs/md-structure-rag.md`）。
 
 ### 4.1 上传文档
 
@@ -381,13 +385,13 @@ AI 问答基于 Markdown 结构感知 RAG：先用混合检索（向量 + 关键
 
 ### 6.3 支持的 AI 模型
 
-| 提供商 | 特点 | 需要密钥 |
+| 提供商 | 特点 | 需要配置 |
 |--------|------|----------|
-| MiniMax（默认 chat） | 中英文均衡，性价比高 | MINIMAX_API_KEY |
+| llama.cpp（默认 chat） | 本地部署，OpenAI 兼容接口，零调用成本 | LLAMA_CPP_BASE_URL / LLAMA_CPP_MODEL |
 | DashScope | 通义千问；同时提供 embedding（默认）与 rerank | DASHSCOPE_API_KEY |
 | Anthropic | Claude，长文本理解出色 | ANTHROPIC_API_KEY |
 
-> 通过请求体 `modelProvider`（`MINIMAX` / `DASHSCOPE` / `ANTHROPIC`）切换 chat 模型；embedding 固定用 DashScope。
+> 通过请求体 `modelProvider`（`LLAMA_CPP` / `DASHSCOPE`）切换 chat 模型；不传则用默认 `LLAMA_CPP`。embedding 固定用 DashScope。
 
 ### 6.4 问答接口（阻塞式）
 
@@ -397,7 +401,7 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask \
   -H "Content-Type: application/json" \
   -d '{
     "question": "我们的数据库连接池默认最大连接数是多少？",
-    "modelProvider": "MINIMAX",
+    "modelProvider": "LLAMA_CPP",
     "topK": 5
   }'
 ```
@@ -418,7 +422,7 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask \
         "score": 0.94
       }
     ],
-    "modelUsed": "MINIMAX",
+    "modelUsed": "LLAMA_CPP",
     "tokensUsed": 856
   }
 }
@@ -437,7 +441,7 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask \
   -d '{
     "question": "那么最小空闲连接数呢？",
     "sessionId": "上一次返回的 session-uuid",
-    "modelProvider": "MINIMAX",
+    "modelProvider": "LLAMA_CPP",
     "topK": 5
   }'
 ```
@@ -465,15 +469,14 @@ LLM 作为 Agent 自主决策，双工具 `searchKnowledgeBase`（搜 child 片�
 curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/agentic \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
-  -d '{"question": "对比安装章节与升级章节对依赖版本的要求", "modelProvider": "MINIMAX"}'
+  -d '{"question": "对比安装章节与升级章节对依赖版本的要求", "modelProvider": "LLAMA_CPP"}'
 ```
 
 返回结构与阻塞式问答一致（含 `answer` / `citations` / `sessionId`）。
 
 ### 6.8 会话管理
 
-每次问答均自动创建或续写会话记录（标题取问题前 50 字），无需手动操作。会话由标准 RAG 与 Markdown RAG
-共用同一张 `qa_sessions` 表，因此以下接口前缀仍为 `/qa/sessions`（非 `/md-qa`）。
+每次问答都会自动创建或续写会话记录（标题取问题前 50 字），无需手动操作。会话统一存放在 `qa_sessions` 表中——这张表历史上由标准 RAG 与 Markdown RAG 两条竖井共用，因此会话管理的接口前缀沿用 `/qa/sessions`，而非 `/md-qa`。
 
 **查看会话列表**：
 
@@ -744,7 +747,7 @@ SELECT * FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 10;
 
 ### 10.5 向量维度配置
 
-当前配置使用 1536 维向量（DashScope `text-embedding-v2` / MiniMax embedding 均兼容）。如需修改，需同步更新 `application.yml` 中的 `embedding-dimension` 并**重建** `md_kb_chunks` 集合（现有数据需重新向量化）。
+当前配置使用 1536 维向量（DashScope `text-embedding-v2`）。如需修改，需同步更新 `application.yml` 中的 `embedding-dimension` 并**重建** `md_kb_chunks` 集合（现有数据需重新向量化）。
 
 ### 10.6 文件存储
 
@@ -803,5 +806,5 @@ logging:
 
 在线 LLM tracing 使用自部署 Langfuse，经 OpenTelemetry OTLP 上报。启动、初始化、登录、trace 验证和常见故障处理见：
 
-- [Langfuse Tracing 启动调试操作手册](operation-langfuse-tracing.md)
-- [Langfuse Tracing 验收报告](acceptance-langfuse-tracing.md)
+- [Langfuse Tracing 启动调试操作手册](langfuse-tracing.md#第四部分--操作手册启动--调试)
+- [Langfuse Tracing 验收报告](langfuse-tracing.md#第五部分--验收报告)

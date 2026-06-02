@@ -9,6 +9,7 @@ import com.enterprise.kb.search.service.RerankService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -29,6 +30,9 @@ public class RerankServiceImpl implements RerankService {
 
     /** 传给 Rerank 模型的单条文档最大字符数，避免超出模型 token 限制 */
     private static final int MAX_EXCERPT_CHARS = 500;
+
+    @Value("${spring.ai.dashscope.rerank.options.model:gte-rerank-v2}")
+    private String rerankModelName;
 
     /**
      * 对候选文档列表按与问题的相关性重新排序，返回 topN 条。
@@ -55,6 +59,7 @@ public class RerankServiceImpl implements RerankService {
             }
 
             DashScopeRerankOptions options = DashScopeRerankOptions.builder()
+                    .withModel(rerankModelName)
                     .withTopN(effectiveTopN)
                     .withReturnDocuments(false)
                     .build();

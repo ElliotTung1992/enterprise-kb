@@ -42,7 +42,7 @@ There are currently **no automated tests** in this project.
 | Redis 7 | QA session chat history cache (TTL 24h) | 6379 |
 | MinIO | Milvus object storage backend | 9000 |
 
-> **标准（非 Markdown）RAG 竖井已全退役**（迁移 031）。原 `DocumentController` / `DocumentIngestionPipeline` / `HybridSearch` / `Semantic`+`KeywordSearch` / `QnAService` / `AgenticQnAService`、`kb_chunks` 集合、`documents`/`document_chunks` 等 6 张表、以及 `kb-knowledge-graph` 模块均已删除。系统现仅保留 **Markdown 结构感知 RAG 竖井**（设计见 `docs/design-md-structure-rag.md`）。
+> **标准（非 Markdown）RAG 竖井已全退役**（迁移 031）。原 `DocumentController` / `DocumentIngestionPipeline` / `HybridSearch` / `Semantic`+`KeywordSearch` / `QnAService` / `AgenticQnAService`、`kb_chunks` 集合、`documents`/`document_chunks` 等 6 张表、以及 `kb-knowledge-graph` 模块均已删除。系统现仅保留 **Markdown 结构感知 RAG 竖井**（设计见 `docs/md-structure-rag.md`）。
 
 ### Document Ingestion Pipeline (Markdown)
 
@@ -84,7 +84,7 @@ Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`�
 
 ### Online LLM Tracing (LangFuse via OTLP) — ADR-015
 
-在线分布式 LLM tracing：**Micrometer Observation → OpenTelemetry SDK → OTLP/HTTP → 自部署 LangFuse**。「一次请求 = 一棵 span 树」。设计见 `docs/design-langfuse-tracing.md`，决策见 `wiki/decisions/adr-015-langfuse-tracing.md`。
+在线分布式 LLM tracing：**Micrometer Observation → OpenTelemetry SDK → OTLP/HTTP → 自部署 LangFuse**。「一次请求 = 一棵 span 树」。设计见 `docs/langfuse-tracing.md`，决策见 `wiki/decisions/adr-015-langfuse-tracing.md`。
 
 - **总开关**：`enterprise.kb.tracing.enabled`（环境变量 `KB_TRACING_ENABLED`，默认 **false**）。关闭时 `management.tracing.enabled=false` → Observation 不产 span，零开销；自定义 tracing bean（reactor 传播 hook / 脱敏 filter / 业务属性 SpanProcessor）均经 `@ConditionalOnProperty` 不装配。导出器仅当 `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` 就绪时才装配（Spring Boot OTLP 自动配置）。
 - **依赖**：`kb-app` 引 `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`（版本由 Spring Boot BOM 管理）。
@@ -128,7 +128,7 @@ MyBatis mapper XMLs live in each module's `src/main/resources/mapper/`. The glob
 |------|------|
 | `docs/operation.md` | 用户操作手册：功能说明、API 接口速查、部署运维 |
 | `docs/er-diagram.puml` | 数据库 ER 图（PlantUML 格式，基础用户/空间/会话体系；标准 RAG 表已退役不再绘制） |
-| `docs/design-md-structure-rag.md` | Markdown 结构感知 RAG（small-to-big 父子索引）设计文档 |
+| `docs/md-structure-rag.md` | Markdown 结构感知 RAG（small-to-big 父子索引）设计文档 |
 | `.planning/roadmaps/plan.md` | 可扩展内容与优化点规划（技术向：RAG/性能/质量） |
 | `.planning/roadmaps/plan2.md` | 可扩展内容与优化点规划（产品向：体验/安全/集成） |
 

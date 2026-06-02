@@ -13,14 +13,12 @@ import io.micrometer.observation.ObservationFilter;
  * {@code TracingSupport} 内按各自上限脱敏截断；本过滤器再兜一道，并覆盖框架自身写入的高基数 tag。</p>
  *
  * <p><b>覆盖边界：</b>本过滤器只作用于 observation 的 KeyValue 路径，是 KeyValue 的兜底，
- * <b>不</b>覆盖所有直接写到 span 上的 attribute。两类不经此过滤器：</p>
- * <ul>
- *   <li>业务 span 经 {@code TracingSupport.traceInput/input/traceOutputFrom/outputFrom} 写入的
- *       {@code langfuse.*.input/output}——这些在写入源头已强制脱敏截断，无需也不依赖本过滤器；</li>
- *   <li>Spring AI 在 tracer 在场时把 prompt/completion 正文写成 span <b>event</b> 而非 KeyValue，
- *       {@link ObservationFilter} 作用于 KeyValue，<b>不</b>覆盖 event。该部分正文的脱敏需在
- *       event→attribute 映射方案确定后补充自定义 SpanProcessor 处理。</li>
- * </ul>
+ * <b>不</b>覆盖所有直接写到 span 上的 attribute。业务 span 经
+ * {@code TracingSupport.traceInput/input/traceOutputFrom/outputFrom} 写入的
+ * {@code langfuse.*.input/output} 在写入源头已强制脱敏截断，无需也不依赖本过滤器。</p>
+ *
+ * <p>Spring AI ChatModel 的 prompt/completion 由 {@link ChatModelContentObservationFilter}
+ * 映射为 LangFuse KeyValue，并在映射源头按 prompt/completion 各自上限脱敏截断。</p>
  */
 public class SensitiveDataObservationFilter implements ObservationFilter {
 

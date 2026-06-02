@@ -17,6 +17,8 @@ import reactor.core.publisher.Hooks;
  *   <li><b>①</b> reactor 自动上下文传播开关，使根 Observation 与 {@link com.enterprise.kb.common.tracing.TracingContextHolder}
  *       顺 reactor context 流进 graph-core 内部线程（覆盖 LLM span）；</li>
  *   <li>{@link SensitiveDataObservationFilter}：进 trace 高基数 tag 的脱敏 + 截断兜底；</li>
+ *   <li>{@link ChatModelContentObservationFilter}：把 Spring AI ChatModel 的 prompt/completion
+ *       映射到 LangFuse observation input/output；</li>
  *   <li>{@link LangfuseChildAttributeSpanProcessor}：把业务根 span 的 LangFuse 属性复制到子 span；</li>
  *   <li>{@link ExcludedObservationNamePredicate}：基础设施 span 噪音黑名单过滤。</li>
  * </ul>
@@ -55,6 +57,16 @@ public class TracingConfig {
     public SensitiveDataObservationFilter sensitiveDataObservationFilter() {
         int maxChars = Math.max(properties.getMaxPromptChars(), properties.getMaxCompletionChars());
         return new SensitiveDataObservationFilter(maxChars);
+    }
+
+    /**
+     * 将 Spring AI ChatModel 的真实 prompt/completion 写入 LangFuse observation input/output。
+     *
+     * @return ObservationFilter
+     */
+    @Bean
+    public ChatModelContentObservationFilter chatModelContentObservationFilter() {
+        return new ChatModelContentObservationFilter(properties.getMaxPromptChars(), properties.getMaxCompletionChars());
     }
 
     /**
