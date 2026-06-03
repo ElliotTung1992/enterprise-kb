@@ -1,5 +1,15 @@
 # Wiki Ingest Log
 
+## 2026-06-03 | sync | docs/ 更新回灌（MiniMax 退役收尾）
+- Trigger: `docs/` 多篇文档刚做了 MiniMax 清理 + 语句重写，回灌 wiki 的残留事实差。
+- Pages updated:
+  - [[decisions/adr-002-milvus-vector-store]] — 1536 维理由去掉 "MiniMax embo-01"
+  - [[decisions/adr-008-intent-routing-two-tier]] — 路由廉价模型示例 MiniMax → 默认本地 `LLAMA_CPP`
+  - [[decisions/adr-014-ragas-integration]] — judge 否决项去掉 MiniMax，理由改挂"默认 chat 为 llama.cpp、judge 与生产不同源"
+  - `log.md`（2026-05-31 条）— 命门 insight 里 `minimax OpenAiChatModel.builder()` 笔误订正为 `llama.cpp`
+- Key insight: wiki 在 MiniMax 退役上**已基本同步**（`ai-rag/providers.md` 早有退役墓碑、Home/tech-stack/providers 均已标 llama.cpp 为默认 chat），本轮只补三处 ADR 历史理据 + 一处日志笔误。md Agentic 在 wiki 无矛盾（[[features/markdown-structure-rag]] 已记为已实现），docs 的散文重写不涉及 wiki 事实，未动。
+- 保留：`ai-rag/providers.md` 的 MiniMax 退役墓碑（有意保留，作"勿再引入"记录）。
+
 ## 2026-06-02 | ingest | LangFuse Input/Output 映射设计
 - Source: `docs/design-langfuse-io-mapping.md`（+ `docs/design-langfuse-tracing.md` 已由现有页覆盖，仅交叉引用）
 - Summary: [[features/langfuse-io-mapping]]
@@ -51,7 +61,7 @@
   - [[features/langfuse-tracing]]
 - Pages updated:
   - [[Home]] — 功能导航补 `langfuse-tracing` / `ragas-evaluation`，架构决策补 ADR-014/015
-- Key insight: 厂商中立 OTLP 管线 + 自部署 LangFuse + service 入口自建唯一业务根 span。**ChatModel/VectorStore 的 ObservationRegistry 是命门**——minimax `OpenAiChatModel.builder()` 和手工 `mdVectorStore` 不注入就落 NOOP，默认链路零 trace。跨线程传播必须 ①+②+③ 同批做：reactor 自动传播 + `ContextSnapshot` 包 `MdHybridSearchService` 并行检索 executor + 关 `DashScopeAsyncToolCallingManager`，否则 retrieval/LLM span 脱根成孤儿 trace。Tool span 用框架原生 `ToolInterceptor`（业务工具体零侵入），比"在 lambda 体内手写 span"或旧 `TraceToolInterceptor` 切入点更标准。业务上下文（`langfuse.user.id` / `langfuse.session.id` / metadata）走本地 thread-local + `SpanProcessor` 复制到子 span，**不经 baggage**——避免随下游 HTTP 请求外发给模型 provider。
+- Key insight: 厂商中立 OTLP 管线 + 自部署 LangFuse + service 入口自建唯一业务根 span。**ChatModel/VectorStore 的 ObservationRegistry 是命门**——llama.cpp `OpenAiChatModel.builder()` 和手工 `mdVectorStore` 不注入就落 NOOP，默认链路零 trace。跨线程传播必须 ①+②+③ 同批做：reactor 自动传播 + `ContextSnapshot` 包 `MdHybridSearchService` 并行检索 executor + 关 `DashScopeAsyncToolCallingManager`，否则 retrieval/LLM span 脱根成孤儿 trace。Tool span 用框架原生 `ToolInterceptor`（业务工具体零侵入），比"在 lambda 体内手写 span"或旧 `TraceToolInterceptor` 切入点更标准。业务上下文（`langfuse.user.id` / `langfuse.session.id` / metadata）走本地 thread-local + `SpanProcessor` 复制到子 span，**不经 baggage**——避免随下游 HTTP 请求外发给模型 provider。
 
 ## 2026-05-27 | ingest | MD 关键词检索升级 BM25 设计
 - Source: `docs/design-md-keyword-bm25.md`（+ 本会话对运行库的实测）

@@ -1,8 +1,12 @@
 # Hot Cache
 
-_Last updated: 2026-06-02_
+_Last updated: 2026-06-03_
 
 ## 最近 ingest
+
+**2026-06-03 docs/ 更新回灌（MiniMax 退役收尾）** → 见 `log.md`
+- `docs/` 做了 MiniMax 清理 + 语句重写后回灌 wiki。wiki 早已基本同步（providers 退役墓碑、llama.cpp 标默认 chat），本轮只补 3 处 ADR 历史理据（adr-002/008/014 的 MiniMax 残留）+ 1 处日志笔误。
+- md Agentic 在 wiki 无矛盾（[[features/markdown-structure-rag]] 已记为已实现）；docs 散文重写不涉 wiki 事实。
 
 **2026-06-02 LangFuse Input/Output 映射设计** → [[features/langfuse-io-mapping]]
 - [[features/langfuse-tracing]] 的补齐子设计：trace 结构有了但 `observations.input/output` 全 NULL，看不到问/答/检索/工具/入库正文。

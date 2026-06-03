@@ -36,7 +36,7 @@ tags: [adr, architecture, customer-assistant, intent-routing, domain-router]
 
 最终流水线：`攻击守卫 → DomainRouterService → 按 primaryDomain 选 DomainHandler → 委派 → 处理 clarification/HANDOFF/secondary 反问`。老 `CustomerAssistantServiceImpl` 重构成此薄流水线，不保留新老并存的双套意图逻辑。
 
-路由是 5~13 路分类，用便宜快模型（MiniMax / Qwen-Turbo 级），域内子 Agent 才用主力模型。
+路由是 5~13 路分类，用便宜快模型（默认本地 `LLAMA_CPP`，或 Qwen-Turbo 级），域内子 Agent 才用主力模型。
 
 ### 3. 路由器输出空间
 

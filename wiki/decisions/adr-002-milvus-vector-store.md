@@ -21,6 +21,6 @@ tags: [adr, vector-store, milvus, embeddings]
 
 ## 注意事项
 
-- 维度统一锁定为 1536（兼容 DashScope 和 MiniMax embo-01）
+- 维度统一锁定为 1536（DashScope embedding 即 1536 维）
 - 切换 Embedding 提供商时，需重建 `md_kb_chunks` 并重新摄入所有 md 文档
 - `mdVectorStore` 是手工 bean，需注入 `ObservationRegistry` 才有 VectorStore 自动 span（见 [[features/langfuse-tracing]] 埋点盲区 D）

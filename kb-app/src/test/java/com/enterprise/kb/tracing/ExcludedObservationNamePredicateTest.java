@@ -25,7 +25,7 @@ class ExcludedObservationNamePredicateTest {
 
     /** 与 application.yml 默认黑名单一致的规则集。 */
     private static final List<String> DEFAULT_BLACKLIST = List.of(
-            "task complaint-deadline-scheduler",
+            "tasks.scheduled.execution",
             "security filterchain",
             "authorize request",
             "authorize method",
@@ -44,7 +44,7 @@ class ExcludedObservationNamePredicateTest {
 
         @ParameterizedTest
         @ValueSource(strings = {
-                "task complaint-deadline-scheduler.check-deadlines", // 前缀盖住 .check-deadlines 后缀
+                "tasks.scheduled.execution",                         // Spring Boot 定时任务 observation name
                 "security filterchain before",                       // 前缀盖住 before/after
                 "security filterchain after",
                 "authorize request",
@@ -59,7 +59,7 @@ class ExcludedObservationNamePredicateTest {
 
         @ParameterizedTest
         @ValueSource(strings = {
-                "TASK COMPLAINT-DEADLINE-SCHEDULER.check-deadlines",
+                "TASKS.SCHEDULED.EXECUTION",
                 "Security FilterChain Before",
                 "HTTP GET /actuator/health"
         })

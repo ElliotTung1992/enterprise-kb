@@ -292,10 +292,10 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId} \
 
 **入库处理**：
 
-- 按 H1-H3 切 parent（整段 section），parent 内再切段落级 child（small-to-big：child 用于召回，parent 整段返回给 LLM）。
-- 表格做双表示：检索用逐行自然语言化文本，返回 LLM 用原始 markdown 表格。
-- Markdown 中引用的图片走图片理解（`MdImageUnderstandingService`，默认占位实现，可切换 DashScope），caption 作为 `md_document_asset` 异步补充，不阻塞正文问答。
-- 原始 `.md` 存入 MinIO。
+- 先按 H1-H3 标题把文档切成 parent（每个 parent 是一整段 section），再在 parent 内部切出段落级的 child。这就是 small-to-big 的思路：用小而精的 child 做召回，一旦命中就把整段 parent 返回给 LLM。
+- 表格采用双表示：检索时用逐行自然语言化后的文本，返回给 LLM 时则换回原始的 markdown 表格。
+- Markdown 中引用的图片会交给图片理解服务处理（`MdImageUnderstandingService`，默认是占位实现，可切换成 DashScope）；生成的 caption 作为 `md_document_asset` 异步补充进来，不阻塞正文问答。
+- 原始 `.md` 文件存入 MinIO。
 
 **上传接口**：
 
@@ -313,8 +313,8 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-documents/upload \
 PENDING（已接收）→ PROCESSING（结构切分 / child 向量化）→ READY（可问答） / FAILED（处理失败）
 ```
 
-入库流程：结构切分（parent/child + 表格线性化 + 图片理解）→ child 写入 `md_kb_chunks` 向量 +
-`md_parent_chunk` / `md_child_chunk` / `md_document_asset` 元数据。
+入库流程大致是：先做结构切分（切出 parent / child、做表格线性化、跑图片理解），然后把 child 写入
+`md_kb_chunks` 向量库，同时把 `md_parent_chunk` / `md_child_chunk` / `md_document_asset` 等元数据落库。
 
 ### 4.3 查看文档列表
 
@@ -357,12 +357,12 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/md-documents/{docum
 
 ## 5. 搜索（已下线）
 
-> 标准搜索接口（`POST /search`、`/search/keyword`、`/search/hybrid`）随标准 RAG 竖井一并下线。
+> 标准搜索接口（`POST /search`、`/search/keyword`、`/search/hybrid`）已随标准 RAG 竖井一并下线。
 >
-> Markdown 竖井不单独暴露检索端点——检索能力已并入问答：`MdHybridSearchService`（`md_kb_chunks`
-> 向量召回 + `md_child_chunk` 关键词/BM25，RRF 融合）→ rerank → parent 展开，全部在
-> [AI 问答（Markdown）](#6-ai-问答markdown) 内部完成。若需观察检索命中，可调用问答接口查看返回的
-> `citations` 字段。
+> Markdown 竖井不再单独暴露检索端点——检索能力已经整合进问答流程：先由 `MdHybridSearchService` 做混合召回
+> （`md_kb_chunks` 向量召回 + `md_child_chunk` 关键词 / BM25，再用 RRF 融合），接着 rerank，最后做 parent
+> 展开，整个过程都在 [AI 问答（Markdown）](#6-ai-问答markdown) 内部完成。如果想看清检索究竟命中了哪些内容，
+> 调用问答接口、查看返回里的 `citations` 字段即可。
 
 ---
 
@@ -370,9 +370,9 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/md-documents/{docum
 
 ### 6.1 功能说明
 
-AI 问答基于 Markdown 结构感知 RAG：先用混合检索（向量 + 关键词 RRF）召回相关 child 片段，
-经 rerank 后按 parent 折叠展开为整段 section（small-to-big），再由 LLM 结合上下文生成回答。
-回答附带来源引用（文档标题 + 章节面包屑），可溯源、可验证。接口前缀为
+AI 问答构建在 Markdown 结构感知 RAG 之上，整体分四步：先用混合检索（向量 + 关键词，RRF 融合）召回相关的
+child 片段；再经 rerank 精排；然后按 parent 把命中的 child 折叠、展开成整段 section（即 small-to-big）；
+最后由 LLM 结合这些上下文生成回答。回答会附带来源引用（文档标题 + 章节面包屑），便于溯源和核对。接口前缀为
 `/api/v1/spaces/{spaceId}/md-qa`。
 
 ### 6.2 页面操作
@@ -462,8 +462,8 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/stream \
 
 ### 6.7 Agentic 问答（多跳推理）
 
-LLM 作为 Agent 自主决策，双工具 `searchKnowledgeBase`（搜 child 片段）+ `readFullSection`
-（按需展开 parent 整段），适合需要多跳检索的复杂问题：
+这种模式下，LLM 以 Agent 的身份自主决策，手里有两个工具：`searchKnowledgeBase`（搜 child 片段）和
+`readFullSection`（按需展开某个 parent 的整段正文）。它适合那些需要多跳检索才能回答的复杂问题：
 
 ```bash
 curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/agentic \
@@ -514,9 +514,9 @@ curl -X DELETE http://localhost:8081/api/v1/spaces/{spaceId}/qa/sessions/{sessio
 
 ## 7. 标签与知识图谱（已下线）
 
-> `kb-knowledge-graph` 模块随标准 RAG 竖井一并退役，标签与知识图谱接口
-> （`/tags`、`/tags/tree`、`/tags/graph`、合并/删除标签等）及 `tags` / `document_tags` 表已全部移除。
-> Markdown 竖井按文档内部结构（H1-H3 章节）组织检索，本期不提供打标 / 文档关系 / 图谱可视化能力。
+> `kb-knowledge-graph` 模块已随标准 RAG 竖井一并退役：标签与知识图谱相关的接口
+> （`/tags`、`/tags/tree`、`/tags/graph`，以及合并 / 删除标签等）连同 `tags` / `document_tags` 表都已全部移除。
+> Markdown 竖井是按文档自身的结构（H1-H3 章节）来组织检索的，本期不提供打标、文档关系、图谱可视化这些能力。
 
 ---
 
@@ -755,7 +755,7 @@ SELECT * FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 10;
 
 ### 10.7 Markdown 图片理解运维
 
-Markdown 中引用的图片由 `MdImageUnderstandingService` 处理（默认 `NoopMdImageUnderstandingService` 占位实现，可切换 `DashScopeMdImageUnderstandingService`），生成的 caption 作为可检索文本随 child 一并入库；图片资产元数据存于 PostgreSQL `md_document_asset`，原图与原始 `.md` 存于 MinIO。
+Markdown 中引用的图片由 `MdImageUnderstandingService` 负责处理（默认是占位实现 `NoopMdImageUnderstandingService`，可切换成 `DashScopeMdImageUnderstandingService`）。它生成的 caption 会作为可检索文本，随 child 一起入库；图片资产的元数据存在 PostgreSQL 的 `md_document_asset` 表中，原图和原始 `.md` 则存在 MinIO。
 
 **清理策略**：
 
