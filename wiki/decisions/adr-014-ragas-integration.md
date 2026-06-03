@@ -51,7 +51,7 @@ tags: [adr, evaluation, ragas, rag, llm-as-judge, ci-gate, langsmith]
 
 ### 5. Judge 默认 DashScope Qwen-Max（C5）
 
-否决用 Anthropic 作 judge（中国区网络不稳）。选 Qwen-Max 的理由：DashScope 是默认 embedding 提供商，但不是默认 chat（默认 chat 为本地 llama.cpp），所以 judge 与生产 chat 不同源，self-preference bias 可接受；同时中文能力足够、调用稳定，API key 还能复用 `DASHSCOPE_API_KEY`。embedding 维持 DashScope `text-embedding-v3`，与生产一致避免分布偏移。
+否决使用境外闭源模型作 judge（中国区网络不稳）。选 Qwen-Max 的理由：DashScope 是默认 embedding 提供商，但不是默认 chat（默认 chat 为本地 llama.cpp），所以 judge 与生产 chat 不同源，self-preference bias 可接受；同时中文能力足够、调用稳定，API key 还能复用 `DASHSCOPE_API_KEY`。embedding 维持 DashScope `text-embedding-v3`，与生产一致避免分布偏移。
 
 ### 6. 数据集：regression + synthetic，production-sample 推迟（C6）
 

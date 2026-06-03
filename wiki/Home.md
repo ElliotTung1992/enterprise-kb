@@ -52,7 +52,7 @@
 | 向量数据库 | Milvus 2.4（COSINE, IVF_FLAT；活跃集合 `md_kb_chunks`） |
 | 关系数据库 | PostgreSQL 16（`tensorchord/vchord-suite` 镜像）+ Liquibase |
 | 缓存 | Redis 7（会话历史 · 客服路由状态 · ReactAgent checkpoint，TTL 24h） |
-| AI 提供商 | DashScope（默认 Embedding）· llama.cpp 本地模型（默认 Chat）· Anthropic |
+| AI 提供商 | DashScope（默认 Embedding）· llama.cpp 本地模型（默认 Chat） |
 | LLM Tracing | Micrometer Observation → OTLP → 自部署 LangFuse（`--profile tracing` 可选启用） |
 
 详见 [[architecture/tech-stack]]。

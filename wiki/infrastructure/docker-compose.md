@@ -18,8 +18,6 @@ curl http://127.0.0.1:8081/actuator/health
 | `LLAMA_CPP_BASE_URL` / `LLAMA_CPP_MODEL` / `LLAMA_CPP_API_KEY` | llama.cpp 本地模型（默认 Chat 提供商 + 路由器 Tier-1，OpenAI 兼容接口） |
 | `DASHSCOPE_API_KEY` | DashScope API Key（默认 Embedding 提供商；rerank / 图片理解也用此） |
 
-可选：`ANTHROPIC_API_KEY`
-
 ## `--profile tracing`（可选，LangFuse 在线 LLM tracing）
 
 ```bash

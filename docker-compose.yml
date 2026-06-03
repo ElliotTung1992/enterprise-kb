@@ -160,7 +160,6 @@ services:
       LLAMA_CPP_MODEL: ${LLAMA_CPP_MODEL:-qwen3-vl-8b-instruct}
       LLAMA_CPP_API_KEY: ${LLAMA_CPP_API_KEY:-local}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
       # Redis
       REDIS_HOST: redis

@@ -105,7 +105,7 @@ public final class RagasContextCollector {
 | `enterprise.kb.eval.ragas.poll-interval-seconds` | `5` | Java 侧轮询 Python jobId |
 | `enterprise.kb.eval.ragas.timeout-minutes` | `30` | 超时直接 FAILED |
 
-不用同源 chat provider 做 judge 是避免 self-preference bias；Anthropic Claude 因中国区访问稳定性问题不作默认。
+不用同源 chat provider 做 judge 是避免 self-preference bias；境外闭源模型因中国区访问稳定性问题不作默认。
 
 ## 三阶段门禁
 

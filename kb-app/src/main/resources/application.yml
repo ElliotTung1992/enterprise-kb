@@ -11,7 +11,6 @@ spring:
 
   autoconfigure:
     exclude:
-      - org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration
       # 标准 RAG 退役：排除会创建并初始化 kb_chunks 集合的自动配置；
       # Milvus 客户端改由 AppConfig.milvusClient 手动声明，仅供 md_kb_chunks 使用。
       - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration
@@ -62,12 +61,6 @@ spring:
       rerank:
         options:
           model: gte-rerank-v2
-
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY:}
-      chat:
-        options:
-          model: claude-sonnet-4-5
 
     # Spring AI 官方 prompt/completion 应用日志开关（design-langfuse-io-mapping D3）。
     # 与 tracing 总开关解耦，默认全关：这些开关只把正文打进【应用日志】，不会让 LangFuse
@@ -191,7 +184,7 @@ enterprise:
       shadow-routing-enabled: ${CUSTOMER_ASSISTANT_SHADOW_ROUTING_ENABLED:true}
     md:
       # md 关键词路算法：TRGM(默认，pg_trgm 子串相似度) / BM25(vchord_bm25 词级打分)，一键回退
-      keyword-mode: ${MD_KEYWORD_MODE:TRGM}
+      keyword-mode: ${MD_KEYWORD_MODE:BM25}
       # 索引与查询共用的 pg_tokenizer 配置名（建于运维脚本 db/manual/md-bm25-build.sql）
       bm25-tokenizer: ${MD_BM25_TOKENIZER:md_tok}
       # vchord_bm25 索引名，to_bm25query 按名引用

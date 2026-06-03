@@ -76,7 +76,7 @@ Document status transitions: `PENDING` → `PROCESSING` → `READY` / `FAILED`�
 
 - **Chat**: `dashscopeChatClient`, `llamaCppChatClient` (llama.cpp 本地模型，OpenAI 兼容接口)
 - **Embedding**: `dashscopeEmbeddingModel` (marked `@Primary` via `BeanFactoryPostProcessor`)
-- Default chat provider: `LLAMA_CPP`; default embedding: `DASHSCOPE`（`ModelProvider` 枚举：`LLAMA_CPP` / `OPENAI` / `ANTHROPIC`）
+- Default chat provider: `LLAMA_CPP`; default embedding: `DASHSCOPE`（`ModelProvider` 枚举：`LLAMA_CPP` / `OPENAI`）
 
 > **MiniMax 已退役**：项目不再使用 MiniMax，相关 bean / 依赖 / 配置 / API Key 均已移除。
 

@@ -22,7 +22,6 @@
 |--------|-----------|----------------|------|
 | DashScope（阿里云） | qwen-plus | text-embedding-v2（1536 维） | 默认 Embedding，`@Primary` |
 | llama.cpp 本地模型 | qwen3-vl-8b-instruct（OpenAI 兼容接口） | — | 默认 Chat（路由器 Tier-1 也用此） |
-| Anthropic | claude-sonnet-4-5 | — | 可选，仅 Chat |
 
 > 维度统一 1536，切换 Embedding 提供商需重建 `md_kb_chunks` 并重新摄入。
 
