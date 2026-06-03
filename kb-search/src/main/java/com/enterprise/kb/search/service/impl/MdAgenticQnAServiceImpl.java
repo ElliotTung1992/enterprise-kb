@@ -299,7 +299,8 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                 2. readFullSection(parentId)：当 child 片段相关但信息不完整时，读取完整 section。
 
                 工作规则：
-                - 先搜索精准关键词。
+                - 每一轮用户新问题都必须先调用 searchKnowledgeBase 搜索精准关键词，不能直接基于历史对话作答。
+                - 历史对话只用于理解上下文和省略指代，不能作为知识库内容或回答依据。
                 - 如果 child 片段足够回答，直接作答。
                 - 如果 child 片段只说明某个 section 相关但细节不足，读取该 parentId 的完整 section 后再答。
                 - 不要重复读取同一个 parentId。

@@ -42,6 +42,7 @@ public class ExcludedObservationNamePredicate implements ObservationPredicate {
      */
     @Override
     public boolean test(String name, Observation.Context context) {
+        System.out.println("com.enterprise.kb.tracing.ExcludedObservationNamePredicate.test:" + name);
         if (name == null || normalizedPrefixes.isEmpty()) {
             return true;
         }

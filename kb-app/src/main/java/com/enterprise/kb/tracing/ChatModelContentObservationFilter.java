@@ -6,6 +6,8 @@ import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationFilter;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.observation.ChatModelObservationContext;
@@ -64,8 +66,32 @@ public class ChatModelContentObservationFilter implements ObservationFilter {
             return "";
         }
         return prompt.getInstructions().stream()
-                .map(message -> message.getMessageType() + ": " + nullToEmpty(message.getText()))
+                .map(message -> message.getMessageType() + ":\n" + promptMessageText(message))
                 .collect(Collectors.joining("\n\n"));
+    }
+
+    private String promptMessageText(Message message) {
+        if (message instanceof AssistantMessage assistantMessage) {
+            return assistantOutputText(assistantMessage);
+        }
+        if (message instanceof ToolResponseMessage toolResponseMessage) {
+            return toolResponseText(toolResponseMessage);
+        }
+        return nullToEmpty(message.getText());
+    }
+
+    private String toolResponseText(ToolResponseMessage message) {
+        if (message.getResponses() == null) {
+            return "";
+        }
+        String responses = message.getResponses().stream()
+                .map(response -> String.join("\n",
+                        "- id: " + nullToEmpty(response.id()),
+                        "  name: " + nullToEmpty(response.name()),
+                        "  response:",
+                        indent(nullToEmpty(response.responseData()), 4)))
+                .collect(Collectors.joining("\n"));
+        return "tool_responses:\n" + responses;
     }
 
     private String completionText(ChatResponse response) {
@@ -83,19 +109,33 @@ public class ChatModelContentObservationFilter implements ObservationFilter {
 
     private String assistantOutputText(AssistantMessage message) {
         String text = nullToEmpty(message.getText());
-        if (hasText(text)) {
+        String toolCalls = message.hasToolCalls() ? message.getToolCalls().stream()
+                .map(toolCall -> String.join("\n",
+                        "- id: " + nullToEmpty(toolCall.id()),
+                        "  type: " + nullToEmpty(toolCall.type()),
+                        "  name: " + nullToEmpty(toolCall.name()),
+                        "  arguments:",
+                        indent(nullToEmpty(toolCall.arguments()), 4)))
+                .collect(Collectors.joining("\n")) : "";
+        if (!hasText(toolCalls)) {
             return text;
         }
-        if (!message.hasToolCalls()) {
-            return "";
+        String structuredToolCalls = "tool_calls:\n" + toolCalls;
+        if (!hasText(text)) {
+            return structuredToolCalls;
         }
-        return message.getToolCalls().stream()
-                .map(toolCall -> "TOOL_CALL: " + toolCall.name() + " " + nullToEmpty(toolCall.arguments()))
-                .collect(Collectors.joining("\n"));
+        return "text:\n" + indent(text, 2) + "\n" + structuredToolCalls;
     }
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String indent(String value, int spaces) {
+        String prefix = " ".repeat(spaces);
+        return nullToEmpty(value).lines()
+                .map(line -> prefix + line)
+                .collect(Collectors.joining("\n"));
     }
 
     private String nullToEmpty(String value) {

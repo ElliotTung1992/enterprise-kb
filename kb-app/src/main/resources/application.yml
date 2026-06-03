@@ -162,8 +162,10 @@ enterprise:
         - "authorize request"
         - "authorize method"
         - "secured request"
-        - "http get /**"
         - "http get /actuator/health"
+        - "http.server.requests"
+        - "spring.security"
+        - "spring.ai"
     jwt:
       secret: ${JWT_SECRET:e25007bd691e02e014a1809d87fcda0fa1e9800f0accd3d2a5be68298b96833f}
       access-token-expiry-minutes: 60
