@@ -30,6 +30,7 @@ class ExcludedObservationNamePredicateTest {
             "authorize request",
             "authorize method",
             "secured request",
+            "http get /**",
             "http get /actuator/health");
 
     /** predicate 只看 name，context 内容无关，统一传同一个空 context。 */
@@ -50,6 +51,7 @@ class ExcludedObservationNamePredicateTest {
                 "authorize request",
                 "authorize method",
                 "secured request",
+                "http get /**",
                 "http get /actuator/health"
         })
         @DisplayName("已知基础设施噪音被丢")

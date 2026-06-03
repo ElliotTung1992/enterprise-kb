@@ -2,7 +2,7 @@
 
 > 状态：代码已落地编译通过，运行态未验证
 > 设计文档：`docs/design-langfuse-tracing.md`
-> 子设计：[[features/langfuse-io-mapping]]（补齐 input/output 正文，Phase 1 待实现）
+> 子设计：Input/Output 映射已并入本页（见 [[#Input/Output 映射（子设计）]]，Phase 1 待实现）
 > 架构决策：[[decisions/adr-015-langfuse-tracing]]
 > 前置评估侧 ADR：[[decisions/adr-014-ragas-integration]]（"备选方案"标记的 LangFuse 自部署即本方案）
 > 已退役的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 退役，落库形态废弃）
@@ -204,7 +204,33 @@ graph-core 内部为 reactive/异步生成器，classpath 上有 `DashScopeAsync
 
 **风险边界**：自部署 + 区内 + 访问控制只能降低数据出境与第三方可见性风险，**不能替代脱敏**；LangFuse、ClickHouse 备份和运维账号仍可能看到 trace 内容。
 
-**待验证**：tracer 在场时 Spring AI 把 prompt/completion 写成 span **event**，而 LangFuse 认 `gen_ai.*` / `langfuse.observation.input/output` **attribute**——可能导致 LangFuse 详情页 input/output 为空。先按默认跑一版验证，必要时加自定义 `SpanProcessor` 做 attribute 映射。子设计 [[features/langfuse-io-mapping]] 的 Phase 1 已确定走业务 span 直写 `langfuse.observation.input/output` 绕开 event/attribute 不确定性；自动 generation span 的补齐留在 Phase 2 PoC。
+**待验证**：tracer 在场时 Spring AI 把 prompt/completion 写成 span **event**，而 LangFuse 认 `gen_ai.*` / `langfuse.observation.input/output` **attribute**——可能导致 LangFuse 详情页 input/output 为空。先按默认跑一版验证，必要时加自定义 `SpanProcessor` 做 attribute 映射。下文 §Input/Output 映射的 Phase 1 已确定走业务 span 直写 `langfuse.observation.input/output` 绕开 event/attribute 不确定性；自动 generation span 的补齐留在 Phase 2 PoC。
+
+## Input/Output 映射（子设计）
+
+> Phase 1 待实现。完整设计 `docs/design-langfuse-io-mapping.md`；原独立页 `features/langfuse-io-mapping` 已并入本节。
+
+**问题**：tracing 落地后 LangFuse 有 trace / generation 结构，但 ClickHouse `observations.input/output` 全 `NULL`——只知"调用发生"，看不到模型输入输出、检索上下文、工具参数、入库结果。根因是 Spring AI 自动 generation span 不把 prompt/completion 写进 LangFuse 可识别的 input/output 字段，需项目主动写入 LangFuse 原生 attribute。
+
+**契约（D1）**：统一用 LangFuse 原生 namespace（不以 OpenInference 为主契约）——`langfuse.trace.input/output`、`langfuse.observation.input/output`、`langfuse.{trace,observation}.metadata.*`。
+
+**两阶段**：
+
+- **Phase 1（本次）**：补齐**项目自建业务 span** 的 input/output，由 `TracingSupport` 在 `Observation.stop()` 前直写，不依赖 Spring AI handler 顺序。
+- **Phase 2（PoC 后定）**：评估给 Spring AI 自动 generation span（`chat *`）补 input/output——需 `ObservationHandler<ChatModelObservationContext>`、依赖 handler 执行顺序；不稳定就放弃、继续靠业务 span。
+
+**关键决策**：
+
+- **D2** 扩展 `TracingSupport.SpanBuilder` 为唯一写入入口（`traceInput`/`traceOutputFrom`/`input`/`outputFrom`/`metadata`）；`*OutputFrom` 在业务体返回后、stop 前执行，异常不写 output 但写错误 metadata。
+- **D3** 官方 `log-prompt`/`log-completion`/`include-error-logging` 从联动 `KB_TRACING_ENABLED` 拆为独立开关、**默认全关**（官方开关只把正文打进应用日志、不进 LangFuse 也不过脱敏）；LangFuse input/output 由本设计负责。
+- **D4** embedding span **不写** input/output（向量对人无价值、input 体量大风险高），验收明确允许为空。
+- **D5** 检索 output 写**结构化摘要**（score / title / section / 截断脱敏后的 excerpt），不写完整 parent，受 `KB_TRACING_MAX_RETRIEVAL_CHARS` 控制。
+- **D6** 入库写状态 / 统计：input = filename / documentId，output = `status=READY, chunks=N` 或 `FAILED, error=...`。
+
+> [!key-insight] 写入收口在 TracingSupport
+> 所有正文写入**必须**在 `TracingSupport` 方法内部调 `SensitiveDataRedactor.redactAndTruncate(...)`，调用方不能绕过脱敏直写 `langfuse.*.input/output` 高基数正文。这是脱敏唯一收口点，与上文 `SensitiveDataObservationFilter`（KeyValue 路径兜底，**不**覆盖 span event 与这些直写 attribute）互补。
+
+**写入规格（Phase 1）**：`kb.qa.ask*` = 问题 / 答案；`kb.retrieval.*` = query / 命中摘要；`gen_ai.tool.execution` = 参数 / 结果；`kb.ingest.*` = filename / status / chunkCount；均带 userId / sessionId / spaceId 等 metadata。**改动**落 `TracingAttributes` / `TracingSupport`（kb-common）+ `MdQnAServiceImpl` / `MdAgenticQnAServiceImpl` / `MdHybridSearchServiceImpl` / `TracingToolInterceptor` / `MdDocumentIngestionWorkerImpl`。
 
 ## 共享 tracing 工具（`kb-common`）
 

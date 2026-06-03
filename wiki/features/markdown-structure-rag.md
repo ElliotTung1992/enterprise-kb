@@ -3,7 +3,7 @@
 > 状态：已实现（编译通过，入库单测 7/7 通过），未端到端联调、未上线
 > 设计文档：`docs/design-md-structure-rag.md`（含 C1–C17 决策）
 > 架构决策：[[decisions/adr-012-markdown-structure-rag]]
-> 验收报告：[[features/markdown-structure-rag-acceptance]]
+> 验收：见下文 [[#验收]]（原独立验收页已并入本页）；完整逐条表 `docs/acceptance-md-structure-rag.md`
 > 兄弟功能：[[features/markdown-visual-rag-l2]]（图文/视觉 RAG，另一回事）
 > 关键词升级：[[features/md-keyword-bm25]]（本竖井关键词路 trgm → BM25，`keyword-mode` 开关切换）
 
@@ -117,15 +117,33 @@ enterprise.kb:
 - 文档删除（`MdDocumentService.deleteDocument`）：清 `md_kb_chunks` 向量 + child + parent，`md_documents` 软删除。
 - 空间删除：`@EventListener handleSpaceDeleted(SpaceDeletedEvent)` 清 md 三表 + Milvus 集合。
 
-## 实现状态
+## 验收
 
-- 入库切分单测 `MarkdownStructureIngestionServiceImplTest` 7/7 通过（H1-H3 切分、表格线性化、行内竖线非表格、大表格按行切、代码块原子、超长列表按项切、贪心打包孤儿方向）。
-- 检索 / parent 展开 / Agentic 暂无自动化测试；端到端（需起 Milvus/PG）未联调。
-- 设计决策 C1–C17 见设计文档；核心架构决策已沉淀为 [[decisions/adr-012-markdown-structure-rag]]。
+验收摘要（验收当期标准竖井尚在）：43 个文件 / +3575 行；新增迁移 `027` / `028`；新增 Milvus 集合 `md_kb_chunks`（1536 / COSINE / IVF_FLAT）；新增 REST 端点 文档 4 + 问答 3。对标准竖井零代码改动（仅 `AppConfig` 把自动配置的 `vectorStore` 标 primary）——该比较项在标准竖井随迁移 031 退役后已不再适用。
+
+完整「验收点 → 方法 → 预期」逐条表见 `docs/acceptance-md-structure-rag.md` §3，分六组：
+
+- **A 数据层**：三表 / 级联 / `pg_trgm` 索引 / `md_kb_chunks` 集合。
+- **B 入库**：上传返回 202、状态机、H1-H3 parent 切分、child 512/64 打包、表格双表示、重新入库幂等清理、`chunk_count` 回填。
+- **C 检索问答**：同步 / 流式 / Agentic 三端点、RRF 不去重、parent 折叠去重（≤5）、多窗节选、表格行组补表头、空检索兜底不编造、prompt 注入防护、多轮会话落库。
+- **D 删除清理**：文档删除清向量 + `SpaceDeletedEvent` 监听清理。
+- **E 权限**：上传 / 删除 EDITOR，查询 / 问答 VIEWER。
+- **F 配置项**：8 个默认值核对（`md-collection` / `chunking.markdown.*` / `md-parent-expansion.*`）。
+
+**自动化测试**：`MarkdownStructureIngestionServiceImplTest` 入库切分 7/7 通过（H1-H3 切分 + 面包屑前置、表格线性化、行内竖线非表格、大表格按行切、代码块原子、超长列表按项切、贪心打包孤儿方向 C17）。运行（`-am` 须加 `failIfNoSpecifiedTests=false`，否则在 `kb-common` 处因无匹配用例中断）：
+
+```bash
+mvn test -pl kb-document -am \
+  -Dtest=MarkdownStructureIngestionServiceImplTest \
+  -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+**遗留**：检索 / parent 展开 / Agentic 暂无自动化测试，需起 Milvus/PG/Redis/MinIO 手动联调；端到端 & 多轮会话回归未跑。设计决策 C1–C17 见设计文档。
+
+**本期不做**：非 `.md` 格式（标准竖井退役后整体不支持）；知识图谱打标 / 文档关系（随迁移 031 删除）；图片 / 流程图视觉理解 / OCR / 表格 LLM 摘要 child（交 [[features/markdown-image-rag]]）；历史 `.md`（曾走标准链）自动回填 md 竖井。
 
 ## 关联文件
 
-- 设计：`docs/design-md-structure-rag.md`
-- 验收：`docs/acceptance-md-structure-rag.md` → [[features/markdown-structure-rag-acceptance]]
+- 设计：`docs/design-md-structure-rag.md` · 验收：`docs/acceptance-md-structure-rag.md`
 - 入库核心：`kb-document/.../MarkdownStructureIngestionServiceImpl.java`、`MdDocumentIngestionWorkerImpl.java`
 - 检索核心：`kb-search/.../MdQnAServiceImpl.java`、`MdHybridSearchServiceImpl.java`、`MdParentExpansionServiceImpl.java`、`MdAgenticQnAServiceImpl.java`

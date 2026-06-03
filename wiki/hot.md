@@ -8,7 +8,7 @@ _Last updated: 2026-06-03_
 - `docs/` 做了 MiniMax 清理 + 语句重写后回灌 wiki。wiki 早已基本同步（providers 退役墓碑、llama.cpp 标默认 chat），本轮只补 3 处 ADR 历史理据（adr-002/008/014 的 MiniMax 残留）+ 1 处日志笔误。
 - md Agentic 在 wiki 无矛盾（[[features/markdown-structure-rag]] 已记为已实现）；docs 散文重写不涉 wiki 事实。
 
-**2026-06-02 LangFuse Input/Output 映射设计** → [[features/langfuse-io-mapping]]
+**2026-06-02 LangFuse Input/Output 映射设计** → [[features/langfuse-tracing]] §Input/Output 映射（原独立页 2026-06-03 已并入）
 - [[features/langfuse-tracing]] 的补齐子设计：trace 结构有了但 `observations.input/output` 全 NULL，看不到问/答/检索/工具/入库正文。
 - Phase 1：项目自建业务 span（`kb.qa.ask*` / `kb.retrieval.*` / `gen_ai.tool.execution` / `kb.ingest.*`）经 `TracingSupport` 直写 `langfuse.observation.input/output`，脱敏收口在 TracingSupport，绕开 Spring AI event/attribute 不确定性。Phase 2 才 PoC 自动 generation span。embedding span 不写 input/output（D4）。
 - 姊妹设计待办：基础设施 span 噪音过滤 `docs/design-langfuse-noise-filter.md`（尚未建页 / 实现）。
@@ -60,7 +60,7 @@ _Last updated: 2026-06-03_
 - 三件套：`md_ta`(jieba 切词) → `md_model`(词→ID **冻结**词表，从 `embed_text` 学) → `md_tok`。`bm25vector`={词ID:TF}（严格升序，TF 是值不是维度）；DF/IDF 在 `USING bm25` 倒排索引、`to_bm25query` 查询时现算。
 - 状态：代码已落地（编译过、md 入库 7/7）；**运行态 build 脚本未跑**——实测 `tokenizer_catalog.model/text_analyzer/tokenizer` 三表 0 行，`md_model` 等尚不存在，BM25 链路未真正可用，默认仍 TRGM。`db/manual/md-bm25-build.sql` 须语料 ingest 后手动跑。
 
-**2026-05-26 Markdown 结构感知 RAG 验收文档** → [[features/markdown-structure-rag]] · [[features/markdown-structure-rag-acceptance]] · [[decisions/adr-012-markdown-structure-rag]]
+**2026-05-26 Markdown 结构感知 RAG 验收文档** → [[features/markdown-structure-rag]]（验收已并入该页 §验收） · [[decisions/adr-012-markdown-structure-rag]]
 - 与 [[features/markdown-visual-rag-l2]]（图文 RAG）是**两条不同竖井**：结构感知走全新 `md_documents`/`md_kb_chunks`，small-to-big 父子索引，标准竖井零改动。
 - 已实现，入库单测 7/7 通过；检索/Agentic 无自动化测试、端到端未联调。核心架构决策已落 adr-012。
 

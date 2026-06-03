@@ -1,5 +1,15 @@
 # Wiki Ingest Log
 
+## 2026-06-03 | maintenance | wiki 结构整合（去冗余 -27%）
+- Trigger: 审计发现结构冗余集中在视觉 RAG L2 历史集群（占全库 26%）+ 空目录 + 同主题碎片化。
+- 整合动作（5811 → 4257 行，-1554 / -27%；54 → 52 文件）：
+  - **视觉 RAG L2 集群 3 页 → 2 页**：`features/markdown-visual-rag-l2`(390) 重写为 ~55 行历史归档（吸收已删的 693 行沟通纪要）；`decisions/adr-011`(446) 压成 ~50 行决策墓碑；删除 `features/markdown-visual-rag-l2-design-notes.md`（693）。
+  - **MD-RAG 验收并入**：`features/markdown-structure-rag-acceptance`(54) 折进 [[features/markdown-structure-rag]] §验收后删除。
+  - **LangFuse io-mapping 并入**：`features/langfuse-io-mapping`(95) 压成紧凑节并入 [[features/langfuse-tracing]] §Input/Output 映射后删除（母体已 337 行，故压缩而非整篇搬入）。
+  - 删空目录 `modules/`。
+- 链接维护：所有指向被删页的入链已改指合并后页面 / §锚点（adr-011/012、Home、hot、log）；全库复扫无遗留 live 死链（log 内保留 `~~删除页~~` 删除线墓碑）。
+- 未动：退役系统页面（adr-009/010 墓碑、document-ingestion / hybrid-search / agentic-qa 等）时效标记本就齐全；短 ADR、api/ 一控制器一页、feature/ADR 分离均为有意结构，不合并。
+
 ## 2026-06-03 | sync | docs/ 更新回灌（MiniMax 退役收尾）
 - Trigger: `docs/` 多篇文档刚做了 MiniMax 清理 + 语句重写，回灌 wiki 的残留事实差。
 - Pages updated:
@@ -12,8 +22,8 @@
 
 ## 2026-06-02 | ingest | LangFuse Input/Output 映射设计
 - Source: `docs/design-langfuse-io-mapping.md`（+ `docs/design-langfuse-tracing.md` 已由现有页覆盖，仅交叉引用）
-- Summary: [[features/langfuse-io-mapping]]
-- Pages created: [[features/langfuse-io-mapping]]
+- Summary: [[features/langfuse-tracing]] §Input/Output 映射（原独立页 2026-06-03 已并入）
+- Pages created: ~~features/langfuse-io-mapping~~（2026-06-03 整合并入 [[features/langfuse-tracing]] §Input/Output 映射）
 - Pages updated: [[features/langfuse-tracing]]（加子设计链接 + event/attribute 待验证项补注）、[[Home]]（功能行加新页）
 - Key insight: io-mapping 是 langfuse-tracing 落地后的补齐子设计——现状是 trace 结构有了但 `observations.input/output` 全 NULL，只知"调用发生"不知"问了/答了什么"。方案两阶段：Phase 1 给项目自建业务 span（`kb.qa.ask*` / `kb.retrieval.*` / `gen_ai.tool.execution` / `kb.ingest.*`）经 `TracingSupport` 直写 `langfuse.observation.input/output`（脱敏收口在 TracingSupport，绕开 Spring AI event/attribute 不确定性）；Phase 2 才用 `ObservationHandler<ChatModelObservationContext>` PoC 评估自动 generation span。embedding span 明确不写 input/output。
 - 注：`design-langfuse-tracing.md` 内容已由 [[features/langfuse-tracing]] + [[decisions/adr-015-langfuse-tracing]] 完整覆盖，本轮未重复建页。
@@ -78,10 +88,10 @@
 
 ## 2026-05-26 | ingest | Markdown 结构感知 RAG 验收文档
 - Source: `docs/acceptance-md-structure-rag.md`
-- Summary: [[features/markdown-structure-rag-acceptance]]
+- Summary: [[features/markdown-structure-rag]]（§验收，原独立验收页 2026-06-03 已并入）
 - Pages created:
   - [[features/markdown-structure-rag]]
-  - [[features/markdown-structure-rag-acceptance]]
+  - ~~features/markdown-structure-rag-acceptance~~（2026-06-03 整合并入 [[features/markdown-structure-rag]] §验收）
   - [[decisions/adr-012-markdown-structure-rag]]（ingest 后补建：提炼 C1–C17 核心架构决策）
 - Pages updated:
   - [[Home]] — 功能导航 + 架构决策导航

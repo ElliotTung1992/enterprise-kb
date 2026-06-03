@@ -7,7 +7,7 @@ tags: [adr, architecture, rag, document-ingestion, markdown, small-to-big, paren
 
 **状态**：已接受（已实现，待端到端联调与上线）
 
-> 详细功能设计见 [[features/markdown-structure-rag]]。验收报告见 [[features/markdown-structure-rag-acceptance]]。完整决策推演（C1–C17）见 `docs/design-md-structure-rag.md`。
+> 详细功能设计与验收见 [[features/markdown-structure-rag]]（§验收）。完整决策推演（C1–C17）见 `docs/design-md-structure-rag.md`。
 
 ## 背景
 
@@ -107,8 +107,7 @@ overlap 与 parent 展开解决的是同一问题——边界上下文丢失。�
 
 ## 关联
 
-- 功能方案：[[features/markdown-structure-rag]]
-- 验收报告：[[features/markdown-structure-rag-acceptance]]
+- 功能方案 + 验收：[[features/markdown-structure-rag]]（§验收）
 - 兄弟 ADR（图文 RAG）：[[decisions/adr-011-markdown-visual-rag-l2]]
 - 文档摄取：[[features/document-ingestion]]
 - Milvus 决策：[[decisions/adr-002-milvus-vector-store]]
