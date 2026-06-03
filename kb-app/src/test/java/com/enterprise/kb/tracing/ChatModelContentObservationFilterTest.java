@@ -48,6 +48,25 @@ class ChatModelContentObservationFilterTest {
     }
 
     @Test
+    void mapsToolCallOnlyAssistantMessageToObservationOutput() {
+        ChatModelObservationContext context = ChatModelObservationContext.builder()
+                .provider("openai")
+                .prompt(new Prompt(List.of(new UserMessage("告诉我约拿单和大卫的故事"))))
+                .build();
+        AssistantMessage toolCallMessage = AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall(
+                        "call-1", "function", "searchKnowledgeBase", "{\"query\":\"约拿单和大卫\"}")))
+                .build();
+        context.setResponse(new ChatResponse(List.of(new Generation(toolCallMessage))));
+
+        new ChatModelContentObservationFilter(200, 200).map(context);
+
+        assertThat(highCardinalityValue(context, TracingAttributes.OBSERVATION_OUTPUT))
+                .isEqualTo("TOOL_CALL: searchKnowledgeBase {\"query\":\"约拿单和大卫\"}");
+    }
+
+    @Test
     void redactsAndTruncatesMappedContent() {
         ChatModelObservationContext context = ChatModelObservationContext.builder()
                 .provider("dashscope")

@@ -5,6 +5,7 @@ import com.enterprise.kb.common.tracing.TracingAttributes;
 import io.micrometer.common.KeyValue;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationFilter;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.observation.ChatModelObservationContext;
@@ -75,9 +76,22 @@ public class ChatModelContentObservationFilter implements ObservationFilter {
                 .filter(Objects::nonNull)
                 .map(Generation::getOutput)
                 .filter(Objects::nonNull)
-                .map(message -> nullToEmpty(message.getText()))
+                .map(this::assistantOutputText)
                 .filter(this::hasText)
                 .collect(Collectors.joining("\n\n"));
+    }
+
+    private String assistantOutputText(AssistantMessage message) {
+        String text = nullToEmpty(message.getText());
+        if (hasText(text)) {
+            return text;
+        }
+        if (!message.hasToolCalls()) {
+            return "";
+        }
+        return message.getToolCalls().stream()
+                .map(toolCall -> "TOOL_CALL: " + toolCall.name() + " " + nullToEmpty(toolCall.arguments()))
+                .collect(Collectors.joining("\n"));
     }
 
     private boolean hasText(String value) {
