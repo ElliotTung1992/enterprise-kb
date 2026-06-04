@@ -212,8 +212,10 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         return outputs
                 .filter(output -> output instanceof StreamingOutput<?> so
                         && so.getOutputType() == OutputType.AGENT_MODEL_STREAMING)
-                .map(output -> ((StreamingOutput<?>) output).chunk())
-                .filter(chunk -> chunk != null && !chunk.isEmpty());
+                // 用 mapNotNull：chunk() 对部分 AGENT_MODEL_STREAMING 帧（如工具决策轮 / 仅元数据帧）会返回 null，
+                // 而 Reactor 的 map 契约禁止 mapper 返回 null（会抛 NPE）。mapNotNull 直接丢弃 null 元素。
+                .mapNotNull(output -> ((StreamingOutput<?>) output).chunk())
+                .filter(chunk -> !chunk.isEmpty());
     }
 
     /**
