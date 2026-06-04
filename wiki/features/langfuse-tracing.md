@@ -1,8 +1,8 @@
 # LangFuse 在线 LLM Tracing
 
-> 状态：代码已落地编译通过，运行态未验证
+> 状态：代码已落地编译通过，运行态待起栈联调验收
 > 设计文档：`docs/design-langfuse-tracing.md`
-> 子设计：Input/Output 映射已并入本页（见 [[#Input/Output 映射（子设计）]]，Phase 1 待实现）
+> 子设计：Input/Output 映射已并入本页（见 [[#Input/Output 映射（子设计）]]，**Phase 1 代码已落地、运行态待验收**）；基础设施 span 噪音过滤见 [[#基础设施 span 噪音过滤]]（代码已落地、单测 24/24、运行态待验收）
 > 架构决策：[[decisions/adr-015-langfuse-tracing]]
 > 前置评估侧 ADR：[[decisions/adr-014-ragas-integration]]（"备选方案"标记的 LangFuse 自部署即本方案）
 > 已退役的前身：原 ADR-009 / ADR-010 自研 trace（迁移 032 退役，落库形态废弃）
@@ -204,11 +204,13 @@ graph-core 内部为 reactive/异步生成器，classpath 上有 `DashScopeAsync
 
 **风险边界**：自部署 + 区内 + 访问控制只能降低数据出境与第三方可见性风险，**不能替代脱敏**；LangFuse、ClickHouse 备份和运维账号仍可能看到 trace 内容。
 
-**待验证**：tracer 在场时 Spring AI 把 prompt/completion 写成 span **event**，而 LangFuse 认 `gen_ai.*` / `langfuse.observation.input/output` **attribute**——可能导致 LangFuse 详情页 input/output 为空。先按默认跑一版验证，必要时加自定义 `SpanProcessor` 做 attribute 映射。下文 §Input/Output 映射的 Phase 1 已确定走业务 span 直写 `langfuse.observation.input/output` 绕开 event/attribute 不确定性；自动 generation span 的补齐留在 Phase 2 PoC。
+**已落地**：tracer 在场时 Spring AI 把 prompt/completion 写成 span **event**，而 LangFuse 认 `gen_ai.*` / `langfuse.observation.input/output` **attribute**——曾担心导致详情页 input/output 为空。现已由 `ChatModelContentObservationFilter` 把自动 generation span 的 prompt/completion 映射到 `langfuse.observation.input/output` attribute（不再仅靠 event）；业务 span 则由 `TracingSupport` 直写。两路均编译通过、单测覆盖，**仅运行态待联调验收**。详见下文 §Input/Output 映射。
 
 ## Input/Output 映射（子设计）
 
-> Phase 1 待实现。完整设计 `docs/design-langfuse-io-mapping.md`；原独立页 `features/langfuse-io-mapping` 已并入本节。
+> **Phase 1 代码已落地，运行态待起栈联调验收**（2026-06-04）。完整设计 `docs/langfuse-tracing.md` 第二部分；原独立页 `features/langfuse-io-mapping` 已并入本节。
+> 落地实现：`ChatModelContentObservationFilter`（`kb-app`，把 Spring AI ChatModel prompt/completion 映射到 `langfuse.observation.input/output`，由 `TracingConfig` 装配，`ChatModelContentObservationFilterTest` 覆盖）+ 业务 span（`kb.qa.ask*` / `kb.retrieval.*` / `kb.ingest.*` / tool）经 `TracingSupport` 直写 input/output。
+> 剩余只是验收标准中的运行态部分（LangFuse UI 可见 Input/Output、ClickHouse `observations.input/output` 不为 NULL、脱敏与截断实测），随整体起栈一并验。
 
 **问题**：tracing 落地后 LangFuse 有 trace / generation 结构，但 ClickHouse `observations.input/output` 全 `NULL`——只知"调用发生"，看不到模型输入输出、检索上下文、工具参数、入库结果。根因是 Spring AI 自动 generation span 不把 prompt/completion 写进 LangFuse 可识别的 input/output 字段，需项目主动写入 LangFuse 原生 attribute。
 
@@ -231,6 +233,34 @@ graph-core 内部为 reactive/异步生成器，classpath 上有 `DashScopeAsync
 > 所有正文写入**必须**在 `TracingSupport` 方法内部调 `SensitiveDataRedactor.redactAndTruncate(...)`，调用方不能绕过脱敏直写 `langfuse.*.input/output` 高基数正文。这是脱敏唯一收口点，与上文 `SensitiveDataObservationFilter`（KeyValue 路径兜底，**不**覆盖 span event 与这些直写 attribute）互补。
 
 **写入规格（Phase 1）**：`kb.qa.ask*` = 问题 / 答案；`kb.retrieval.*` = query / 命中摘要；`gen_ai.tool.execution` = 参数 / 结果；`kb.ingest.*` = filename / status / chunkCount；均带 userId / sessionId / spaceId 等 metadata。**改动**落 `TracingAttributes` / `TracingSupport`（kb-common）+ `MdQnAServiceImpl` / `MdAgenticQnAServiceImpl` / `MdHybridSearchServiceImpl` / `TracingToolInterceptor` / `MdDocumentIngestionWorkerImpl`。
+
+## 基础设施 span 噪音过滤
+
+> **代码已落地（编译通过、单测 24/24），运行态待起栈联调验收**（2026-06-04）。设计见 `docs/design-langfuse-noise-filter.md`（注：该设计文档当前尚未落到 `docs/`，仅代码与本节记录）。
+
+**问题**：tracing 开启后 Spring Boot Micrometer Observation 会自动采集 HTTP / Security / Scheduler 等基础设施 observation，一并经 OTLP 上报。LangFuse 作为 LLM / RAG / 入库链路观测平台不需要这些噪音。典型噪音：投诉超时检查定时任务（每 60 秒一次，持续刷屏）、`security filterchain *`、`authorize request/method`、`secured request`、`/actuator/health` 健康检查。
+
+**实现**：`ExcludedObservationNamePredicate`（`kb-app`）——按 observation name **大小写不敏感前缀**黑名单命中即降为 NOOP，未命中与未知 observation 默认放行（白名单式安全：避免误杀业务链路）。黑名单经 `TracingProperties.excludedObservationNamePrefixes` 配置，可由环境变量 `KB_TRACING_EXCLUDED_OBSERVATION_NAME_PREFIXES`（逗号分隔）**整体覆盖**——排查 Security/Scheduler 问题时清空即恢复基础设施 span 可见。
+
+`application.yml` 默认黑名单：
+
+```yaml
+enterprise.kb.tracing.excluded-observation-name-prefixes:
+  - "tasks.scheduled.execution"     # 定时任务（含投诉超时检查）
+  - "security filterchain"
+  - "authorize request"
+  - "authorize method"
+  - "secured request"
+  - "http get /actuator/health"
+  - "http.server.requests"
+  - "spring.security"
+  - "spring.ai"
+```
+
+> [!note] 默认黑名单与 todo 列举略有出入
+> 实现采用 `tasks.scheduled.execution` 前缀（覆盖所有定时任务，不只投诉超时 `complaint-deadline-scheduler`），并额外屏蔽 `http.server.requests` / `spring.security` / `spring.ai` 前缀。业务链路（`kb.*` / `chat *` / `embedding *` / `gen_ai.*` / `md-documents/upload` / `md-qa`）不在黑名单内，默认放行。
+
+**验收标准（运行态待验）**：投诉超时定时任务、`/actuator/health`、security filterchain / authorize span 不再进 LangFuse；Markdown 上传仍见 `md-documents/upload` / `kb.ingest.document` / `kb.ingest.parse`；问答仍见 `kb.qa.ask` / `kb.retrieval.*` / `chat *` / `embedding *`。
 
 ## 共享 tracing 工具（`kb-common`）
 
@@ -338,7 +368,8 @@ management:
 
 ## 待验证风险
 
-- Spring AI prompt/completion 落 span event vs LangFuse 认 attribute 的映射
+- `ChatModelContentObservationFilter` 把自动 generation span 的 prompt/completion 映射到 `langfuse.observation.input/output` 后，LangFuse UI / ClickHouse 是否实际可见（event vs attribute 的映射已有代码，待运行态确认）
+- `ExcludedObservationNamePredicate` 黑名单是否精准屏蔽基础设施噪音而不误杀业务链路（运行态待验收）
 - `langfuse.user.id` / `langfuse.session.id` / metadata attributes 是否按预期出现在所有子 span，且能在 LangFuse 中过滤聚合；同时确认不会随下游 HTTP 请求透传给模型提供商
 - `management.tracing.sampling.probability=${KB_TRACING_SAMPLE_RATIO}` 是否实际控制 OTel 采样比例
 - ① reactor 自动传播能否真正覆盖 graph-core 内部线程

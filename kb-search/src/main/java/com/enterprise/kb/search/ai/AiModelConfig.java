@@ -65,8 +65,9 @@ public class AiModelConfig {
     @Primary
     @ConditionalOnProperty("spring.ai.dashscope.api-key")
     public ChatClient dashscopeChatClient(
-            @Qualifier("dashScopeChatModel") ChatModel dashScopeChatModel) {
-        return ChatClient.builder(dashScopeChatModel).build();
+            @Qualifier("dashScopeChatModel") ChatModel dashScopeChatModel,
+            ObservationRegistry observationRegistry) {
+        return ChatClient.builder(dashScopeChatModel, observationRegistry, null, null).build();
     }
 
     // ---- llama.cpp 本地模型（OpenAI 兼容接口） ----
@@ -83,14 +84,15 @@ public class AiModelConfig {
     @Bean("llamaCppChatClient")
     @ConditionalOnProperty(name = "enterprise.kb.ai.llama-cpp.enabled", havingValue = "true", matchIfMissing = true)
     public ChatClient llamaCppChatClient(ObservationRegistry observationRegistry) {
-        return openAiCompatibleChatClient(
+        ChatModel chatModel = openAiCompatibleChatModel(
                 llamaCppBaseUrl,
                 llamaCppApiKey,
                 llamaCppModel,
                 observationRegistry);
+        return ChatClient.builder(chatModel, observationRegistry, null, null).build();
     }
 
-    private ChatClient openAiCompatibleChatClient(
+    private ChatModel openAiCompatibleChatModel(
             String baseUrl,
             String apiKey,
             String model,
@@ -145,8 +147,7 @@ public class AiModelConfig {
                 .observationRegistry(observationRegistry)
                 .build();
 
-        // ChatClient 层同样带上 registry（conventions 传 null 走默认），使 ChatClient span 生效
-        return ChatClient.builder(chatModel, observationRegistry, null, null).build();
+        return chatModel;
     }
 
     /**

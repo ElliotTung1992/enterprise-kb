@@ -5,6 +5,7 @@ import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
 import com.enterprise.kb.search.service.MdAgenticQnAService;
 import com.enterprise.kb.search.service.MdQnAService;
+import com.enterprise.kb.search.tracing.QaObserved;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -39,6 +40,7 @@ public class MdQnAController {
      */
     @PostMapping("/ask")
     @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    @QaObserved(name = "kb.qa.ask")
     public ResponseEntity<ApiResponse<QnAResponse>> ask(
             @PathVariable UUID spaceId,
             @Valid @RequestBody QnARequest req) {
@@ -54,6 +56,7 @@ public class MdQnAController {
      */
     @PostMapping("/ask/agentic")
     @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    @QaObserved(name = "kb.qa.ask.agentic")
     public ResponseEntity<ApiResponse<QnAResponse>> askAgentic(
             @PathVariable UUID spaceId,
             @Valid @RequestBody QnARequest req) {
@@ -69,9 +72,26 @@ public class MdQnAController {
      */
     @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    @QaObserved(name = "kb.qa.ask.stream")
     public Flux<String> askStream(
             @PathVariable UUID spaceId,
             @Valid @RequestBody QnARequest req) {
         return mdQnAService.askStream(spaceId, req);
+    }
+
+    /**
+     * Markdown Agentic 两工具流式问答。
+     *
+     * @param spaceId 空间 ID
+     * @param req     问答请求
+     * @return token 流
+     */
+    @PostMapping(value = "/ask/agentic/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
+    @QaObserved(name = "kb.qa.ask.agentic.stream")
+    public Flux<String> askAgenticStream(
+            @PathVariable UUID spaceId,
+            @Valid @RequestBody QnARequest req) {
+        return mdAgenticQnAService.askStream(spaceId, req);
     }
 }

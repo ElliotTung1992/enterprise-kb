@@ -1,11 +1,13 @@
 package com.enterprise.kb.search.service.impl;
 
 import com.alibaba.cloud.ai.graph.CompileConfig;
+import com.alibaba.cloud.ai.graph.NodeOutput;
 import com.alibaba.cloud.ai.graph.RunnableConfig;
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.exception.GraphRunnerException;
+import com.alibaba.cloud.ai.graph.streaming.OutputType;
+import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.enterprise.kb.common.exception.KbException;
-import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.document.mapper.MdChildChunkMapper;
 import com.enterprise.kb.document.mapper.MdDocumentMapper;
@@ -36,10 +38,12 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -82,15 +86,6 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     @Value("${enterprise.kb.tracing.enabled:false}")
     private boolean tracingEnabled;
 
-    @Value("${enterprise.kb.tracing.max-tool-chars:4000}")
-    private int maxToolChars;
-
-    @Value("${enterprise.kb.tracing.max-prompt-chars:8000}")
-    private int maxPromptChars;
-
-    @Value("${enterprise.kb.tracing.max-completion-chars:8000}")
-    private int maxCompletionChars;
-
     private final Encoding encoding = com.knuddels.jtokkit.Encodings.newLazyEncodingRegistry()
             .getEncoding(EncodingType.CL100K_BASE);
 
@@ -103,16 +98,9 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
      */
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
+        // 根 span 由 Controller 方法 AOP（QaObservedAspect）在边界统一创建，Service 只负责业务。
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
-        // 业务根 span（ADR-015）：agentic 问答的唯一 trace root，graph/node/tool/LLM span 均挂其下
-        return TracingSupport.root(observationRegistry, tracingEnabled, "kb.qa.ask.agentic")
-                .userId(currentUserIdQuietly())
-                .sessionId(sessionId)
-                .spaceId(spaceId)
-                .modelProvider(req.modelProvider() != null ? req.modelProvider() : "DEFAULT")
-                .traceInput(req.question(), maxPromptChars)
-                .traceOutputFrom((QnAResponse resp) -> resp.answer(), maxCompletionChars)
-                .observe(() -> doAsk(spaceId, req, sessionId));
+        return doAsk(spaceId, req, sessionId);
     }
 
     private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
@@ -121,27 +109,8 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
         MdAccumulator acc = new MdAccumulator();
 
-        ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        // graph/node 子树：tracing 开启时给 CompileConfig 注入 registry，由 graph-core 的
-        // GraphObservationLifecycleListener 产 graph/node span，挂在当前 agentic 业务根下（ADR-015 C2）
-        CompileConfig.Builder compileConfigBuilder = CompileConfig.builder().recursionLimit(MAX_RECURSION_LIMIT);
-        if (tracingEnabled) {
-            compileConfigBuilder.observationRegistry(observationRegistry);
-        }
-        var agentBuilder = ReactAgent.builder()
-                .name("md-kb-search-agent")
-                .chatClient(chatClient)
-                .systemPrompt(systemPrompt())
-                .tools(buildSearchTool(spaceId, budget, acc), buildReadFullSectionTool(spaceId, acc))
-                .compileConfig(compileConfigBuilder.build());
-        // tool span：原生 ToolInterceptor，per-tool-call 粒度，业务工具体零侵入（ADR-015 C2）
-        if (tracingEnabled) {
-            agentBuilder.interceptors(new TracingToolInterceptor(observationRegistry, maxToolChars));
-        }
-        ReactAgent reactAgent = agentBuilder.build();
-
-        List<Message> messages = new ArrayList<>(trimmedHistory);
-        messages.add(new UserMessage(req.question()));
+        ReactAgent reactAgent = buildReactAgent(spaceId, req, budget, acc);
+        List<Message> messages = buildMessages(trimmedHistory, req);
         RunnableConfig runnableConfig = RunnableConfig.builder().threadId(sessionId.toString()).build();
 
         AssistantMessage assistantMessage;
@@ -153,6 +122,115 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         }
 
         return buildResponse(req, sessionId, spaceId, assistantMessage, acc);
+    }
+
+    /**
+     * 构建 ReAct 双工具 Agent（同步/流式共用）。
+     * tracing 开启时给 CompileConfig 注入 registry（graph/node span，ADR-015 C2），
+     * 并挂原生 ToolInterceptor 产 per-tool-call tool span（业务工具体零侵入）。
+     */
+    private ReactAgent buildReactAgent(UUID spaceId, QnARequest req,
+                                       AgenticTokenBudgetService.Budget budget, MdAccumulator acc) {
+        ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
+        CompileConfig.Builder compileConfigBuilder = CompileConfig.builder().recursionLimit(MAX_RECURSION_LIMIT);
+        if (tracingEnabled) {
+            compileConfigBuilder.observationRegistry(observationRegistry);
+        }
+        FunctionToolCallback<KnowledgeSearchInput, String> searchTool = buildSearchTool(spaceId, budget, acc);
+        FunctionToolCallback<ReadFullSectionInput, String> readTool = buildReadFullSectionTool(spaceId, acc);
+        var agentBuilder = ReactAgent.builder()
+                .name("md-kb-search-agent")
+                .chatClient(chatClient)
+                .systemPrompt(systemPrompt())
+                .tools(searchTool, readTool)
+                .compileConfig(compileConfigBuilder.build());
+        if (tracingEnabled) {
+            // 把 ToolCallback 列表传给 interceptor，使 tool span 能用真实 ToolDefinition / metadata
+            agentBuilder.interceptors(new TracingToolInterceptor(
+                    observationRegistry, List.<ToolCallback>of(searchTool, readTool)));
+        }
+        return agentBuilder.build();
+    }
+
+    private List<Message> buildMessages(List<Message> trimmedHistory, QnARequest req) {
+        List<Message> messages = new ArrayList<>(trimmedHistory);
+        messages.add(new UserMessage(req.question()));
+        return messages;
+    }
+
+    /**
+     * 使用 ReAct 两工具模式完成 Markdown 多跳流式问答。
+     *
+     * @param spaceId 空间 ID
+     * @param req     问答请求
+     * @return token 流
+     */
+    @Override
+    public Flux<String> askStream(UUID spaceId, QnARequest req) {
+        // 根 span 由 Controller 方法 AOP（QaObservedAspect）接管流的生命周期，Service 只返回业务 token 流。
+        // userId / sessionId 在请求线程提前捕获（订阅时的 reactor 线程可能没有 SecurityContext）。
+        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
+        UUID userId = SecurityUtils.getCurrentUserId();
+        return doAskStream(spaceId, req, sessionId, userId);
+    }
+
+    private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId) {
+        StringBuilder answerBuffer = new StringBuilder();
+        // Flux.defer：把 Agent 执行推迟到订阅时，使 graph/tool/LLM span 落在根 span scope 内。
+        return Flux.defer(() -> agentTokenStream(spaceId, req, sessionId))
+                .doOnNext(answerBuffer::append)
+                .doOnComplete(() -> persistStreamExchange(
+                        sessionId, spaceId, userId, req.question(), answerBuffer.toString()));
+    }
+
+    /**
+     * 构建 Agent 并以 token 流返回其 LLM 输出增量（过滤工具决策/工具结果的非文本输出）。
+     */
+    private Flux<String> agentTokenStream(UUID spaceId, QnARequest req, UUID sessionId) {
+        List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
+        AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
+        List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
+        MdAccumulator acc = new MdAccumulator();
+        ReactAgent reactAgent = buildReactAgent(spaceId, req, budget, acc);
+        List<Message> messages = buildMessages(trimmedHistory, req);
+        RunnableConfig runnableConfig = RunnableConfig.builder().threadId(sessionId.toString()).build();
+        try {
+            return extractAnswerTokens(reactAgent.stream(messages, runnableConfig));
+        } catch (GraphRunnerException e) {
+            log.error("Markdown Agentic 流式执行失败：sessionId={}", sessionId, e);
+            return Flux.error(new KbException(
+                    "Markdown Agent 流式执行失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR));
+        }
+    }
+
+    /**
+     * 从 Agent 的 {@link NodeOutput} 流中抽取最终答复 token：
+     * 只取 {@code AGENT_MODEL_STREAMING} 的非空 chunk——工具决策轮文本为空被过滤，
+     * 工具结果（{@code AGENT_TOOL_*}）等非模型输出也被排除，最终答复轮才产 token。
+     */
+    private Flux<String> extractAnswerTokens(Flux<NodeOutput> outputs) {
+        return outputs
+                .filter(output -> output instanceof StreamingOutput<?> so
+                        && so.getOutputType() == OutputType.AGENT_MODEL_STREAMING)
+                .map(output -> ((StreamingOutput<?>) output).chunk())
+                .filter(chunk -> chunk != null && !chunk.isEmpty());
+    }
+
+    /**
+     * 流式问答收尾：把本轮问答写入 Redis 会话记忆并持久化到 PostgreSQL；失败仅告警，不影响已返回的流。
+     */
+    private void persistStreamExchange(UUID sessionId, UUID spaceId, UUID userId, String question, String answer) {
+        try {
+            redisChatMemory.add(sessionId.toString(),
+                    List.of(new UserMessage(question), new AssistantMessage(answer)));
+        } catch (Exception e) {
+            log.warn("写入 Markdown Agentic 流式会话记忆失败：sessionId={}", sessionId, e);
+        }
+        try {
+            qaChatSessionService.saveExchange(sessionId, spaceId, userId, question, answer);
+        } catch (Exception e) {
+            log.warn("保存 Markdown Agentic 流式会话失败：sessionId={}", sessionId, e);
+        }
     }
 
     private FunctionToolCallback<KnowledgeSearchInput, String> buildSearchTool(
@@ -277,18 +355,6 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         }
         return new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
-    }
-
-    /**
-     * 获取当前用户 ID，无认证上下文时静默返回 {@code null}（仅用于 trace tag，不影响业务）。
-     */
-    private String currentUserIdQuietly() {
-        try {
-            UUID userId = SecurityUtils.getCurrentUserId();
-            return userId != null ? userId.toString() : null;
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private String systemPrompt() {

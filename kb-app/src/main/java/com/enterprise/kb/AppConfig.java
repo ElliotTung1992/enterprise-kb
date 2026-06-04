@@ -4,6 +4,7 @@ import com.enterprise.kb.auth.service.AuthService;
 import com.enterprise.kb.auth.service.impl.AuthServiceImpl;
 import com.enterprise.kb.auth.service.JwtService;
 import com.enterprise.kb.auth.service.impl.JwtServiceImpl;
+import com.enterprise.kb.common.tracing.ContextPropagatingExecutor;
 import com.enterprise.kb.user.security.SpacePermissionEvaluator;
 import com.enterprise.kb.user.service.UserService;
 import io.micrometer.observation.ObservationRegistry;
@@ -99,6 +100,23 @@ public class AppConfig {
     @Bean("ingestionExecutor")
     public Executor ingestionExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
+    }
+
+    /**
+     * 并行检索专用的跨线程上下文传播执行器（ADR-015 跨线程传播设施化）。
+     *
+     * <p>底层用 JDK 21 虚拟线程（检索为 I/O 密集），外层包 {@link ContextPropagatingExecutor}：每次任务
+     * 提交时捕获当前线程的 tracing 上下文（Observation + 业务属性 holder）并在工作线程恢复，使并行检索的
+     * 子 span 仍挂在请求根 span 下并继承 LangFuse user/session/space。业务代码只注入本执行器并正常提交任务，
+     * 不再在调用点手写 {@code ContextSnapshot.captureAll().wrapExecutor(...)}。</p>
+     *
+     * <p>tracing 关闭时无上下文可捕获，传播退化为直接执行，开销可忽略。</p>
+     *
+     * @return 传播型执行器
+     */
+    @Bean("retrievalExecutor")
+    public Executor retrievalExecutor() {
+        return new ContextPropagatingExecutor(Executors.newVirtualThreadPerTaskExecutor());
     }
 
     /**

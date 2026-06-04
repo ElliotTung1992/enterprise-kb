@@ -1,5 +1,14 @@
 # Wiki Ingest Log
 
+## 2026-06-04 | ingest | todo.md LangFuse 两子设计状态回灌
+- Source: `todo.md`（项目根，TODO 状态清单）
+- Summary: [[features/langfuse-tracing]] §Input/Output 映射 + §基础设施 span 噪音过滤
+- Pages updated: [[features/langfuse-tracing]]（banner + IO 映射节状态 + 正文捕获脱敏节 + 新增噪音过滤节 + 待验证风险）、`hot.md`
+- Pages created: 无（噪音过滤并入 [[features/langfuse-tracing]] 而非新页，沿用 2026-06-03 整合思路）
+- 核实动作：grep 确认 `ChatModelContentObservationFilter` / `ExcludedObservationNamePredicate` / `TracingProperties.excludedObservationNamePrefixes` 类与 `application.yml` 黑名单、`ChatModelContentObservationFilterTest` 均存在 → todo "代码已落地"属实。
+- Key insight: 两项从"Phase 1 待实现 / 未建页"推进到**代码落地、运行态待联调**；wiki 此前停在"待实现"，本轮把状态与实现细节同步。实测默认噪音黑名单（`tasks.scheduled.execution`/`http.server.requests`/`spring.security`/`spring.ai`）比 todo 列举更宽。
+- 残留差：todo 引用的 `docs/design-langfuse-noise-filter.md` 设计文档实际不在 `docs/`（仅代码 + 本节记录），已在页内标注。
+
 ## 2026-06-03 | maintenance | wiki 结构整合（去冗余 -27%）
 - Trigger: 审计发现结构冗余集中在视觉 RAG L2 历史集群（占全库 26%）+ 空目录 + 同主题碎片化。
 - 整合动作（5811 → 4257 行，-1554 / -27%；54 → 52 文件）：

@@ -1,8 +1,5 @@
 package com.enterprise.kb.search.service.impl;
 
-import com.enterprise.kb.common.tracing.SensitiveDataRedactor;
-import com.enterprise.kb.common.tracing.TracingAttributes;
-import com.enterprise.kb.common.tracing.TracingContextHolder;
 import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
@@ -19,9 +16,7 @@ import com.enterprise.kb.search.service.MdQnAService;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.service.RerankService;
-import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
-import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -31,13 +26,10 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Markdown 结构感知问答服务实现。
@@ -57,12 +49,6 @@ public class MdQnAServiceImpl implements MdQnAService {
 
     @Value("${enterprise.kb.tracing.enabled:false}")
     private boolean tracingEnabled;
-
-    @Value("${enterprise.kb.tracing.max-prompt-chars:8000}")
-    private int maxPromptChars;
-
-    @Value("${enterprise.kb.tracing.max-completion-chars:8000}")
-    private int maxCompletionChars;
 
     @Value("${enterprise.kb.tracing.max-retrieval-chars:4000}")
     private int maxRetrievalChars;
@@ -86,16 +72,9 @@ public class MdQnAServiceImpl implements MdQnAService {
      */
     @Override
     public QnAResponse ask(UUID spaceId, QnARequest req) {
+        // 根 span 由 Controller 方法 AOP（QaObservedAspect）在边界统一创建，Service 只负责业务。
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
-        // 业务根 span（ADR-015）：单轮问答的唯一 trace root，挂 LangFuse user/session/metadata
-        return TracingSupport.root(observationRegistry, tracingEnabled, "kb.qa.ask")
-                .userId(currentUserIdQuietly())
-                .sessionId(sessionId)
-                .spaceId(spaceId)
-                .modelProvider(req.modelProvider() != null ? req.modelProvider() : "DEFAULT")
-                .traceInput(req.question(), maxPromptChars)
-                .traceOutputFrom((QnAResponse resp) -> resp.answer(), maxCompletionChars)
-                .observe(() -> doAsk(spaceId, req, sessionId));
+        return doAsk(spaceId, req, sessionId);
     }
 
     private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
@@ -130,89 +109,36 @@ public class MdQnAServiceImpl implements MdQnAService {
      */
     @Override
     public Flux<String> askStream(UUID spaceId, QnARequest req) {
+        // 根 span 由 Controller 方法 AOP（QaObservedAspect）接管流的生命周期，Service 只返回业务 token 流。
+        // userId / sessionId 在请求线程提前捕获（订阅时的 reactor 线程可能没有 SecurityContext）。
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
         UUID userId = SecurityUtils.getCurrentUserId();
-        if (!tracingEnabled) {
-            return doAskStream(spaceId, req, sessionId, userId);
-        }
-        // 流式根 span（ADR-015 D8）：方法立即返回 Flux，不能用同步 scope。
-        // 用 reactor 生命周期：subscribe 时 start（Flux.using 的 resource 初始化），
-        // doFinally（using 的 cleanup）时 stop；把 Observation 写入 reactor context，
-        // 使 Spring AI 流式 chat span 与并行检索 span 挂到本根 span 下。
-        String provider = req.modelProvider() != null ? req.modelProvider() : "DEFAULT";
-        Map<String, String> attrs = businessAttrs(currentUserIdQuietly(), sessionId, spaceId, provider);
-        StringBuilder answerBuffer = new StringBuilder();
-        AtomicBoolean completed = new AtomicBoolean(false);
-        AtomicReference<Throwable> errorRef = new AtomicReference<>();
-        Observation observation = Observation.createNotStarted("kb.qa.ask.stream", observationRegistry);
-        attrs.forEach((key, value) -> {
-            if (TracingAttributes.LANGFUSE_USER_ID.equals(key) || TracingAttributes.LANGFUSE_SESSION_ID.equals(key)) {
-                observation.highCardinalityKeyValue(key, value);
-            } else {
-                observation.lowCardinalityKeyValue(key, value);
-            }
-        });
-        // trace input：用户问题，进 span 前脱敏截断（input/output 映射 D2 / D3）
-        observation.highCardinalityKeyValue(TracingAttributes.TRACE_INPUT,
-                SensitiveDataRedactor.redactAndTruncate(req.question(), maxPromptChars));
-        return Flux.using(
-                observation::start,
-                obs -> {
-                    Map<String, String> previous = TracingContextHolder.peek();
-                    TracingContextHolder.set(attrs);
-                    try {
-                        // 检索为同步阻塞，在根 span scope + holder 下执行，使检索子 span 挂树
-                        List<SearchHit> parentHits = obs.scoped(() -> retrieveParentHits(spaceId, req));
-                        ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-                        return chatClient.prompt()
-                                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
-                                        .conversationId(sessionId.toString()).build())
-                                .system(buildSystemPrompt(parentHits))
-                                .user(req.question())
-                                .stream()
-                                .content()
-                                .doOnNext(answerBuffer::append)
-                                .doOnComplete(() -> saveStreamExchange(
-                                        sessionId, spaceId, userId, req.question(), answerBuffer.toString()))
-                                .doOnComplete(() -> completed.set(true))
-                                .doOnError(errorRef::set)
-                                .contextWrite(ctx -> ctx
-                                        .put(ObservationThreadLocalAccessor.KEY, obs)
-                                        .put(TracingContextHolder.KEY, attrs));
-                    } finally {
-                        TracingContextHolder.set(previous);
-                    }
-                },
-                // 流终止后、span 停止前写 trace output（聚合答案），再停止
-                obs -> {
-                    Throwable error = errorRef.get();
-                    if (error != null) {
-                        obs.error(error);
-                        obs.lowCardinalityKeyValue(TracingAttributes.TRACE_METADATA_PREFIX + "status", "ERROR");
-                    } else if (completed.get()) {
-                        obs.lowCardinalityKeyValue(TracingAttributes.TRACE_METADATA_PREFIX + "status", "COMPLETED");
-                        obs.highCardinalityKeyValue(TracingAttributes.TRACE_OUTPUT,
-                                SensitiveDataRedactor.redactAndTruncate(answerBuffer.toString(), maxCompletionChars));
-                    } else {
-                        obs.lowCardinalityKeyValue(TracingAttributes.TRACE_METADATA_PREFIX + "status", "CANCELLED");
-                    }
-                    obs.stop();
-                });
+        return doAskStream(spaceId, req, sessionId, userId);
     }
 
     private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId) {
+        // Flux.defer：把检索/模型调用推迟到订阅时执行，使其落在根 span scope 内（AOP 边界在订阅时开 scope）。
+        return Flux.defer(() -> streamAnswer(spaceId, req, sessionId))
+                .transform(tokens -> persistStreamAnswer(tokens, sessionId, spaceId, userId, req.question()));
+    }
+
+    private Flux<String> streamAnswer(UUID spaceId, QnARequest req, UUID sessionId) {
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        StringBuilder answerBuffer = new StringBuilder();
         return chatClient.prompt()
-                .advisors(MessageChatMemoryAdvisor.builder(redisChatMemory)
-                        .conversationId(sessionId.toString()).build())
+                .advisors(streamMemoryAdvisor(sessionId))
                 .system(buildSystemPrompt(parentHits))
                 .user(req.question())
                 .stream()
-                .content()
-                .doOnNext(answerBuffer::append)
-                .doOnComplete(() -> saveStreamExchange(sessionId, spaceId, userId, req.question(), answerBuffer.toString()));
+                .content();
+    }
+
+    private Flux<String> persistStreamAnswer(Flux<String> tokens, UUID sessionId, UUID spaceId,
+                                             UUID userId, String question) {
+        StringBuilder answerBuffer = new StringBuilder();
+        return tokens.doOnNext(answerBuffer::append)
+                .doOnComplete(() -> saveStreamExchange(
+                        sessionId, spaceId, userId, question, answerBuffer.toString()));
     }
 
     private void saveStreamExchange(UUID sessionId, UUID spaceId, UUID userId, String question, String answer) {
@@ -221,6 +147,13 @@ public class MdQnAServiceImpl implements MdQnAService {
         } catch (Exception e) {
             log.warn("保存 Markdown 流式问答会话失败：sessionId={}", sessionId, e);
         }
+    }
+
+    private MessageChatMemoryAdvisor streamMemoryAdvisor(UUID sessionId) {
+        return MessageChatMemoryAdvisor.builder(redisChatMemory)
+                .conversationId(sessionId.toString())
+                .scheduler(Schedulers.immediate())
+                .build();
     }
 
     private List<SearchHit> retrieveParentHits(UUID spaceId, QnARequest req) {
@@ -241,32 +174,6 @@ public class MdQnAServiceImpl implements MdQnAService {
                 .tag("kb.parent_expansion.child_hits", String.valueOf(childHits.size()))
                 .outputFrom((List<SearchHit> parents) -> RetrievalTraceSummary.summarize(parents), maxRetrievalChars)
                 .observe(() -> parentExpansionService.expand(childHits));
-    }
-
-    /**
-     * 获取当前用户 ID，无认证上下文时静默返回 {@code null}（仅用于 trace tag，不影响业务）。
-     */
-    private String currentUserIdQuietly() {
-        try {
-            UUID userId = SecurityUtils.getCurrentUserId();
-            return userId != null ? userId.toString() : null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * 构建业务根 span 的 LangFuse 属性集合（user/session 高基数，space/provider metadata）。
-     */
-    private Map<String, String> businessAttrs(String userId, UUID sessionId, UUID spaceId, String provider) {
-        Map<String, String> attrs = new LinkedHashMap<>();
-        if (userId != null) {
-            attrs.put(TracingAttributes.LANGFUSE_USER_ID, userId);
-        }
-        attrs.put(TracingAttributes.LANGFUSE_SESSION_ID, sessionId.toString());
-        attrs.put(TracingAttributes.META_SPACE_ID, spaceId.toString());
-        attrs.put(TracingAttributes.META_MODEL_PROVIDER, provider);
-        return attrs;
     }
 
     private String buildSystemPrompt(List<SearchHit> hits) {

@@ -70,6 +70,18 @@ public class TracingConfig {
     }
 
     /**
+     * 把 Spring AI tool observation 的入参 / 返回写入 Spring AI 原生 key，并镜像到 LangFuse
+     * observation input/output。内容在写入源头完成脱敏截断，不直接注册 Spring AI 原生正文 filter，
+     * 避免未脱敏的 {@code spring.ai.tool.call.arguments/result} 进入 high-cardinality keys。
+     *
+     * @return ObservationFilter
+     */
+    @Bean
+    public ToolCallingContentLangfuseObservationFilter toolCallingContentLangfuseObservationFilter() {
+        return new ToolCallingContentLangfuseObservationFilter(properties.getMaxToolChars());
+    }
+
+    /**
      * 把业务根 span 的 LangFuse 业务属性复制到同一 trace 的每个子 span。
      * 作为 {@code SpanProcessor} bean 被 Spring Boot OTel 自动配置收集进 SdkTracerProvider。
      *

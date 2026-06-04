@@ -125,7 +125,9 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   const token = localStorage.getItem('access_token');
   const topK = parseInt(document.getElementById('topk-select').value);
   const modelProvider = selectedModelProvider();
-  const res = await fetch(`/api/v1/spaces/${spaceId}/md-qa/ask/stream`, {
+  // 流式端点可配置：标准流式 ask/stream、Agentic 流式 ask/agentic/stream
+  const streamEndpoint = mdCurrentConfig?.streamEndpoint || 'ask/stream';
+  const res = await fetch(`/api/v1/spaces/${spaceId}/md-qa/${streamEndpoint}`, {
     method: 'POST',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

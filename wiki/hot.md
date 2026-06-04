@@ -1,8 +1,14 @@
 # Hot Cache
 
-_Last updated: 2026-06-03_
+_Last updated: 2026-06-04_
 
 ## 最近 ingest
+
+**2026-06-04 LangFuse 两子设计代码落地（todo.md 状态回灌）** → [[features/langfuse-tracing]] §Input/Output 映射 + §基础设施 span 噪音过滤
+- todo.md 把两项从"待实现/未建页"推进到**代码已落地、运行态待起栈联调验收**；已核对类文件存在确认。
+- ① Input/Output 映射 Phase 1：`ChatModelContentObservationFilter`（映射自动 generation span 的 prompt/completion 到 `langfuse.observation.input/output`，`TracingConfig` 装配 + 测试覆盖）+ 业务 span 经 `TracingSupport` 直写。原 §正文捕获脱敏的 event/attribute "待验证" 改记为已落代码、运行态待验。
+- ② 基础设施噪音过滤（新增节）：`ExcludedObservationNamePredicate` 前缀黑名单 → NOOP，`TracingProperties.excludedObservationNamePrefixes` + `KB_TRACING_EXCLUDED_OBSERVATION_NAME_PREFIXES` 整体覆盖。默认黑名单实测含 `tasks.scheduled.execution`/`http.server.requests`/`spring.security`/`spring.ai` 等（比 todo 列举更宽）。设计文档 `docs/design-langfuse-noise-filter.md` 尚未落到 docs/。
+- 决策：沿用 2026-06-03 整合思路，噪音过滤作 §节并入 [[features/langfuse-tracing]] 而非新建页，避免再碎片化。
 
 **2026-06-03 docs/ 更新回灌（MiniMax 退役收尾）** → 见 `log.md`
 - `docs/` 做了 MiniMax 清理 + 语句重写后回灌 wiki。wiki 早已基本同步（providers 退役墓碑、llama.cpp 标默认 chat），本轮只补 3 处 ADR 历史理据（adr-002/008/014 的 MiniMax 残留）+ 1 处日志笔误。
