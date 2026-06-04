@@ -5,7 +5,7 @@ tags: [feature, rag, search, bm25, keyword-search, markdown, pg_tokenizer, vchor
 
 # md 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
 
-> 状态：**代码已实现**（编译通过，md 入库单测 7/7 通过）；运行态步骤（建 model/tokenizer、回填、评估、翻默认）**尚未执行**。
+> 状态：**代码已实现 + BM25 build 已跑通**（2026-06-04）。`db/manual/md-bm25-build.sql` 已执行，`tokenizer_catalog` 三表与 `md_model` 词表生成，运行时已确认走 BM25（不再降级 TRGM）。剩余可选运行态步骤：填评估集跑 `MdKeywordEvalTest` 做 recall@k 对照。
 > 设计文档：`docs/design-md-keyword-bm25.md`（含选型 C1/C2 推演）
 > 实施计划：`.planning/2026-05-28-markdown-keyword-bm25/plan.md`
 > 架构决策：[[decisions/adr-013-md-keyword-bm25]]
@@ -127,11 +127,11 @@ ORDER BY score ASC LIMIT ?               -- BM25 分为负，越负越相关 →
 
 | 配置项 | 默认 | 说明 |
 |--------|------|------|
-| `enterprise.kb.md.keyword-mode` | `TRGM` | md 关键词算法：`TRGM` / `BM25` |
+| `enterprise.kb.md.keyword-mode` | `BM25` | md 关键词算法：`TRGM` / `BM25`。`application.yml` 设 `${MD_KEYWORD_MODE:BM25}`（生效默认 BM25）；代码 `@Value` 兜底值仍是 `TRGM`（属性缺失时） |
 | `enterprise.kb.md.bm25-tokenizer` | `md_tok` | 索引与查询共用 tokenizer 名 |
 | `enterprise.kb.md.bm25-index` | `idx_md_child_bm25` | vchord_bm25 索引名，`to_bm25query` 按名引用 |
 
-部署后默认走 TRGM；评估达标再翻 `BM25`；线上异常**一键回退** TRGM，无需改代码、无需重建数据（`bm25vector` 列保留即可）。
+build 跑通后**现已默认走 BM25**（`application.yml` `MD_KEYWORD_MODE` 默认 `BM25`）；线上异常**一键回退** TRGM（`MD_KEYWORD_MODE=TRGM`），无需改代码、无需重建数据（`bm25vector` 列保留即可）。
 
 ## 评估
 
@@ -143,12 +143,14 @@ ORDER BY score ASC LIMIT ?               -- BM25 分为负，越负越相关 →
 
 1. ✅ 换镜像 `tensorchord/vchord-suite:pg16-20260501`
 2. ✅ migration 029：扩展 + `bm25vector` 列 + bm25 索引
-3. ⬜ ingest 代表性语料后跑 `db/manual/md-bm25-build.sql`（建 model/tokenizer/trigger + 回填）
-4. ✅ `MdKeywordSearchServiceImpl` 加 BM25 分支 + 开关（默认仍 TRGM）
-5. ⬜ 填评估集 → 跑 `MdKeywordEvalTest`
-6. ⬜ 达标 → 翻 `BM25`
+3. ✅ ingest 代表性语料后跑 `db/manual/md-bm25-build.sql`（建 model/tokenizer/trigger + 回填）—— **已执行（2026-06-04）**
+4. ✅ `MdKeywordSearchServiceImpl` 加 BM25 分支 + 开关
+5. ⬜ 填评估集 → 跑 `MdKeywordEvalTest`（recall@k 对照，可选）
+6. ✅ 运行时走 `BM25`（已确认不再降级 TRGM）
 
-> **本会话实测（2026-05-27，运行镜像 vchord_bm25 0.3.0 / pg_tokenizer 0.1.1）**：029 已 apply（`tokenizer_catalog` / `bm25_catalog` schema 与扩展就位，`idx_md_child_bm25` 空索引 88 kB）；但 `tokenizer_catalog.model` / `text_analyzer` / `tokenizer` **三表均 0 行** → **build 脚本尚未跑，`md_model`/`md_ta`/`md_tok` 都还不存在**。即第 3 步未做，BM25 链路尚未真正可用。
+> **更新（2026-06-04）**：`db/manual/md-bm25-build.sql` 已跑通——`tokenizer_catalog.model` / `text_analyzer` / `tokenizer` 三表与 `md_model` / `md_ta` / `md_tok` 已生成，第 3 步完成，BM25 链路真正可用并已确认运行走 BM25。
+>
+> ~~**本会话实测（2026-05-27，运行镜像 vchord_bm25 0.3.0 / pg_tokenizer 0.1.1）**：029 已 apply 但 `tokenizer_catalog` 三表均 0 行，build 脚本尚未跑，BM25 链路尚未真正可用。~~（已被上方 2026-06-04 更新取代，保留作历史）
 
 ## 风险
 

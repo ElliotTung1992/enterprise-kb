@@ -63,6 +63,20 @@
         "wiki/log.md",
         "wiki/hot.md"
       ]
+    },
+    "docs/langfuse-tracing-architecture.md": {
+      "hash": "1ae35532a229938bbdc226a4b3709486",
+      "ingested_at": "2026-06-04",
+      "pages_created": [
+        "wiki/features/langfuse-tracing-boundary-refactor.md"
+      ],
+      "pages_updated": [
+        "wiki/features/langfuse-tracing.md",
+        "wiki/decisions/adr-015-langfuse-tracing.md",
+        "wiki/Home.md",
+        "wiki/hot.md",
+        "wiki/log.md"
+      ]
     }
   }
 }

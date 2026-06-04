@@ -5,7 +5,7 @@ tags: [adr, architecture, rag, search, bm25, keyword-search, markdown, pg_tokeni
 
 # ADR-013：md 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
 
-**状态**：已接受（代码已实现并编译验证；运行态建 model / 回填 / 评估 / 翻默认待执行，build 脚本截至 2026-05-27 尚未跑）
+**状态**：已接受并落地（代码已实现并编译验证；**build 脚本已于 2026-06-04 跑通**——`tokenizer_catalog` 三表 + `md_model` 已建，`application.yml` `MD_KEYWORD_MODE` 默认 `BM25`，运行时走 BM25。剩余可选：`MdKeywordEvalTest` recall@k 对照）
 
 > 详细功能设计见 [[features/md-keyword-bm25]]。完整选型推演见 `docs/design-md-keyword-bm25.md`，实施计划见 `.planning/2026-05-28-markdown-keyword-bm25/plan.md`。本 ADR 是 [[decisions/adr-012-markdown-structure-rag]] 的后续——只升级该竖井的关键词检索一路。
 
@@ -17,7 +17,7 @@ tags: [adr, architecture, rag, search, bm25, keyword-search, markdown, pg_tokeni
 
 ## 决策
 
-在 **Postgres 原生**实现 BM25，选 **VectorChord-bm25 + pg_tokenizer**，仅替换 md 竖井关键词路的内部算法，受 `keyword-mode` 开关控制（默认仍 TRGM）。
+在 **Postgres 原生**实现 BM25，选 **VectorChord-bm25 + pg_tokenizer**，仅替换 md 竖井关键词路的内部算法，受 `keyword-mode` 开关控制（build 跑通后生效默认 `BM25`，可一键回退 `TRGM`）。
 
 ## 关键决策
 

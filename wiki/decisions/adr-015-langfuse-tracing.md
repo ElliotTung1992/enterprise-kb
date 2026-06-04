@@ -9,6 +9,14 @@ tags: [adr, observability, tracing, langfuse, opentelemetry, otlp, micrometer, l
 
 > 完整设计与流程图见 `docs/design-langfuse-tracing.md`。本 ADR 接续 [[decisions/adr-014-ragas-integration]] "备选方案" 中标记为"推迟二期"的 **LangFuse 自部署** 选项；与 ADR-014（离线评估）正交——本 ADR 解决**在线链路可观测性**。
 
+> [!note] 边界化重构（2026-06-04）修订 C2/C3/C4
+> 后续把 tracing 横切关注点从 Service 收口到边界，**已落地代码**并修订本 ADR 的部分实现细节：
+> - **C2/C8 → 根 span 改由 Controller 方法 AOP**（`@QaObserved` / `QaObservedAspect` / `AiStreamTracingSupport`）创建，Service 不再 `TracingSupport.root(...)`；流式 root 所有权交 `Flux.doFinally`。（ingest worker 仍入口自建根。）
+> - **C2 → tool span 命名复用 Spring AI `spring.ai.tool` 规约**（`DefaultToolCallingObservationConvention`），废弃自定义 `gen_ai.tool.execution`。
+> - **C3 → ② 改为传播型 `retrievalExecutor`**（`ContextPropagatingExecutor`，提交时捕获），调用点不再手写 `ContextSnapshot.wrapExecutor`。
+> - **C4 → 去掉手写 `kb.retrieval.vector`**，vector 段吃 Spring AI VectorStore 原生 observation；keyword/rerank/parent_expansion 业务 span 保留。
+> 完整论证与代码核实见 [[features/langfuse-tracing-boundary-refactor]]。
+
 ## 背景
 
 自研 trace 体系（原 ADR-009 / ADR-010 的 `agent_traces` / `agent_trace_steps` + `TraceRecorder` + `TraceFacade` + ChatClient advisor + agent 拦截器 + AOP）于 2026-05-28 经迁移 032 **整体退役**。退役后：

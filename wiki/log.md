@@ -1,5 +1,20 @@
 # Wiki Ingest Log
 
+## 2026-06-04 | sync | BM25 build 跑通状态回灌
+- Trigger: 用户确认 `.planning/未实现功能.md` 的「BM25 build 跑通」P0 项已实现（`db/manual/md-bm25-build.sql` 已执行，`tokenizer_catalog` 三表 + `md_model` 已生成，运行时走 BM25）。
+- Pages updated: [[features/md-keyword-bm25]]（状态 banner + 实现状态 checklist 3·6 ✅ + 实测块加 2026-06-04 更新、旧块划线保留 + 配置表默认 BM25）、[[decisions/adr-013-md-keyword-bm25]]（状态 + 决策行默认）、[[features/markdown-structure-rag]]（关键词路 note）、[[Home]]（状态速览）、`hot.md`（新 ingest 条 + 旧 2026-05-27 条状态行）、`.planning/roadmaps/{未实现,已实现}功能.md`。
+- grounding 订正：`application.yml:186` 实为 `keyword-mode: ${MD_KEYWORD_MODE:BM25}` → **生效默认早就是 BM25**（代码 `@Value(...:TRGM)` 只是属性缺失兜底）。wiki 多处旧记「默认仍 TRGM」系只看 `@Value` 未看 yml，本轮一并订正。
+- Key insight: 状态从「代码已落地、build 未跑、降级 TRGM」翻为「build 跑通、运行走 BM25」。历史实测块（2026-05-27 三表 0 行）以删除线保留作时间线。
+
+## 2026-06-04 | ingest | LangFuse 边界化重构架构文档
+- Source: `docs/langfuse-tracing-architecture.md`（自 `todo.md` 第 3 点整理的 5 节重构设计）
+- Summary: [[features/langfuse-tracing-boundary-refactor]]
+- Pages created: [[features/langfuse-tracing-boundary-refactor]]
+- Pages updated: [[features/langfuse-tracing]]（header 指针 + span 模型表 `[!stale]` + 并行传播 `[!stale]` + ① 传播表行 ② + I/O 写入规格旧 tool span 名）、[[decisions/adr-015-langfuse-tracing]]（note 修订 C2/C3/C4）、[[Home]]（功能行）、`hot.md`
+- 核实动作：grep 核实 5 节方案**均已落地代码** —— `QaObservedAspect`/`@QaObserved`/`AiStreamTracingSupport` 存在且 `MdQnAController` 四端点已挂注解；`TracingSupport.root` 零命中；`retrievalExecutor`(`ContextPropagatingExecutor`) 在 `AppConfig` 且 `MdHybridSearchServiceImpl` 注入；`TracingToolInterceptor` 用 `DefaultToolCallingObservationConvention`/`spring.ai.tool` 且 `gen_ai.tool.execution` 零命中；`MdHybridSearchServiceImpl` 注释确认 `kb.retrieval.vector` 已去掉。
+- Key insight: 源文档以「待重构实现」口吻写就，但**代码已走到目标态**——ingest 据代码实况记录，并把母页 [[features/langfuse-tracing]] 中被超越的早期描述（service 自建根 / `gen_ai.tool.execution` / 手写 `ContextSnapshot.wrapExecutor` / 手写 `kb.retrieval.vector`）逐处 `[!stale]` 标注指回新页。
+- 范围克制：纯技术重构，无新增 entity/concept 页；连接全部内部（母页 / ADR-015 / md-structure-rag / providers）。
+
 ## 2026-06-04 | ingest | todo.md LangFuse 两子设计状态回灌
 - Source: `todo.md`（项目根，TODO 状态清单）
 - Summary: [[features/langfuse-tracing]] §Input/Output 映射 + §基础设施 span 噪音过滤

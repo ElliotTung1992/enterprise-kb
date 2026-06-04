@@ -4,6 +4,17 @@ _Last updated: 2026-06-04_
 
 ## 最近 ingest
 
+**2026-06-04 BM25 build 跑通（状态回灌）** → [[features/md-keyword-bm25]] · `.planning/roadmaps/`
+- 用户确认 `db/manual/md-bm25-build.sql` 已执行：`tokenizer_catalog` 三表 + `md_model`/`md_ta`/`md_tok` 已生成，BM25 链路真正可用。从原「运行态 build 未跑、降级 TRGM」翻为已跑通。
+- grounding 发现：`application.yml:186` 早已是 `keyword-mode: ${MD_KEYWORD_MODE:BM25}`（生效默认 **BM25**，非 wiki 旧记的 TRGM；代码 `@Value` 兜底才是 TRGM）→ 一并订正 [[features/md-keyword-bm25]] 配置表。
+- 同步：`.planning/未实现功能.md`（移出 P0 收口项 + 留墓碑）+ `.planning/已实现功能.md` §二；wiki banner / 实现状态 checklist 3·6 ✅ / 配置表默认。
+
+**2026-06-04 LangFuse 边界化重构（docs 架构文档 ingest）** → 新建 [[features/langfuse-tracing-boundary-refactor]]
+- 源 `docs/langfuse-tracing-architecture.md`（自 todo.md 第 3 点）写 5 节重构方案，**口吻是"待重构实现"，但 grep 核实代码已全部落地** → 本页按代码实际状态记录，是本轮最高信号。
+- 五刀：① 根 span Service→**Controller AOP**（`@QaObserved`/`QaObservedAspect`/`AiStreamTracingSupport`，`TracingSupport.root` 已零命中）；② 并行检索手写 wrap→注入**传播型 `retrievalExecutor`**（`ContextPropagatingExecutor`，提交时捕获）；③ I/O 全局 filter；④ tool span `gen_ai.tool.execution`→**`spring.ai.tool`** 原生规约（`TracingToolInterceptor` 用 `DefaultToolCallingObservationConvention`，旧名零命中）；⑤ 去掉手写 `kb.retrieval.vector`，吃 VectorStore 原生 span。
+- 连带：[[features/langfuse-tracing]] 加 4 处 `[!stale]`（span 模型表 / 并行传播 / I/O 写入规格里的旧 tool span 名）；[[decisions/adr-015-langfuse-tracing]] 加 note 修订 C2/C3/C4。
+- 教训：源文档状态字段（"待实现"）滞后于代码，ingest 必须 grep 落地核实，别照抄文档口吻。
+
 **2026-06-04 LangFuse 两子设计代码落地（todo.md 状态回灌）** → [[features/langfuse-tracing]] §Input/Output 映射 + §基础设施 span 噪音过滤
 - todo.md 把两项从"待实现/未建页"推进到**代码已落地、运行态待起栈联调验收**；已核对类文件存在确认。
 - ① Input/Output 映射 Phase 1：`ChatModelContentObservationFilter`（映射自动 generation span 的 prompt/completion 到 `langfuse.observation.input/output`，`TracingConfig` 装配 + 测试覆盖）+ 业务 span 经 `TracingSupport` 直写。原 §正文捕获脱敏的 event/attribute "待验证" 改记为已落代码、运行态待验。
@@ -64,7 +75,7 @@ _Last updated: 2026-06-04_
 **2026-05-27 MD 关键词检索升级 BM25** → [[features/md-keyword-bm25]] · [[decisions/adr-013-md-keyword-bm25]]
 - 升级 [[features/markdown-structure-rag]] 竖井的**关键词那一路**：pg_trgm → 真正 BM25（VectorChord-bm25 + pg_tokenizer jieba）。改动只在 `MdKeywordSearchServiceImpl` 一个 method（RRF 按排名融合，BM25 负分免归一化）。
 - 三件套：`md_ta`(jieba 切词) → `md_model`(词→ID **冻结**词表，从 `embed_text` 学) → `md_tok`。`bm25vector`={词ID:TF}（严格升序，TF 是值不是维度）；DF/IDF 在 `USING bm25` 倒排索引、`to_bm25query` 查询时现算。
-- 状态：代码已落地（编译过、md 入库 7/7）；**运行态 build 脚本未跑**——实测 `tokenizer_catalog.model/text_analyzer/tokenizer` 三表 0 行，`md_model` 等尚不存在，BM25 链路未真正可用，默认仍 TRGM。`db/manual/md-bm25-build.sql` 须语料 ingest 后手动跑。
+- 状态：代码已落地（编译过、md 入库 7/7）；**build 脚本已于 2026-06-04 跑通**——`tokenizer_catalog` 三表 + `md_model` 已生成，BM25 链路真正可用，`application.yml` `MD_KEYWORD_MODE` 默认 `BM25`，运行时走 BM25（异常可一键回退 TRGM）。
 
 **2026-05-26 Markdown 结构感知 RAG 验收文档** → [[features/markdown-structure-rag]]（验收已并入该页 §验收） · [[decisions/adr-012-markdown-structure-rag]]
 - 与 [[features/markdown-visual-rag-l2]]（图文 RAG）是**两条不同竖井**：结构感知走全新 `md_documents`/`md_kb_chunks`，small-to-big 父子索引，标准竖井零改动。

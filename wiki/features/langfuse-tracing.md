@@ -2,6 +2,7 @@
 
 > 状态：代码已落地编译通过，运行态待起栈联调验收
 > 设计文档：`docs/design-langfuse-tracing.md`
+> **边界化重构（2026-06-04）**：根 span 归属、tool span 命名、并行检索传播、vector 埋点已重构，见 [[features/langfuse-tracing-boundary-refactor]]。本页下文若干早期描述已被该重构修订，相关处加了 `[!stale]` 标注。
 > 子设计：Input/Output 映射已并入本页（见 [[#Input/Output 映射（子设计）]]，**Phase 1 代码已落地、运行态待验收**）；基础设施 span 噪音过滤见 [[#基础设施 span 噪音过滤]]（代码已落地、单测 24/24、运行态待验收）
 > 架构决策：[[decisions/adr-015-langfuse-tracing]]
 > 前置评估侧 ADR：[[decisions/adr-014-ragas-integration]]（"备选方案"标记的 LangFuse 自部署即本方案）
@@ -80,12 +81,15 @@ LangFuse 未起或本地开发时应用照常启动。
 
 | span 类型 | 来源 | 命名 |
 |-----------|------|------|
-| 根 span | service / worker 入口自建 | `kb.qa.ask` / `kb.qa.ask.agentic` / `kb.qa.ask.stream` / `kb.ingest.document` |
+| 根 span | ~~service / worker 入口自建~~ → **HTTP 问答改由 Controller AOP**（`@QaObserved`）；ingest worker 仍入口自建 | `kb.qa.ask` / `kb.qa.ask.agentic` / `kb.qa.ask.stream` / `kb.qa.ask.agentic.stream` / `kb.ingest.document` |
 | LLM span | Spring AI 自动 | `chat <model>` + `gen_ai.*` |
-| Tool span | `ToolInterceptor` around | `gen_ai.tool.execution` + tool 名 / toolCallId / 入参摘要 |
-| 检索 span | `MdHybridSearchService` 手工 | `kb.retrieval.vector` / `kb.retrieval.keyword` / `kb.retrieval.rerank` / `kb.retrieval.parent_expansion` |
+| Tool span | `ToolInterceptor` around | ~~`gen_ai.tool.execution`~~ → **`spring.ai.tool`**（复用 Spring AI `DefaultToolCallingObservationConvention`） |
+| 检索 span | `MdHybridSearchService` | ~~`kb.retrieval.vector`~~（已去掉，吃 VectorStore 原生）/ `kb.retrieval.keyword` / `kb.retrieval.rerank` / `kb.retrieval.parent_expansion` |
 | VectorStore span | Spring AI 自动（补 registry 后） | `db <op>` |
 | Graph/Node span | `GraphObservationLifecycleListener` | graph-core 自带命名 |
+
+> [!stale] 本表已被边界化重构修订
+> 根 span 归属（service → Controller AOP）、tool span 命名（`gen_ai.tool.execution` → `spring.ai.tool`）、`kb.retrieval.vector`（去掉、改吃 VectorStore 原生 span）均已在代码中变更。完整设计与代码核实见 [[features/langfuse-tracing-boundary-refactor]]。
 
 **业务上下文属性**（trace attribute / metadata attribute）：
 
@@ -114,7 +118,10 @@ flowchart TD
     PE -.-> LLM
 ```
 
-`V` 与 `K` 经 `CompletableFuture.supplyAsync` 在 **ForkJoinPool** 并行——必须用 `ContextSnapshot.wrapExecutor` 包装的 executor 替换裸 `supplyAsync`，否则两段检索 span 脱离根 span 成孤儿 trace。
+`V` 与 `K` 经 `CompletableFuture.supplyAsync` 并行，须跨线程带上根 span 上下文，否则两段检索 span 脱离根 span 成孤儿 trace。
+
+> [!stale] 传播方式已设施化
+> 原方案在调用点手写 `ContextSnapshot.wrapExecutor` 包 ForkJoinPool。现已改为注入传播型 `retrievalExecutor`（`ContextPropagatingExecutor` 包虚拟线程，**每次提交任务时**捕获上下文），调用点不再出现 `ContextSnapshot.captureAll()`。见 [[features/langfuse-tracing-boundary-refactor]] §2。
 
 ## Agentic 问答的 span 树
 
@@ -188,7 +195,7 @@ graph-core 内部为 reactive/异步生成器，classpath 上有 `DashScopeAsync
 | 机制 | 覆盖面 | 说明 |
 |------|--------|------|
 | ① reactor 自动传播 | graph 内部线程上的 LLM span | `TracingConfig` 在 enabled 时 `Hooks.enableAutomaticContextPropagation()` + `micrometer-context-propagation` + `ObservationThreadLocalAccessor`，一行开关 |
-| ② `ContextSnapshot` 包装 | `CompletableFuture` 检索并行（vector/keyword） | `MdHybridSearchServiceImpl` 用 `ContextSnapshot.wrapExecutor` 包并行检索 executor，对自有并行代码确定性兜底，不依赖 reactor 是否传播 |
+| ② 传播型 executor | `CompletableFuture` 检索并行（vector/keyword） | `MdHybridSearchServiceImpl` 注入 `retrievalExecutor`（`ContextPropagatingExecutor`，提交时捕获上下文），对自有并行代码确定性兜底，不依赖 reactor 是否传播。~~原为调用点手写 `ContextSnapshot.wrapExecutor`~~，见 [[features/langfuse-tracing-boundary-refactor]] §2 |
 | ③ 关异步 tool manager | tool 执行线程 | `spring.ai.alibaba.tool.async.enabled=false`，tool 同步在调用线程跑，最大化 thread-local 直接命中 |
 
 **验证顺序**：①②③ 必须同批完成后再验收。先用单轮问答验证 `kb.retrieval.vector` / `kb.retrieval.keyword` 挂在 `kb.qa.ask` 下，再用 agentic 问答验证 graph / LLM / tool / retrieval 都挂在 `kb.qa.ask.agentic` 这一棵树下。
@@ -232,7 +239,7 @@ graph-core 内部为 reactive/异步生成器，classpath 上有 `DashScopeAsync
 > [!key-insight] 写入收口在 TracingSupport
 > 所有正文写入**必须**在 `TracingSupport` 方法内部调 `SensitiveDataRedactor.redactAndTruncate(...)`，调用方不能绕过脱敏直写 `langfuse.*.input/output` 高基数正文。这是脱敏唯一收口点，与上文 `SensitiveDataObservationFilter`（KeyValue 路径兜底，**不**覆盖 span event 与这些直写 attribute）互补。
 
-**写入规格（Phase 1）**：`kb.qa.ask*` = 问题 / 答案；`kb.retrieval.*` = query / 命中摘要；`gen_ai.tool.execution` = 参数 / 结果；`kb.ingest.*` = filename / status / chunkCount；均带 userId / sessionId / spaceId 等 metadata。**改动**落 `TracingAttributes` / `TracingSupport`（kb-common）+ `MdQnAServiceImpl` / `MdAgenticQnAServiceImpl` / `MdHybridSearchServiceImpl` / `TracingToolInterceptor` / `MdDocumentIngestionWorkerImpl`。
+**写入规格（Phase 1）**：`kb.qa.ask*` = 问题 / 答案；`kb.retrieval.*` = query / 命中摘要；tool span（`spring.ai.tool`，原 `gen_ai.tool.execution`）= 参数 / 结果；`kb.ingest.*` = filename / status / chunkCount；均带 userId / sessionId / spaceId 等 metadata。**改动**落 `TracingAttributes` / `TracingSupport`（kb-common）+ `MdQnAServiceImpl` / `MdAgenticQnAServiceImpl` / `MdHybridSearchServiceImpl` / `TracingToolInterceptor` / `MdDocumentIngestionWorkerImpl`。
 
 ## 基础设施 span 噪音过滤
 
