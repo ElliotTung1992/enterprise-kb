@@ -19,6 +19,8 @@ import reactor.core.publisher.Hooks;
  *   <li>{@link SensitiveDataObservationFilter}：进 trace 高基数 tag 的脱敏 + 截断兜底；</li>
  *   <li>{@link ChatModelContentObservationFilter}：把 Spring AI ChatModel 的 prompt/completion
  *       映射到 LangFuse observation input/output；</li>
+ *   <li>{@link VectorStoreContentObservationFilter}：把 Spring AI VectorStore 的查询请求 / 召回文档
+ *       映射到 LangFuse observation input/output；</li>
  *   <li>{@link LangfuseChildAttributeSpanProcessor}：把业务根 span 的 LangFuse 属性复制到子 span；</li>
  *   <li>{@link ExcludedObservationNamePredicate}：基础设施 span 噪音黑名单过滤。</li>
  * </ul>
@@ -79,6 +81,17 @@ public class TracingConfig {
     @Bean
     public ToolCallingContentLangfuseObservationFilter toolCallingContentLangfuseObservationFilter() {
         return new ToolCallingContentLangfuseObservationFilter(properties.getMaxToolChars());
+    }
+
+    /**
+     * 将 Spring AI VectorStore observation 的查询请求 / 召回文档写入 LangFuse observation input/output。
+     * 补齐 ChatModel / Tool 之外缺失的 VectorStore（{@code milvus query}）这一类正文映射。
+     *
+     * @return ObservationFilter
+     */
+    @Bean
+    public VectorStoreContentObservationFilter vectorStoreContentObservationFilter() {
+        return new VectorStoreContentObservationFilter(properties.getMaxRetrievalChars());
     }
 
     /**

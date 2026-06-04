@@ -30,8 +30,9 @@ class ExcludedObservationNamePredicateTest {
             "authorize request",
             "authorize method",
             "secured request",
-            "http get /**",
-            "http get /actuator/health");
+            "http get /actuator/health",
+            "http.server.requests",
+            "spring.security");
 
     /** predicate 只看 name，context 内容无关，统一传同一个空 context。 */
     private static final Observation.Context CTX = new Observation.Context();
@@ -51,8 +52,9 @@ class ExcludedObservationNamePredicateTest {
                 "authorize request",
                 "authorize method",
                 "secured request",
-                "http get /**",
-                "http get /actuator/health"
+                "http get /actuator/health",
+                "http.server.requests",
+                "spring.security"
         })
         @DisplayName("已知基础设施噪音被丢")
         void infrastructureNoiseIsExcluded(String name) {
@@ -83,6 +85,7 @@ class ExcludedObservationNamePredicateTest {
                 "chat qwen-plus",
                 "embedding text-embedding-v2",
                 "gen_ai.client.operation",
+                "spring.ai.tool",
                 "milvus query",
                 "http post /api/v1/spaces/{spaceId}/md-qa/ask",        // 业务 http 不被 health 前缀误伤
                 "http post /api/v1/spaces/{spaceId}/md-documents/upload"
