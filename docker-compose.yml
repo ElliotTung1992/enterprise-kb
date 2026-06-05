@@ -215,6 +215,8 @@ services:
     container_name: kb-clickhouse
     profiles:
       - tracing
+    ports:
+      - "8123:8123"
     environment:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?CLICKHOUSE_PASSWORD is required}
