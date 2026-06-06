@@ -30,14 +30,15 @@ naive 的"行为画像"在此地基不稳。
 4. **砍掉"主题兴趣"与"常用 space"**：主题随时间漂移属会话层，space 属意图层——都不是"人的稳定属性"。
 5. **取值 = 显式优先 + 推断回落**；字段级来源（declared/inferred 分列于 JSONB）。
 6. **显式同步写（即时生效）+ 推断异步写（不覆盖显式）**。
-7. **离线推断**：仅对"资历"做 LLM 判定 + 置信闸，输出严格枚举（不产自由文本人设）。语言走 per-request 检测；长度/风格走系统默认。
+7. **离线推断只对资历**：仅对"资历"做 LLM 判定 + 置信闸，输出严格枚举（不产自由文本人设）。答案偏好**不做行为反推**：语言未声明则 LLM 天然跟随提问语言（无检测代码）、长度/风格走系统默认；用户**明说**的持久偏好由对话捕获（决策 15）抽取，属"读取显式声明"而非反推。
 8. **架构 = 离线算 + 在线读**，单一存储 `user_profiles`，**JSONB 单列**，枚举校验在 `ProfileService` 写入时把关。
 9. **不单开模块，落 kb-user**：单开 `kb-profile` 会因 worker 依赖 kb-search 的 qa_messages+LLM 而与 kb-search 循环依赖。
 10. **V1 不上缓存，直读 DB**：画像读=每问一次 PK 查、被 LLM 秒级延迟淹没，缓存失效维护不值（defer Phase 3）。
 11. **MQ = Kafka**（项目级基础设施投资）；producer 经 Spring 事件 + `@TransactionalEventListener(AFTER_COMMIT)` 解耦，Kafka 发送隔离在 `@ConditionalOnProperty` 监听器，**Phase 2 默认关、不依赖 Kafka 启动**。
-12. **冲突裁决 = 软默认 + LLM 裁决**：画像以"默认偏好"注入，提示词写明"本轮明确要求优先"，不建意图解析器。优先级阶梯：本轮指令 > 会话 > 显式画像 > 推断画像 > 系统默认。
+12. **冲突裁决 = 软默认 + LLM 裁决**：画像以"默认偏好"注入，提示词写明"本轮明确要求优先"。优先级阶梯：本轮指令 > 会话 > 显式画像 > 推断画像 > 系统默认。**一次性**指令（"这次详细点"）由 LLM 化解、不回写画像；**持久**指令的回写见决策 15。
 13. **应用范围 = 标准 QA + Agentic QA 都注入**。
 14. **Kafka 降级线程池**：投递失败（同步异常 / 异步 future 失败）转本地有界 `ThreadPoolTaskExecutor`（core1/max2/queue200，满则丢弃）直接跑共享 `ProfileInferenceRunner`，Kafka 故障下退化为「单机异步」；producer `max.block.ms=3000` 快速失败避免阻塞请求线程；runner 顶层吞异常防毒丸消息。worker 与降级路径共用 runner（去抖天然幂等）。
+15. **对话内偏好捕获（第二显式入口）= 检测 + 静默保存 + 告知**：用户在对话里说"以后/默认用中文、简洁点"等**持久**答案偏好，由 `AnswerPreferenceCaptureService`（预过滤 + 按需 LLM 判 `FIELD|VALUE|DURABLE`）写入 declared（PATCH `mergeDeclaredPreference`）并把回执前置到本轮答案。仅答案偏好（语言/长度/风格）、不含资历；一次性诉求不回写。修正了 grill 里"答案偏好 = 显式 only（设置页）"的盲区——显式实有两入口。
 
 ## 后果
 

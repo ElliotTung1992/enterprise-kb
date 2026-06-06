@@ -1,5 +1,6 @@
 package com.enterprise.kb.user.service.impl;
 
+import com.enterprise.kb.common.constants.AnswerLanguage;
 import com.enterprise.kb.common.constants.AnswerLength;
 import com.enterprise.kb.common.constants.Seniority;
 import com.enterprise.kb.user.dto.ProfileInferenceState;
@@ -149,5 +150,15 @@ class ProfileServiceImplTest {
         assertThat(s.hasDeclaredSeniority()).isTrue();
         assertThat(s.personalizationEnabled()).isTrue();
         assertThat(s.processedMsgCount()).isEqualTo(7);
+    }
+
+    @Test
+    void mergeDeclaredPreferenceSetsFieldAndKeepsOthers() {
+        // 已有 declared.answerLength=DETAILED + inferred.seniority；对话捕获合并 language=ZH 不应动它们
+        stubProfile("{\"declared\":{\"answerLength\":\"DETAILED\"},"
+                + "\"inferred\":{\"seniority\":\"SENIOR\",\"confidence\":0.9}}");
+        service.mergeDeclaredPreference(userId, AnswerLanguage.ZH, null, null);
+        UserProfile saved = captureUpsert();
+        assertThat(saved.getProfile()).contains("ZH").contains("DETAILED").contains("SENIOR");
     }
 }

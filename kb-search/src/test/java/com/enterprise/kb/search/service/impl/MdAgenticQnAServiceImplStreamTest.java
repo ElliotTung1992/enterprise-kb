@@ -50,7 +50,7 @@ class MdAgenticQnAServiceImplStreamTest {
 
     private MdAgenticQnAServiceImpl newService(RedisChatMemory memory, QaChatSessionService session) {
         return new MdAgenticQnAServiceImpl(
-                null, null, null, memory, session, null, null, null, null, ObservationRegistry.create(), null);
+                null, null, null, memory, session, null, null, null, null, ObservationRegistry.create(), null, null);
     }
 
     @SuppressWarnings("unchecked")

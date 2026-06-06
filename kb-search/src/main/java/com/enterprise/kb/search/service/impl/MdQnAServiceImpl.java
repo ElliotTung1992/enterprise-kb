@@ -81,8 +81,9 @@ public class MdQnAServiceImpl implements MdQnAService {
     }
 
     private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
+        UUID userId = SecurityUtils.getCurrentUserId();
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
-        String profileBlock = profileService.renderProfileBlock(SecurityUtils.getCurrentUserId());
+        String profileBlock = profileService.renderProfileBlock(userId);
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(redisChatMemory)
                 .conversationId(sessionId.toString()).build();
@@ -96,7 +97,7 @@ public class MdQnAServiceImpl implements MdQnAService {
         int tokensUsed = usage(chatResponse);
         List<Citation> citations = CitationAssembler.fromHits(parentHits);
         try {
-            qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(), req.question(), answer);
+            qaChatSessionService.saveExchange(sessionId, spaceId, userId, req.question(), answer);
         } catch (Exception e) {
             log.warn("保存 Markdown 问答会话失败：sessionId={}", sessionId, e);
         }

@@ -1,5 +1,8 @@
 package com.enterprise.kb.user.service;
 
+import com.enterprise.kb.common.constants.AnswerLanguage;
+import com.enterprise.kb.common.constants.AnswerLength;
+import com.enterprise.kb.common.constants.AnswerStyle;
 import com.enterprise.kb.common.constants.Seniority;
 import com.enterprise.kb.user.dto.ProfileInferenceState;
 import com.enterprise.kb.user.dto.UpdateProfileRequest;
@@ -58,4 +61,15 @@ public interface ProfileService {
      * @param processedMsgCount 本次推断已处理的用户消息总数（写入元数据用于下次去抖）
      */
     void recordInference(UUID userId, Seniority seniority, Double confidence, int processedMsgCount);
+
+    /**
+     * 合并写入显式答案偏好（PATCH 语义，供"对话内偏好捕获"使用）：只把非空的语言/长度/风格设到现有 declared，
+     * 保留其它 declared 字段与 inferred/meta，**绝不触碰资历**。
+     *
+     * @param userId   用户 ID
+     * @param language 答案语言（null 表示不改）
+     * @param length   答案长度（null 表示不改）
+     * @param style    答案风格（null 表示不改）
+     */
+    void mergeDeclaredPreference(UUID userId, AnswerLanguage language, AnswerLength length, AnswerStyle style);
 }

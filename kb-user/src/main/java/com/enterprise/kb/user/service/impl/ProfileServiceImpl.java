@@ -90,6 +90,24 @@ public class ProfileServiceImpl implements ProfileService {
      * {@inheritDoc}
      */
     @Override
+    @Transactional
+    public void mergeDeclaredPreference(UUID userId, AnswerLanguage language, AnswerLength length, AnswerStyle style) {
+        UserProfileData data = load(userId);
+        UserProfileData.Declared d = data.declaredOrEmpty();
+        // PATCH：只覆盖传入的非空字段，保留其它显式字段与资历；不动 inferred/meta。
+        UserProfileData.Declared merged = new UserProfileData.Declared(
+                d.seniority(),
+                length != null ? length : d.answerLength(),
+                language != null ? language : d.answerLanguage(),
+                style != null ? style : d.answerStyle());
+        persist(userId, new UserProfileData(merged, data.inferred(), data.meta()));
+        log.debug("对话捕获写入显式偏好：userId={}，lang={}，len={}，style={}", userId, language, length, style);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     @Transactional(readOnly = true)
     public String renderProfileBlock(UUID userId) {
         if (!injectionEnabled) {

@@ -229,6 +229,10 @@ enterprise:
     profile:
       # 在线注入总开关（Phase 1）：关则问答 prompt 不注入 <user_profile> 块
       injection-enabled: ${KB_PROFILE_INJECTION_ENABLED:true}
+      # 对话内偏好捕获（ADR-016 决策15）：识别"以后用中文"等持久声明 → 写入显式偏好 + 回执
+      capture:
+        enabled: ${KB_PROFILE_CAPTURE_ENABLED:true}
+        provider: ${KB_PROFILE_CAPTURE_PROVIDER:LLAMA_CPP}
       inference:
         # 离线推断总开关（Phase 2）：关则 producer 监听器与 worker 均不装配，应用无需 Kafka 即可启动
         enabled: ${KB_PROFILE_INFERENCE_ENABLED:false}
