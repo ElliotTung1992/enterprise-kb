@@ -89,6 +89,22 @@ spring:
         database-name: default
         embedding-dimension: 1536
 
+  # 用户画像离线推断的 Kafka（ADR-016，Phase 2）。bootstrap-servers 为空时不连接；
+  # 消费者容器由 ProfileInferenceWorker 的 @ConditionalOnProperty 控制，默认关时不装配、不连 broker。
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:}
+    consumer:
+      group-id: ${KB_PROFILE_CONSUMER_GROUP:profile-inference}
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        # broker 不可用时快速失败（默认 60s 会长时间阻塞发送），随后由监听器降级到本地线程池
+        max.block.ms: ${KAFKA_PRODUCER_MAX_BLOCK_MS:3000}
+
 mybatis:
   mapper-locations: classpath*:mapper/**/*.xml
   configuration:
@@ -169,7 +185,8 @@ enterprise:
         enabled: ${LLAMA_CPP_ENABLED:true}
         base-url: ${LLAMA_CPP_BASE_URL:http://localhost:8079}
         api-key: ${LLAMA_CPP_API_KEY:local}
-        model: ${LLAMA_CPP_MODEL:qwen3-vl-8b-instruct}
+        # 纯文本 Qwen3 原版混合权重（支持 /think·/no_think 软开关）；视觉走 DashScope 入库，本地链路不需要 VL
+        model: ${LLAMA_CPP_MODEL:qwen3-14b}
       context-limit: ${AI_CONTEXT_LIMIT:8192}
       agentic:
         chunk-token-size: ${AI_AGENTIC_CHUNK_TOKEN_SIZE:512}
@@ -208,6 +225,30 @@ enterprise:
         max-chars-per-parent: ${MD_PARENT_EXPANSION_MAX_CHARS_PER_PARENT:2000}
         max-windows-per-parent: ${MD_PARENT_EXPANSION_MAX_WINDOWS_PER_PARENT:3}
         max-context-chars: ${MD_PARENT_EXPANSION_MAX_CONTEXT_CHARS:10000}
+    # 用户画像与个性化问答（ADR-016）
+    profile:
+      # 在线注入总开关（Phase 1）：关则问答 prompt 不注入 <user_profile> 块
+      injection-enabled: ${KB_PROFILE_INJECTION_ENABLED:true}
+      inference:
+        # 离线推断总开关（Phase 2）：关则 producer 监听器与 worker 均不装配，应用无需 Kafka 即可启动
+        enabled: ${KB_PROFILE_INFERENCE_ENABLED:false}
+        # 推断资历用的模型提供商（轻量分类，用便宜快模型）
+        provider: ${KB_PROFILE_INFERENCE_PROVIDER:LLAMA_CPP}
+        # 活动事件 topic
+        topic: ${KB_PROFILE_ACTIVITY_TOPIC:kb.user.activity}
+        # 推断取用的近 N 条本人提问
+        recent-message-limit: ${KB_PROFILE_RECENT_MSG_LIMIT:50}
+        # 去抖：距上次推断新消息 ≥ 此值才重算
+        min-new-messages: ${KB_PROFILE_MIN_NEW_MESSAGES:10}
+        # 去抖：距上次推断间隔 ≥ 此小时数才重算
+        min-interval-hours: ${KB_PROFILE_MIN_INTERVAL_HOURS:6}
+        # 置信闸：推断资历低于此值不应用
+        confidence-threshold: ${KB_PROFILE_CONFIDENCE_THRESHOLD:0.7}
+        # Kafka 不可用时的降级线程池（有界，满则丢弃本次推断，提供背压）
+        fallback:
+          core-pool-size: ${KB_PROFILE_FALLBACK_CORE_POOL:1}
+          max-pool-size: ${KB_PROFILE_FALLBACK_MAX_POOL:2}
+          queue-capacity: ${KB_PROFILE_FALLBACK_QUEUE:200}
     eval:
       ragas:
         enabled: ${RAGAS_EVAL_ENABLED:true}

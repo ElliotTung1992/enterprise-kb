@@ -28,4 +28,24 @@
         )
     </insert>
 
+    <select id="countUserQuestions" resultType="int">
+        SELECT COUNT(*)
+        FROM qa_messages m
+        JOIN qa_sessions s ON m.session_id = s.id
+        WHERE s.user_id = #{userId,jdbcType=OTHER}
+          AND s.deleted_at IS NULL
+          AND m.role = 'user'
+    </select>
+
+    <select id="findRecentUserQuestions" resultType="java.lang.String">
+        SELECT m.content
+        FROM qa_messages m
+        JOIN qa_sessions s ON m.session_id = s.id
+        WHERE s.user_id = #{userId,jdbcType=OTHER}
+          AND s.deleted_at IS NULL
+          AND m.role = 'user'
+        ORDER BY m.created_at DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>

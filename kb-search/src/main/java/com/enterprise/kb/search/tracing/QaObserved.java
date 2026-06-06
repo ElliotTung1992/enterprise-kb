@@ -27,4 +27,13 @@ public @interface QaObserved {
      * @return span 名称
      */
     String name();
+
+    /**
+     * 该端点的流是否为「过程事件 JSON 流」（thinking/tool_call/tool_result/answer/done/error）。
+     * <p>为 {@code true} 时，aspect 给流式根 span 注入「只取 answer 正文」的答案抽取器，避免 thinking/工具事件
+     * 污染 trace 输出；为 {@code false}（默认）时流是裸文本 token，trace 原样累加。仅流式端点有意义。</p>
+     *
+     * @return 是否事件流
+     */
+    boolean eventStream() default false;
 }

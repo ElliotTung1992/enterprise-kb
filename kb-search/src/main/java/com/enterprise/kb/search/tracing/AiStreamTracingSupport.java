@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -45,6 +46,20 @@ public final class AiStreamTracingSupport {
     public static TraceState newState(String observationName, ObservationRegistry observationRegistry,
                                       Map<String, String> attrs, String input, int maxPromptChars,
                                       int maxCompletionChars) {
+        return newState(observationName, observationRegistry, attrs, input,
+                maxPromptChars, maxCompletionChars, Function.identity());
+    }
+
+    /**
+     * 同上，但显式传入「答案抽取器」：每个流元素经它转换后才累加进 trace output。
+     * 裸文本流传 {@link Function#identity()}（原样累加）；过程事件 JSON 流由调用方传入只取 answer 正文的抽取器，
+     * 避免 thinking/工具事件污染 trace 输出。tracing 自身不感知事件协议，由端点显式决定（不在共享层猜测）。
+     *
+     * @param answerExtractor 流元素 → 计入 trace output 的答案文本
+     */
+    public static TraceState newState(String observationName, ObservationRegistry observationRegistry,
+                                      Map<String, String> attrs, String input, int maxPromptChars,
+                                      int maxCompletionChars, Function<String, String> answerExtractor) {
         Observation observation = Observation.createNotStarted(observationName, observationRegistry);
         attrs.forEach((key, value) -> {
             if (TracingAttributes.LANGFUSE_USER_ID.equals(key) || TracingAttributes.LANGFUSE_SESSION_ID.equals(key)) {
@@ -56,7 +71,7 @@ public final class AiStreamTracingSupport {
         traceText(observation, input, maxPromptChars,
                 TracingAttributes.TRACE_INPUT, TracingAttributes.OBSERVATION_INPUT);
         return new TraceState(observation, attrs, new StringBuilder(),
-                new AtomicBoolean(false), new AtomicReference<>(), maxCompletionChars);
+                new AtomicBoolean(false), new AtomicReference<>(), maxCompletionChars, answerExtractor);
     }
 
     /**
@@ -86,7 +101,9 @@ public final class AiStreamTracingSupport {
     public static Flux<String> traceStarted(TraceState trace, Supplier<Flux<String>> sourceFactory) {
         Observation observation = trace.observation();
         return inScope(sourceFactory, observation, trace.attrs())
-                .doOnNext(trace.answerBuffer()::append)
+                // 每个流元素经端点注入的答案抽取器转换后才累加：裸文本流 = identity（原样）；
+                // 过程事件 JSON 流 = 只取 answer 正文，避免 thinking/工具事件污染 trace 输出（设计 §5.4 方案 a）。
+                .doOnNext(element -> trace.answerBuffer().append(trace.answerExtractor().apply(element)))
                 .doOnComplete(() -> trace.completed().set(true))
                 .doOnError(trace.errorRef()::set)
                 .doFinally(signalType -> finish(observation, trace));
@@ -181,6 +198,7 @@ public final class AiStreamTracingSupport {
      * @param completed          是否正常完成
      * @param errorRef           异常引用
      * @param maxCompletionChars output 截断上限
+     * @param answerExtractor    流元素 → 计入 trace output 的答案文本（裸文本流为 identity）
      */
     public record TraceState(
             Observation observation,
@@ -188,6 +206,7 @@ public final class AiStreamTracingSupport {
             StringBuilder answerBuffer,
             AtomicBoolean completed,
             AtomicReference<Throwable> errorRef,
-            int maxCompletionChars) {
+            int maxCompletionChars,
+            Function<String, String> answerExtractor) {
     }
 }

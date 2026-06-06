@@ -139,6 +139,40 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ── Kafka (用户画像离线推断事件总线, ADR-016, KRaft 单节点) ────
+  kafka:
+    image: apache/kafka:3.7.1
+    container_name: kb-kafka
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # 双监听：网络内 PLAINTEXT://kafka:9092 给 app；EXTERNAL://localhost:29092 给宿主本地开发
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID:-kb-kafka-cluster-00001}
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - kb-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
   # ── Application ──────────────────────────────────────────────
   app:
     build:
@@ -177,6 +211,10 @@ services:
       KB_TRACING_SAMPLE_RATIO: ${KB_TRACING_SAMPLE_RATIO:-1.0}
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://langfuse-web:3000/api/public/otel/v1/traces}
       LANGFUSE_OTLP_BASIC_AUTH: ${LANGFUSE_OTLP_BASIC_AUTH:-}
+      # ── 用户画像离线推断 → Kafka（ADR-016，默认关）──
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      KB_PROFILE_INJECTION_ENABLED: ${KB_PROFILE_INJECTION_ENABLED:-true}
+      KB_PROFILE_INFERENCE_ENABLED: ${KB_PROFILE_INFERENCE_ENABLED:-false}
     volumes:
       - uploads_data:/app/uploads
     networks:
@@ -188,6 +226,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_started
     restart: unless-stopped
 
   # ── Ragas evaluation service (on demand) ────────────────────
@@ -327,6 +367,7 @@ volumes:
   milvus_data:
   uploads_data:
   redis_data:
+  kafka_data:
   clickhouse_data:
   clickhouse_logs:
 

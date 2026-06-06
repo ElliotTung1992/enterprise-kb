@@ -16,4 +16,4 @@
 
 - [[features/md-keyword-bm25]]
 - [[decisions/adr-013-md-keyword-bm25]]
-- 设计文档：`docs/design-md-keyword-bm25.md`
+- 设计文档：`docs/md-structure-rag.md` 第三部分「关键词检索升级 BM25 子设计」（原 `docs/design-md-keyword-bm25.md` 已并入合订本）

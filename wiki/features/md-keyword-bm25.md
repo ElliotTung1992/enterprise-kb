@@ -6,7 +6,7 @@ tags: [feature, rag, search, bm25, keyword-search, markdown, pg_tokenizer, vchor
 # md 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
 
 > 状态：**代码已实现 + BM25 build 已跑通**（2026-06-04）。`db/manual/md-bm25-build.sql` 已执行，`tokenizer_catalog` 三表与 `md_model` 词表生成，运行时已确认走 BM25（不再降级 TRGM）。剩余可选运行态步骤：填评估集跑 `MdKeywordEvalTest` 做 recall@k 对照。
-> 设计文档：`docs/design-md-keyword-bm25.md`（含选型 C1/C2 推演）
+> 设计文档：`docs/md-structure-rag.md` 第三部分「关键词检索升级 BM25 子设计」（含选型 C1/C2 推演；该子设计已并入合订本，无独立文件）
 > 实施计划：`.planning/2026-05-28-markdown-keyword-bm25/plan.md`
 > 架构决策：[[decisions/adr-013-md-keyword-bm25]]
 > 所属竖井：[[features/markdown-structure-rag]]（本功能只升级该竖井的**关键词那一路**）

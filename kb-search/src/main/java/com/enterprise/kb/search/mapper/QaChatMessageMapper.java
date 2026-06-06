@@ -27,4 +27,21 @@ public interface QaChatMessageMapper {
      * @param message 消息实体
      */
     void insert(QaChatMessage message);
+
+    /**
+     * 统计用户跨会话的提问消息数（role='user'，仅未删除会话），用于画像推断去抖。
+     *
+     * @param userId 用户 ID
+     * @return 提问消息总数
+     */
+    int countUserQuestions(@Param("userId") UUID userId);
+
+    /**
+     * 查询用户最近的提问正文（role='user'，仅未删除会话，按时间倒序），供画像推断取样。
+     *
+     * @param userId 用户 ID
+     * @param limit  返回条数上限
+     * @return 提问正文列表（最新在前）
+     */
+    List<String> findRecentUserQuestions(@Param("userId") UUID userId, @Param("limit") int limit);
 }

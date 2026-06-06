@@ -7,7 +7,15 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <link href="/assets/css/app.css" rel="stylesheet">
-<style>body{visibility:hidden}</style>
+<style>
+  body{visibility:hidden}
+  .agent-steps{margin-bottom:.4rem}
+  .agent-step{font-size:.82rem;color:#475569;padding:.15rem 0;display:flex;gap:.4rem;align-items:baseline}
+  .agent-step-result{font-size:.78rem}
+  .agent-thinking{margin:.3rem 0 .5rem;border-left:3px solid #cbd5e1;background:#f8fafc;border-radius:4px}
+  .agent-thinking-summary{cursor:pointer;font-size:.8rem;color:#64748b;padding:.3rem .5rem;user-select:none}
+  .agent-thinking-body{white-space:pre-wrap;font-size:.8rem;color:#64748b;padding:.1rem .6rem .5rem}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
 </head>
 <body>
@@ -54,6 +62,10 @@
         <option value="5" selected>Top 5</option>
         <option value="10">Top 10</option>
       </select>
+      <div class="form-check form-switch m-0 ms-1" title="开启后展示模型推理旁白（需 14B 思考模型 + llama-server --reasoning-format none）">
+        <input class="form-check-input" type="checkbox" id="deepthink-toggle">
+        <label class="form-check-label small text-muted" for="deepthink-toggle">深度思考</label>
+      </div>
     </div>
   </div>
 
@@ -76,6 +88,7 @@
 <script>
 initMdQaPage({
   stream: true,
+  eventStream: true,
   streamEndpoint: 'ask/agentic/stream',
   loading: 'Agent 正在规划检索并读取 section...',
   welcome: 'Agentic 流式问答兼顾多跳检索与逐步输出，适合较长且需要追问式检索的答案。'

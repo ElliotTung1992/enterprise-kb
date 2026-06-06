@@ -98,7 +98,7 @@
 - Key insight: 厂商中立 OTLP 管线 + 自部署 LangFuse + service 入口自建唯一业务根 span。**ChatModel/VectorStore 的 ObservationRegistry 是命门**——llama.cpp `OpenAiChatModel.builder()` 和手工 `mdVectorStore` 不注入就落 NOOP，默认链路零 trace。跨线程传播必须 ①+②+③ 同批做：reactor 自动传播 + `ContextSnapshot` 包 `MdHybridSearchService` 并行检索 executor + 关 `DashScopeAsyncToolCallingManager`，否则 retrieval/LLM span 脱根成孤儿 trace。Tool span 用框架原生 `ToolInterceptor`（业务工具体零侵入），比"在 lambda 体内手写 span"或旧 `TraceToolInterceptor` 切入点更标准。业务上下文（`langfuse.user.id` / `langfuse.session.id` / metadata）走本地 thread-local + `SpanProcessor` 复制到子 span，**不经 baggage**——避免随下游 HTTP 请求外发给模型 provider。
 
 ## 2026-05-27 | ingest | MD 关键词检索升级 BM25 设计
-- Source: `docs/design-md-keyword-bm25.md`（+ 本会话对运行库的实测）
+- Source: `docs/design-md-keyword-bm25.md`（+ 本会话对运行库的实测）〔注：该独立设计已于 2026-06-03 并入 `docs/md-structure-rag.md` 第三部分，原独立文件不存在〕
 - Summary: [[features/md-keyword-bm25]]
 - Pages created:
   - [[features/md-keyword-bm25]]

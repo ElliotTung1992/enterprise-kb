@@ -88,7 +88,7 @@ public class MdQnAController {
      */
     @PostMapping(value = "/ask/agentic/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
-    @QaObserved(name = "kb.qa.ask.agentic.stream")
+    @QaObserved(name = "kb.qa.ask.agentic.stream", eventStream = true)
     public Flux<String> askAgenticStream(
             @PathVariable UUID spaceId,
             @Valid @RequestBody QnARequest req) {

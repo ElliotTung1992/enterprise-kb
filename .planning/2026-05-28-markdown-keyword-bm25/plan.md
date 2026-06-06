@@ -1,6 +1,6 @@
 # 实施计划：md 关键词检索升级 BM25（VectorChord-bm25 + pg_tokenizer）
 
-> 配套设计：`docs/design-md-keyword-bm25.md`
+> 配套设计：`docs/md-structure-rag.md` 第三部分「关键词检索升级 BM25 子设计」（原 `docs/design-md-keyword-bm25.md` 已并入合订本）
 > 本计划已**就地核实**设计 §12 的外部事实（见 Phase 0），并据此修正了设计中与现实不符的前提。
 
 ---

@@ -22,6 +22,11 @@
             <groupId>com.enterprise</groupId>
             <artifactId>kb-document</artifactId>
         </dependency>
+        <!-- 用户画像：在线读 ProfileService 注入 prompt（ADR-016） -->
+        <dependency>
+            <groupId>com.enterprise</groupId>
+            <artifactId>kb-user</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter</artifactId>
@@ -57,6 +62,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Kafka：用户画像离线推断的活动事件传输（ADR-016，Phase 2，默认关） -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
         </dependency>
         <!-- Agentic RAG：ReactAgent 框架（版本由 spring-ai-alibaba BOM 统一管理） -->
         <dependency>

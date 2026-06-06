@@ -125,8 +125,11 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   const token = localStorage.getItem('access_token');
   const topK = parseInt(document.getElementById('topk-select').value);
   const modelProvider = selectedModelProvider();
+  const deepThinking = !!document.getElementById('deepthink-toggle')?.checked;
   // 流式端点可配置：标准流式 ask/stream、Agentic 流式 ask/agentic/stream
   const streamEndpoint = mdCurrentConfig?.streamEndpoint || 'ask/stream';
+  // 仅 Agentic 流式（eventStream:true）走「过程事件 JSON」协议；标准流式仍按裸文本 token 拼接。
+  const isEventStream = !!mdCurrentConfig?.eventStream;
   const res = await fetch(`/api/v1/spaces/${spaceId}/md-qa/${streamEndpoint}`, {
     method: 'POST',
     headers: {
@@ -134,7 +137,7 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
     },
-    body: JSON.stringify({ question, sessionId, topK, modelProvider })
+    body: JSON.stringify({ question, sessionId, topK, modelProvider, deepThinking })
   });
   if (!res.ok) throw new Error(await readStreamError(res));
 
@@ -142,6 +145,11 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   const decoder = new TextDecoder();
   let buffer = '';
   let answer = '';
+  let ctx = null;
+  const scrollDown = () => {
+    const box = bubble.closest('.md-messages');
+    box?.scrollTo(0, box.scrollHeight);
+  };
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -149,20 +157,108 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
     const parts = buffer.split(/\r?\n\r?\n/);
     buffer = parts.pop() || '';
     for (const part of parts) {
-      const tokenText = part.split(/\r?\n/)
+      const dataText = part.split(/\r?\n/)
         .filter(line => line.startsWith('data:'))
         .map(line => line.slice(5).replace(/^ /, ''))
         .join('\n');
-      if (tokenText && tokenText !== '[DONE]') {
-        answer += tokenText;
+      if (!dataText || dataText === '[DONE]') continue;
+      if (isEventStream) {
+        let evt;
+        try { evt = JSON.parse(dataText); } catch { continue; }
+        if (!ctx) ctx = createAgentRenderCtx(bubble); // 首个事件到达才清掉 loading，保留等待提示
+        renderAgentEvent(evt, ctx);
+      } else {
+        answer += dataText;
         bubble.innerHTML = marked.parse(answer);
-        bubble.closest('.md-messages')?.scrollTo(0, bubble.closest('.md-messages').scrollHeight);
       }
+      scrollDown();
     }
   }
-  if (buffer.trim()) {
+  if (!isEventStream && buffer.trim()) {
     answer += buffer.replace(/^data:\s?/gm, '');
     bubble.innerHTML = marked.parse(answer);
+  }
+}
+
+// 为 Agentic 过程事件渲染搭建三区结构：工具时间线 / 思考折叠区 / 答案正文。
+function createAgentRenderCtx(bubble) {
+  bubble.classList.add('agent-bubble');
+  bubble.innerHTML = `
+    <div class="agent-steps"></div>
+    <details class="agent-thinking d-none">
+      <summary class="agent-thinking-summary">💭 思考过程</summary>
+      <div class="agent-thinking-body"></div>
+    </details>
+    <div class="agent-answer"></div>`;
+  return {
+    steps: bubble.querySelector('.agent-steps'),
+    thinking: bubble.querySelector('.agent-thinking'),
+    thinkingBody: bubble.querySelector('.agent-thinking-body'),
+    answerEl: bubble.querySelector('.agent-answer'),
+    answerText: '',
+    thinkingText: '',
+    pendingSteps: []
+  };
+}
+
+function renderAgentEvent(evt, ctx) {
+  switch (evt.type) {
+    case 'tool_call': {
+      const label = evt.tool === 'readFullSection'
+        ? '📖 展开完整章节'
+        : `🔍 检索：${escHtml(evt.query || '')}`;
+      const step = document.createElement('div');
+      step.className = 'agent-step';
+      step.innerHTML = `<span class="agent-step-label">${label}</span> <span class="agent-step-result text-muted"></span>`;
+      ctx.steps.appendChild(step);
+      ctx.pendingSteps.push(step);
+      break;
+    }
+    case 'tool_result': {
+      const step = ctx.pendingSteps.shift();
+      const resultEl = step?.querySelector('.agent-step-result');
+      if (resultEl) resultEl.textContent = formatAgentToolResult(evt);
+      break;
+    }
+    case 'thinking':
+      ctx.thinking.classList.remove('d-none');
+      ctx.thinkingText += evt.delta || '';
+      ctx.thinkingBody.textContent = ctx.thinkingText;
+      break;
+    case 'answer':
+      ctx.answerText += evt.delta || '';
+      ctx.answerEl.innerHTML = marked.parse(ctx.answerText);
+      break;
+    case 'error': {
+      const err = document.createElement('div');
+      err.className = 'text-danger small mt-1';
+      err.textContent = '⚠ ' + (evt.message || '流式处理失败');
+      ctx.answerEl.appendChild(err);
+      break;
+    }
+    case 'done':
+    default:
+      break;
+  }
+}
+
+function formatAgentToolResult(evt) {
+  if (evt.tool === 'searchKnowledgeBase') {
+    switch (evt.status) {
+      case 'ok': return `→ 命中 ${evt.hits} 条`;
+      case 'no_hits': return '→ 无命中';
+      case 'duplicate_query': return '→ 已检索过';
+      case 'max_tool_calls': return '→ 达到调用上限';
+      default: return `→ ${evt.status || ''}`;
+    }
+  }
+  switch (evt.status) {
+    case 'ok': return '✓ 已读取';
+    case 'duplicate_parent': return '✓ 已读取过';
+    case 'not_found': return '✗ 未找到';
+    case 'invalid_parent_id': return '✗ 参数错误';
+    case 'max_tool_calls': return '✗ 达到调用上限';
+    default: return evt.status || '';
   }
 }
 

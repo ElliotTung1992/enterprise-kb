@@ -5,6 +5,7 @@ import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.QaChatMessageDto;
 import com.enterprise.kb.search.dto.QaChatSessionDto;
+import com.enterprise.kb.search.dto.QaExchangeSavedEvent;
 import com.enterprise.kb.search.mapper.QaChatMessageMapper;
 import com.enterprise.kb.search.mapper.QaChatSessionMapper;
 import com.enterprise.kb.search.model.QaChatMessage;
@@ -12,6 +13,7 @@ import com.enterprise.kb.search.model.QaChatSession;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,8 @@ public class QaChatSessionServiceImpl implements QaChatSessionService {
     private final QaChatSessionMapper sessionMapper;
     private final QaChatMessageMapper messageMapper;
     private final RedisChatMemory redisChatMemory;
+    /** 发布问答持久化事件，事务提交后触发用户画像离线推断（ADR-016）。 */
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * {@inheritDoc}
@@ -89,6 +93,9 @@ public class QaChatSessionServiceImpl implements QaChatSessionService {
 
         messageMapper.insert(userMsg);
         messageMapper.insert(assistantMsg);
+
+        // 事务提交后触发画像离线推断（监听器在 AFTER_COMMIT 投递 Kafka）；离线推断关闭时无监听器、事件被丢弃。
+        eventPublisher.publishEvent(new QaExchangeSavedEvent(userId));
     }
 
     /**

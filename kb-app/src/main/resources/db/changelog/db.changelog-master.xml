@@ -38,4 +38,5 @@
     <include file="db/changelog/031-drop-standard-rag.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/032-drop-agent-traces.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/033-restore-md-document-title.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/034-create-user-profiles.sql" relativeToChangelogFile="false"/>
 </databaseChangeLog>

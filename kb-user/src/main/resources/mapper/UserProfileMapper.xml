@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.enterprise.kb.user.mapper.UserProfileMapper">
+
+    <resultMap id="UserProfileResultMap" type="com.enterprise.kb.user.model.UserProfile">
+        <id property="userId" column="user_id"/>
+        <result property="profile" column="profile"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="findByUserId" resultMap="UserProfileResultMap">
+        SELECT * FROM user_profiles WHERE user_id = #{userId,jdbcType=OTHER}
+    </select>
+
+    <!-- profile 以 String 写入 jsonb 列：用内置 StringTypeHandler + ::jsonb 强转（见 ComplaintPlanMapper 同款写法） -->
+    <insert id="upsert">
+        INSERT INTO user_profiles (user_id, profile, updated_at)
+        VALUES (
+            #{userId,jdbcType=OTHER},
+            #{profile,jdbcType=OTHER,typeHandler=org.apache.ibatis.type.StringTypeHandler}::jsonb,
+            #{updatedAt}
+        )
+        ON CONFLICT (user_id) DO UPDATE SET
+            profile    = EXCLUDED.profile,
+            updated_at = EXCLUDED.updated_at
+    </insert>
+
+</mapper>

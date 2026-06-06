@@ -5,6 +5,7 @@ import com.enterprise.kb.common.tracing.SensitiveDataRedactor;
 import com.enterprise.kb.common.tracing.TracingAttributes;
 import com.enterprise.kb.common.tracing.TracingContextHolder;
 import com.enterprise.kb.common.util.SecurityUtils;
+import com.enterprise.kb.search.dto.AgentStreamEvent;
 import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
 import io.micrometer.observation.Observation;
@@ -22,6 +23,7 @@ import reactor.core.publisher.Flux;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * 问答 Controller 方法 AOP：把业务根 span 收口到「请求进来的那道门」（ADR-015 根 span 边界化）。
@@ -87,7 +89,7 @@ public class QaObservedAspect {
         MethodSignature signature = (MethodSignature) pjp.getSignature();
         boolean streaming = Flux.class.isAssignableFrom(signature.getReturnType());
         return streaming
-                ? observeStream(pjp, proceedArgs, qaObserved.name(), attrs, req.question())
+                ? observeStream(pjp, proceedArgs, qaObserved.name(), attrs, req.question(), qaObserved.eventStream())
                 : observeSync(pjp, proceedArgs, qaObserved.name(), attrs, req.question());
     }
 
@@ -122,9 +124,13 @@ public class QaObservedAspect {
      */
     @SuppressWarnings("unchecked")
     private Object observeStream(ProceedingJoinPoint pjp, Object[] args, String name,
-                                 Map<String, String> attrs, String question) throws Throwable {
+                                 Map<String, String> attrs, String question, boolean eventStream) throws Throwable {
+        // 端点显式声明是否「过程事件 JSON 流」：是则只把 answer 正文计入 trace output（thinking/工具事件不计），
+        // 否则 identity 原样累加裸文本 token。tracing 不再猜测元素是否为 JSON，避免误删标准流里恰为 JSON 的答案。
+        Function<String, String> answerExtractor = eventStream
+                ? AgentStreamEvent::answerDelta : Function.identity();
         AiStreamTracingSupport.TraceState state = AiStreamTracingSupport.newState(
-                name, observationRegistry, attrs, question, maxPromptChars, maxCompletionChars);
+                name, observationRegistry, attrs, question, maxPromptChars, maxCompletionChars, answerExtractor);
         Observation observation = state.observation();
         observation.start();
         Map<String, String> previous = TracingContextHolder.peek();
@@ -188,7 +194,8 @@ public class QaObservedAspect {
         Object[] copy = args.clone();
         for (int i = 0; i < copy.length; i++) {
             if (copy[i] instanceof QnARequest) {
-                copy[i] = new QnARequest(req.question(), sessionId, req.modelProvider(), req.modelName(), req.topK());
+                copy[i] = new QnARequest(req.question(), sessionId, req.modelProvider(),
+                        req.modelName(), req.topK(), req.deepThinking());
                 break;
             }
         }

@@ -3,6 +3,7 @@ package com.enterprise.kb.search.tracing;
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.common.tracing.TracingAttributes;
 import com.enterprise.kb.common.tracing.TracingContextHolder;
+import com.enterprise.kb.search.dto.AgentStreamEvent;
 import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
 import io.micrometer.observation.Observation;
@@ -41,6 +42,10 @@ class QaObservedAspectTest {
     }
 
     private QaObserved qaObserved(String name) {
+        return qaObserved(name, false);
+    }
+
+    private QaObserved qaObserved(String name, boolean eventStream) {
         return new QaObserved() {
             @Override
             public Class<? extends Annotation> annotationType() {
@@ -50,6 +55,11 @@ class QaObservedAspectTest {
             @Override
             public String name() {
                 return name;
+            }
+
+            @Override
+            public boolean eventStream() {
+                return eventStream;
             }
         };
     }
@@ -137,6 +147,21 @@ class QaObservedAspectTest {
     }
 
     @Test
+    void streamPathInjectsGeneratedSessionIdAndPreservesDeepThinking() throws Throwable {
+        UUID spaceId = UUID.randomUUID();
+        QnARequest req = new QnARequest("q", null, "LLAMA_CPP", null, 5, true);
+        AtomicReference<Object[]> captured = new AtomicReference<>();
+        ProceedingJoinPoint pjp = joinPoint(new Object[]{spaceId, req}, Flux.class, captured, Flux.just("ok"));
+
+        Object result = aspect.observe(pjp, qaObserved("kb.qa.ask.agentic.stream", true));
+        ((Flux<String>) result).collectList().block(Duration.ofSeconds(1));
+
+        QnARequest passed = (QnARequest) captured.get()[1];
+        assertThat(passed.sessionId()).isNotNull();
+        assertThat(passed.deepThinking()).isTrue();
+    }
+
+    @Test
     void streamPathProceedRunsInsideRootScope() throws Throwable {
         UUID spaceId = UUID.randomUUID();
         QnARequest req = new QnARequest("q", null, "DASHSCOPE", null, 5);
@@ -190,6 +215,48 @@ class QaObservedAspectTest {
         assertThat(errors).hasValue(1);
         assertThat(stops).hasValue(1);
         assertThat(TracingContextHolder.peek()).isNull();
+    }
+
+    @Test
+    void streamTracePreservesJsonAnswerWhenNotEventStream() throws Throwable {
+        // P3 回归：标准流（eventStream=false）用 identity 抽取器，恰为 JSON 的答案 token 原样进 trace output，不被误删
+        String output = captureStreamTraceOutput("kb.qa.ask.stream", false,
+                Flux.just("{\"type\":\"invoice\"}"));
+        assertThat(output).isEqualTo("{\"type\":\"invoice\"}");
+    }
+
+    @Test
+    void streamTraceExtractsOnlyAnswerWhenEventStream() throws Throwable {
+        // 事件流（eventStream=true）：只 answer 正文计入 trace output，thinking/done 不计
+        String output = captureStreamTraceOutput("kb.qa.ask.agentic.stream", true,
+                Flux.just(AgentStreamEvent.thinking("想"), AgentStreamEvent.answer("答案"), AgentStreamEvent.done()));
+        assertThat(output).isEqualTo("答案");
+    }
+
+    @SuppressWarnings("unchecked")
+    private String captureStreamTraceOutput(String name, boolean eventStream, Flux<String> business) throws Throwable {
+        ObservationRegistry registry = ObservationRegistry.create();
+        AtomicReference<String> output = new AtomicReference<>();
+        registry.observationConfig().observationHandler(new ObservationHandler<Observation.Context>() {
+            @Override
+            public void onStop(Observation.Context context) {
+                context.getHighCardinalityKeyValues().stream()
+                        .filter(kv -> kv.getKey().equals(TracingAttributes.TRACE_OUTPUT))
+                        .findFirst().ifPresent(kv -> output.set(kv.getValue()));
+            }
+
+            @Override
+            public boolean supportsContext(Observation.Context context) {
+                return true;
+            }
+        });
+        QaObservedAspect localAspect = new QaObservedAspect(registry, 8000, 8000);
+        QnARequest req = new QnARequest("q", null, "DASHSCOPE", null, 5);
+        ProceedingJoinPoint pjp = streamJoinPoint(new Object[]{UUID.randomUUID(), req},
+                new AtomicReference<>(), invocation -> business);
+        Object result = localAspect.observe(pjp, qaObserved(name, eventStream));
+        ((Flux<String>) result).collectList().block(Duration.ofSeconds(1));
+        return output.get();
     }
 
     private ProceedingJoinPoint streamJoinPoint(Object[] args, AtomicReference<Object[]> capturedArgs,

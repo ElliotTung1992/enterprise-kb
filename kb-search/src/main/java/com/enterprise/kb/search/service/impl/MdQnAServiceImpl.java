@@ -16,6 +16,7 @@ import com.enterprise.kb.search.service.MdQnAService;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import com.enterprise.kb.search.service.QueryRewriteService;
 import com.enterprise.kb.search.service.RerankService;
+import com.enterprise.kb.user.service.ProfileService;
 import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +63,8 @@ public class MdQnAServiceImpl implements MdQnAService {
     private final RedisChatMemory redisChatMemory;
     private final QaChatSessionService qaChatSessionService;
     private final ObservationRegistry observationRegistry;
+    /** 用户画像：在线读，渲染 <user_profile> 软默认块注入系统 prompt（ADR-016）。 */
+    private final ProfileService profileService;
 
     /**
      * 基于 Markdown 父子索引进行问答。
@@ -79,12 +82,13 @@ public class MdQnAServiceImpl implements MdQnAService {
 
     private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
+        String profileBlock = profileService.renderProfileBlock(SecurityUtils.getCurrentUserId());
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         MessageChatMemoryAdvisor memoryAdvisor = MessageChatMemoryAdvisor.builder(redisChatMemory)
                 .conversationId(sessionId.toString()).build();
         ChatResponse chatResponse = chatClient.prompt()
                 .advisors(memoryAdvisor)
-                .system(buildSystemPrompt(parentHits))
+                .system(buildSystemPrompt(parentHits, profileBlock))
                 .user(req.question())
                 .call()
                 .chatResponse();
@@ -113,21 +117,23 @@ public class MdQnAServiceImpl implements MdQnAService {
         // userId / sessionId 在请求线程提前捕获（订阅时的 reactor 线程可能没有 SecurityContext）。
         UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
         UUID userId = SecurityUtils.getCurrentUserId();
-        return doAskStream(spaceId, req, sessionId, userId);
+        // 画像在请求线程预渲染：订阅时的 reactor 线程可能没有 SecurityContext。
+        String profileBlock = profileService.renderProfileBlock(userId);
+        return doAskStream(spaceId, req, sessionId, userId, profileBlock);
     }
 
-    private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId) {
+    private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId, String profileBlock) {
         // Flux.defer：把检索/模型调用推迟到订阅时执行，使其落在根 span scope 内（AOP 边界在订阅时开 scope）。
-        return Flux.defer(() -> streamAnswer(spaceId, req, sessionId))
+        return Flux.defer(() -> streamAnswer(spaceId, req, sessionId, profileBlock))
                 .transform(tokens -> persistStreamAnswer(tokens, sessionId, spaceId, userId, req.question()));
     }
 
-    private Flux<String> streamAnswer(UUID spaceId, QnARequest req, UUID sessionId) {
+    private Flux<String> streamAnswer(UUID spaceId, QnARequest req, UUID sessionId, String profileBlock) {
         List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         return chatClient.prompt()
                 .advisors(streamMemoryAdvisor(sessionId))
-                .system(buildSystemPrompt(parentHits))
+                .system(buildSystemPrompt(parentHits, profileBlock))
                 .user(req.question())
                 .stream()
                 .content();
@@ -176,7 +182,13 @@ public class MdQnAServiceImpl implements MdQnAService {
                 .observe(() -> parentExpansionService.expand(childHits));
     }
 
-    private String buildSystemPrompt(List<SearchHit> hits) {
+    /** 在 base 系统 prompt 前拼接画像软默认块（空则不拼，行为与未引入画像时一致）。 */
+    private String buildSystemPrompt(List<SearchHit> hits, String profileBlock) {
+        String base = buildBaseSystemPrompt(hits);
+        return profileBlock == null || profileBlock.isBlank() ? base : profileBlock + "\n" + base;
+    }
+
+    private String buildBaseSystemPrompt(List<SearchHit> hits) {
         if (hits.isEmpty()) {
             return """
                     你是一个专业的 Markdown 知识库问答助手。
