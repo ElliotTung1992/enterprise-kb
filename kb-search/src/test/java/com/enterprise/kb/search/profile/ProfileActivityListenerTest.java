@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * {@link ProfileActivityListener} 单测：聚焦 Kafka 投递成功不降级、同步异常与异步失败均降级到本地线程池。
+ * {@link ProfileActivityListener} 单测：Kafka 投递成功不降级、同步异常与异步失败均降级到本地线程池跑 run。
  * 降级执行器用同线程（{@code Runnable::run}）便于同步断言。
  */
 @ExtendWith(MockitoExtension.class)
@@ -50,7 +50,7 @@ class ProfileActivityListenerTest {
     }
 
     @Test
-    void fallsBackToLocalInferenceOnAsyncFailure() {
+    void fallsBackToLocalRunOnAsyncFailure() {
         CompletableFuture<SendResult<String, String>> failed =
                 CompletableFuture.failedFuture(new RuntimeException("broker down"));
         when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(failed);
@@ -59,7 +59,7 @@ class ProfileActivityListenerTest {
     }
 
     @Test
-    void fallsBackToLocalInferenceOnSyncException() {
+    void fallsBackToLocalRunOnSyncException() {
         when(kafkaTemplate.send(anyString(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("producer closed"));
         listener.onQaExchangeSaved(new QaExchangeSavedEvent(userId));

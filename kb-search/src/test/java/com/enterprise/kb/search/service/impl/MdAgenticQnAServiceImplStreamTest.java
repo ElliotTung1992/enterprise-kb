@@ -50,7 +50,7 @@ class MdAgenticQnAServiceImplStreamTest {
 
     private MdAgenticQnAServiceImpl newService(RedisChatMemory memory, QaChatSessionService session) {
         return new MdAgenticQnAServiceImpl(
-                null, null, null, memory, session, null, null, null, null, ObservationRegistry.create(), null, null);
+                null, null, null, memory, session, null, null, null, null, ObservationRegistry.create(), null);
     }
 
     @SuppressWarnings("unchecked")
@@ -194,6 +194,17 @@ class MdAgenticQnAServiceImplStreamTest {
         assertThat(emitted).containsExactly(
                 AgentStreamEvent.thinking("推理"),
                 AgentStreamEvent.answer("正文"));
+    }
+
+    @Test
+    void thinkStreamSplitterSkipsBlankThinking() {
+        MdAgenticQnAServiceImpl.ThinkStreamSplitter splitter = new MdAgenticQnAServiceImpl.ThinkStreamSplitter();
+
+        List<String> emitted = new java.util.ArrayList<>();
+        emitted.addAll(splitter.accept("<think>\n\n</think>正文"));
+        emitted.addAll(splitter.flush());
+
+        assertThat(emitted).containsExactly(AgentStreamEvent.answer("正文"));
     }
 
     @Test

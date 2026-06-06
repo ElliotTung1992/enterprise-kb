@@ -620,6 +620,9 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
             if (text.isEmpty()) {
                 return;
             }
+            if (insideThink && text.isBlank()) {
+                return;
+            }
             events.add(insideThink ? AgentStreamEvent.thinking(text) : AgentStreamEvent.answer(text));
         }
 

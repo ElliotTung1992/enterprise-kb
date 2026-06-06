@@ -97,48 +97,11 @@ public class AiModelConfig {
             String apiKey,
             String model,
             ObservationRegistry observationRegistry) {
-        // 1. 定义一个拦截器，专门负责清洗 <think> 标签
-        org.springframework.http.client.ClientHttpRequestInterceptor cleanThinkInterceptor =
-                (request, body, execution) -> {
-                    org.springframework.http.client.ClientHttpResponse response = execution.execute(request, body);
-
-                    // 读取原始返回体
-                    java.io.InputStream bodyStream = response.getBody();
-                    String responseStr = org.springframework.util.StreamUtils.copyToString(bodyStream, java.nio.charset.StandardCharsets.UTF_8);
-
-                    // 核心逻辑：用正则表达式抹除 <think>...</think> 及其内部的所有内容
-                    // 使用 (?s) 确保可以跨越所有的转义换行符
-                    String cleanedStr = responseStr.replaceAll("(?s)<think>.*?</think>", "");
-
-                    byte[] cleanedBytes = cleanedStr.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-
-                    // 将清洗后的干净 JSON 重新包装回去
-                    return new org.springframework.http.client.ClientHttpResponse() {
-                        @Override @org.springframework.lang.NonNull
-                        public java.io.InputStream getBody() { return new java.io.ByteArrayInputStream(cleanedBytes); }
-                        @Override @org.springframework.lang.NonNull
-                        public org.springframework.http.HttpHeaders getHeaders() { return response.getHeaders(); }
-                        @Override @org.springframework.lang.NonNull
-                        public org.springframework.http.HttpStatusCode getStatusCode() throws java.io.IOException { return response.getStatusCode(); }
-                        @Override @org.springframework.lang.NonNull
-                        public String getStatusText() throws java.io.IOException { return response.getStatusText(); }
-                        @Override public void close() { response.close(); }
-                    };
-                };
-
-        // 2. 将拦截器注入到 RestClient 中
-        org.springframework.web.client.RestClient.Builder restClientBuilder =
-                org.springframework.web.client.RestClient.builder()
-                        .requestInterceptor(cleanThinkInterceptor);
-
-        // 3. 构建 OpenAiApi 时使用自定义的 RestClient
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
-                .restClientBuilder(restClientBuilder)
                 .build();
 
-        // 4. 注入 ObservationRegistry，使手工模型产出 gen_ai.* LLM span
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
                 .openAiApi(openAiApi)
                 .defaultOptions(OpenAiChatOptions.builder()

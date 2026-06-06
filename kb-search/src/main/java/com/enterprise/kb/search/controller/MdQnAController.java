@@ -68,11 +68,11 @@ public class MdQnAController {
      *
      * @param spaceId 空间 ID
      * @param req     问答请求
-     * @return token 流
+     * @return 过程事件 JSON 流
      */
     @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
-    @QaObserved(name = "kb.qa.ask.stream")
+    @QaObserved(name = "kb.qa.ask.stream", eventStream = true)
     public Flux<String> askStream(
             @PathVariable UUID spaceId,
             @Valid @RequestBody QnARequest req) {

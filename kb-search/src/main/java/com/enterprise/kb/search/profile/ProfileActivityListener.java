@@ -17,10 +17,10 @@ import java.util.concurrent.RejectedExecutionException;
 /**
  * 用户活动事件 → Kafka 生产者 + 线程池降级（ADR-016，Phase 2）。
  *
- * <p>问答持久化事务提交后，把 userId 投递到活动 topic，驱动离线画像推断。
+ * <p>问答持久化事务提交后，把 userId 投递到活动 topic，驱动异步统一画像推断。
  * <b>Kafka 不可用时降级</b>：投递的同步异常或异步失败都转到本地有界线程池
- * （{@code profileInferenceExecutor}）直接跑推断，使 Kafka 故障下功能仍以「单机异步」形态可用。
- * 仅当 {@code enterprise.kb.profile.inference.enabled=true} 时装配。</p>
+ * （{@code profileInferenceExecutor}）直接跑 {@link ProfileInferenceRunner#run}，
+ * 使 Kafka 故障下功能仍以「单机异步」形态可用。仅当 {@code enterprise.kb.profile.inference.enabled=true} 时装配。</p>
  */
 @Slf4j
 @Component
@@ -33,14 +33,14 @@ public class ProfileActivityListener {
     private String topic;
 
     private final KafkaTemplate<String, String> kafkaTemplate;
-    /** 推断执行单元；Kafka 降级时本地直接调用。 */
+    /** 统一推断执行单元；Kafka 降级时本地直接调用。 */
     private final ProfileInferenceRunner inferenceRunner;
     /** Kafka 降级线程池（按 bean 名注入，有界、满则丢弃，提供背压）。 */
     private final Executor profileInferenceExecutor;
 
     /**
      * 在问答持久化事务提交后投递活动事件；投递失败降级到本地线程池推断。
-     * key=userId 保证单用户内有序；消费侧（或降级 runner）再做去抖。
+     * key=value=userId 保证单用户内有序；消费侧（或降级 runner）再做去抖。
      *
      * @param event 问答交换已保存事件
      */

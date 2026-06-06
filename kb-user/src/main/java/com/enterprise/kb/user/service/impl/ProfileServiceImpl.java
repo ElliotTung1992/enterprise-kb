@@ -5,6 +5,7 @@ import com.enterprise.kb.common.constants.AnswerLength;
 import com.enterprise.kb.common.constants.AnswerStyle;
 import com.enterprise.kb.common.constants.Seniority;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.user.dto.InferredSignals;
 import com.enterprise.kb.user.dto.ProfileInferenceState;
 import com.enterprise.kb.user.dto.UpdateProfileRequest;
 import com.enterprise.kb.user.dto.UserProfileData;
@@ -33,14 +34,14 @@ import java.util.UUID;
  * 用户画像服务实现。
  *
  * <p>画像以 JSONB 原始字符串落库，本类用 Jackson 在 {@link UserProfileData} 与字符串间转换。
- * 服务态合并规则：同一字段「显式 &gt; 推断（达置信阈值）&gt; 空」。设计见 ADR-016。</p>
+ * 服务态合并规则：每维「显式 &gt; 推断（写入时已过置信闸）&gt; 空」。设计见 ADR-016。</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProfileServiceImpl implements ProfileService {
 
-    /** JSONB 序列化器：启用 JavaTime 以 ISO 串写入 Instant，反序列化忽略未知字段（向前兼容新维度）。 */
+    /** JSONB 序列化器：启用 JavaTime 以 ISO 串写 Instant，反序列化忽略未知字段（向前兼容）。 */
     private static final JsonMapper MAPPER = JsonMapper.builder()
             .addModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
@@ -51,7 +52,7 @@ public class ProfileServiceImpl implements ProfileService {
     @Value("${enterprise.kb.profile.injection-enabled:true}")
     private boolean injectionEnabled;
 
-    /** 置信阈值：推断资历低于此值不计入服务态（与离线 worker 共用同一配置）。 */
+    /** 置信阈值：推断值低于此值不写入（写门），与离线 worker 共用同一配置。 */
     @Value("${enterprise.kb.profile.inference.confidence-threshold:0.7}")
     private double confidenceThreshold;
 
@@ -77,7 +78,6 @@ public class ProfileServiceImpl implements ProfileService {
         UserProfileData.Declared declared = new UserProfileData.Declared(
                 req.seniority(), req.answerLength(), req.answerLanguage(), req.answerStyle());
         UserProfileData.Meta oldMeta = data.metaOrDefault();
-        // 个性化开关仅在请求显式提供时更新，否则保留原值；推断调度元数据原样保留。
         boolean personalization = req.personalizationEnabled() != null
                 ? req.personalizationEnabled() : oldMeta.personalizationEnabled();
         UserProfileData.Meta meta = new UserProfileData.Meta(
@@ -91,17 +91,32 @@ public class ProfileServiceImpl implements ProfileService {
      */
     @Override
     @Transactional
-    public void mergeDeclaredPreference(UUID userId, AnswerLanguage language, AnswerLength length, AnswerStyle style) {
+    public void recordInference(UUID userId, InferredSignals s, int processedMsgCount) {
         UserProfileData data = load(userId);
-        UserProfileData.Declared d = data.declaredOrEmpty();
-        // PATCH：只覆盖传入的非空字段，保留其它显式字段与资历；不动 inferred/meta。
-        UserProfileData.Declared merged = new UserProfileData.Declared(
-                d.seniority(),
-                length != null ? length : d.answerLength(),
-                language != null ? language : d.answerLanguage(),
-                style != null ? style : d.answerStyle());
-        persist(userId, new UserProfileData(merged, data.inferred(), data.meta()));
-        log.debug("对话捕获写入显式偏好：userId={}，lang={}，len={}，style={}", userId, language, length, style);
+        UserProfileData.Inferred old = data.inferredOrEmpty();
+        // 逐字段写门：达置信才更新该维，否则保留旧值（避免低置信覆盖、抖动）。
+        boolean[] changed = {false};
+        Seniority sen = gate(s.seniority(), s.seniorityConfidence(), old.seniority(), changed);
+        AnswerLength len = gate(s.answerLength(), s.answerLengthConfidence(), old.answerLength(), changed);
+        AnswerLanguage lang = gate(s.answerLanguage(), s.answerLanguageConfidence(), old.answerLanguage(), changed);
+        AnswerStyle sty = gate(s.answerStyle(), s.answerStyleConfidence(), old.answerStyle(), changed);
+        Instant inferredAt = changed[0] ? Instant.now() : old.inferredAt();
+        UserProfileData.Inferred inferred = new UserProfileData.Inferred(sen, len, lang, sty, inferredAt);
+        UserProfileData.Meta m = data.metaOrDefault();
+        UserProfileData.Meta meta = new UserProfileData.Meta(
+                m.personalizationEnabled(), Instant.now(), processedMsgCount);
+        // 绝不触碰 declared。
+        persist(userId, new UserProfileData(data.declared(), inferred, meta));
+        log.debug("记录统一推断：userId={}，changed={}，processedMsgCount={}", userId, changed[0], processedMsgCount);
+    }
+
+    /** 写门：新值非空且置信达标则采用（标记 changed），否则保留旧值。 */
+    private <T> T gate(T newValue, Double confidence, T oldValue, boolean[] changed) {
+        if (newValue != null && confidence != null && confidence >= confidenceThreshold) {
+            changed[0] = true;
+            return newValue;
+        }
+        return oldValue;
     }
 
     /**
@@ -117,20 +132,22 @@ public class ProfileServiceImpl implements ProfileService {
         if (!data.metaOrDefault().personalizationEnabled()) {
             return "";
         }
-        UserProfileData.Declared d = data.declaredOrEmpty();
-        Seniority seniority = servedSeniority(data);
         List<String> lines = new ArrayList<>();
-        if (seniority != null) {
-            lines.add("- 资历：" + seniorityLabel(seniority));
+        Seniority sen = servedSeniority(data);
+        if (sen != null) {
+            lines.add("- 资历：" + seniorityLabel(sen));
         }
-        if (d.answerLength() != null) {
-            lines.add("- 答案长度：" + lengthLabel(d.answerLength()));
+        AnswerLength len = servedLength(data);
+        if (len != null) {
+            lines.add("- 答案长度：" + lengthLabel(len));
         }
-        if (d.answerLanguage() != null) {
-            lines.add("- 回答语言：" + languageLabel(d.answerLanguage()));
+        AnswerLanguage lang = servedLanguage(data);
+        if (lang != null) {
+            lines.add("- 回答语言：" + languageLabel(lang));
         }
-        if (d.answerStyle() != null) {
-            lines.add("- 答案风格：" + styleLabel(d.answerStyle()));
+        AnswerStyle sty = servedStyle(data);
+        if (sty != null) {
+            lines.add("- 答案风格：" + styleLabel(sty));
         }
         if (lines.isEmpty()) {
             return "";
@@ -158,23 +175,48 @@ public class ProfileServiceImpl implements ProfileService {
                 meta.processedMsgCount());
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    @Transactional
-    public void recordInference(UUID userId, Seniority seniority, Double confidence, int processedMsgCount) {
-        UserProfileData data = load(userId);
-        // seniority 非空才更新推断层；为 null 时保留旧推断，仅刷新调度元数据用于去抖。
-        UserProfileData.Inferred inferred = seniority != null
-                ? new UserProfileData.Inferred(seniority, confidence, Instant.now())
-                : data.inferred();
-        UserProfileData.Meta old = data.metaOrDefault();
-        UserProfileData.Meta meta = new UserProfileData.Meta(
-                old.personalizationEnabled(), Instant.now(), processedMsgCount);
-        // 绝不触碰 declared。
-        persist(userId, new UserProfileData(data.declared(), inferred, meta));
-        log.debug("记录离线推断：userId={}，applied={}，processedMsgCount={}", userId, seniority != null, processedMsgCount);
+    // ---- 服务态合并：显式优先，否则取推断（推断已过写门） ----
+
+    private Seniority servedSeniority(UserProfileData d) {
+        Seniority declared = d.declaredOrEmpty().seniority();
+        return declared != null ? declared : d.inferredOrEmpty().seniority();
+    }
+
+    private AnswerLength servedLength(UserProfileData d) {
+        AnswerLength declared = d.declaredOrEmpty().answerLength();
+        return declared != null ? declared : d.inferredOrEmpty().answerLength();
+    }
+
+    private AnswerLanguage servedLanguage(UserProfileData d) {
+        AnswerLanguage declared = d.declaredOrEmpty().answerLanguage();
+        return declared != null ? declared : d.inferredOrEmpty().answerLanguage();
+    }
+
+    private AnswerStyle servedStyle(UserProfileData d) {
+        AnswerStyle declared = d.declaredOrEmpty().answerStyle();
+        return declared != null ? declared : d.inferredOrEmpty().answerStyle();
+    }
+
+    private UserProfileView toView(UserProfileData data) {
+        UserProfileData.Declared dd = data.declaredOrEmpty();
+        UserProfileData.Inferred ii = data.inferredOrEmpty();
+        return new UserProfileView(
+                servedSeniority(data), source(dd.seniority(), ii.seniority()),
+                servedLength(data), source(dd.answerLength(), ii.answerLength()),
+                servedLanguage(data), source(dd.answerLanguage(), ii.answerLanguage()),
+                servedStyle(data), source(dd.answerStyle(), ii.answerStyle()),
+                data.metaOrDefault().personalizationEnabled());
+    }
+
+    /** 来源标注：显式优先。 */
+    private String source(Object declared, Object inferred) {
+        if (declared != null) {
+            return "EXPLICIT";
+        }
+        if (inferred != null) {
+            return "INFERRED";
+        }
+        return null;
     }
 
     // ---- private helpers ----
@@ -208,30 +250,6 @@ public class ProfileServiceImpl implements ProfileService {
         }
         entity.setUpdatedAt(Instant.now());
         userProfileMapper.upsert(entity);
-    }
-
-    /** 服务态资历：显式优先；显式为空时取置信达标的推断值，否则 null。 */
-    private Seniority servedSeniority(UserProfileData data) {
-        Seniority declared = data.declaredOrEmpty().seniority();
-        if (declared != null) {
-            return declared;
-        }
-        UserProfileData.Inferred inf = data.inferredOrEmpty();
-        if (inf.seniority() != null && inf.confidence() != null && inf.confidence() >= confidenceThreshold) {
-            return inf.seniority();
-        }
-        return null;
-    }
-
-    private UserProfileView toView(UserProfileData data) {
-        UserProfileData.Declared d = data.declaredOrEmpty();
-        Seniority served = servedSeniority(data);
-        boolean fromExplicit = d.seniority() != null;
-        String source = served == null ? null : (fromExplicit ? "EXPLICIT" : "INFERRED");
-        Double confidence = (served != null && !fromExplicit) ? data.inferredOrEmpty().confidence() : null;
-        return new UserProfileView(served, source, confidence,
-                d.answerLength(), d.answerLanguage(), d.answerStyle(),
-                data.metaOrDefault().personalizationEnabled());
     }
 
     private String seniorityLabel(Seniority s) {

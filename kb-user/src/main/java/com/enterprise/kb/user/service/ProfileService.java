@@ -1,9 +1,6 @@
 package com.enterprise.kb.user.service;
 
-import com.enterprise.kb.common.constants.AnswerLanguage;
-import com.enterprise.kb.common.constants.AnswerLength;
-import com.enterprise.kb.common.constants.AnswerStyle;
-import com.enterprise.kb.common.constants.Seniority;
+import com.enterprise.kb.user.dto.InferredSignals;
 import com.enterprise.kb.user.dto.ProfileInferenceState;
 import com.enterprise.kb.user.dto.UpdateProfileRequest;
 import com.enterprise.kb.user.dto.UserProfileView;
@@ -13,13 +10,13 @@ import java.util.UUID;
 /**
  * 用户画像服务：管理持久画像的读写，并为问答提供 prompt 注入文本。
  *
- * <p>画像分显式（用户声明，同步写、优先级最高）与推断（离线 LLM 写，不覆盖显式）两层，
+ * <p>画像分显式（设置页声明，优先级最高）与推断（离线统一推断 4 维、过置信闸）两层，
  * 统一存于单一 user_profiles 表的 JSONB 列。设计见 ADR-016。</p>
  */
 public interface ProfileService {
 
     /**
-     * 查询用户画像服务态视图（合并显式与推断、标注来源）。
+     * 查询用户画像服务态视图（每维合并显式与推断、标注来源）。
      *
      * @param userId 用户 ID
      * @return 画像视图；无画像时各字段为 null、个性化默认开启
@@ -51,25 +48,12 @@ public interface ProfileService {
     ProfileInferenceState getInferenceState(UUID userId);
 
     /**
-     * 记录一次离线推断结果：写入推断资历（不覆盖显式资历）并更新推断调度元数据。
-     *
-     * <p>未达置信阈值时调用方可传 {@code seniority=null}，此时仅刷新调度元数据用于去抖、保留原推断值。</p>
+     * 记录一次离线统一推断结果：逐字段过置信闸（达标才更新对应 inferred 维、否则保留旧值），并刷新调度元数据。
+     * 绝不触碰 declared。
      *
      * @param userId            用户 ID
-     * @param seniority         推断出的资历；为 null 表示本次不应用、仅刷新调度元数据
-     * @param confidence        推断置信度（seniority 非空时有意义）
+     * @param signals           本次推断 4 维原始输出（value + confidence）
      * @param processedMsgCount 本次推断已处理的用户消息总数（写入元数据用于下次去抖）
      */
-    void recordInference(UUID userId, Seniority seniority, Double confidence, int processedMsgCount);
-
-    /**
-     * 合并写入显式答案偏好（PATCH 语义，供"对话内偏好捕获"使用）：只把非空的语言/长度/风格设到现有 declared，
-     * 保留其它 declared 字段与 inferred/meta，**绝不触碰资历**。
-     *
-     * @param userId   用户 ID
-     * @param language 答案语言（null 表示不改）
-     * @param length   答案长度（null 表示不改）
-     * @param style    答案风格（null 表示不改）
-     */
-    void mergeDeclaredPreference(UUID userId, AnswerLanguage language, AnswerLength length, AnswerStyle style);
+    void recordInference(UUID userId, InferredSignals signals, int processedMsgCount);
 }

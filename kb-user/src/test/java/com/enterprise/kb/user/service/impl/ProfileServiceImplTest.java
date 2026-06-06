@@ -3,6 +3,7 @@ package com.enterprise.kb.user.service.impl;
 import com.enterprise.kb.common.constants.AnswerLanguage;
 import com.enterprise.kb.common.constants.AnswerLength;
 import com.enterprise.kb.common.constants.Seniority;
+import com.enterprise.kb.user.dto.InferredSignals;
 import com.enterprise.kb.user.dto.ProfileInferenceState;
 import com.enterprise.kb.user.dto.UpdateProfileRequest;
 import com.enterprise.kb.user.dto.UserProfileView;
@@ -24,7 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * {@link ProfileServiceImpl} 单测：聚焦 declared/inferred 合并优先级、置信闸、渲染与写入。
+ * {@link ProfileServiceImpl} 单测：聚焦 declared/inferred 合并优先级、统一推断逐字段写门、渲染与服务态视图。
  */
 @ExtendWith(MockitoExtension.class)
 class ProfileServiceImplTest {
@@ -55,11 +56,20 @@ class ProfileServiceImplTest {
         return captor.getValue();
     }
 
+    // ---- 渲染 ----
+
     @Test
     void renderBlockContainsExplicitLabels() {
         stubProfile("{\"declared\":{\"seniority\":\"INTERMEDIATE\",\"answerLength\":\"CONCISE\"}}");
         String block = service.renderProfileBlock(userId);
         assertThat(block).contains("<user_profile>").contains("中级").contains("简洁").contains("本轮");
+    }
+
+    @Test
+    void renderBlockServesInferredWhenNoDeclared() {
+        stubProfile("{\"inferred\":{\"answerLength\":\"CONCISE\",\"answerLanguage\":\"ZH\"}}");
+        String block = service.renderProfileBlock(userId);
+        assertThat(block).contains("简洁").contains("中文");
     }
 
     @Test
@@ -80,40 +90,35 @@ class ProfileServiceImplTest {
         assertThat(service.renderProfileBlock(userId)).isEmpty();
     }
 
+    // ---- 服务态合并 ----
+
     @Test
     void getProfileExplicitSource() {
         stubProfile("{\"declared\":{\"seniority\":\"SENIOR\"}}");
         UserProfileView v = service.getProfile(userId);
         assertThat(v.seniority()).isEqualTo(Seniority.SENIOR);
         assertThat(v.senioritySource()).isEqualTo("EXPLICIT");
-        assertThat(v.seniorityConfidence()).isNull();
     }
 
     @Test
-    void getProfileInferredServedWhenAboveThreshold() {
-        stubProfile("{\"inferred\":{\"seniority\":\"JUNIOR\",\"confidence\":0.8}}");
+    void getProfileInferredSource() {
+        stubProfile("{\"inferred\":{\"seniority\":\"JUNIOR\",\"answerLanguage\":\"ZH\"}}");
         UserProfileView v = service.getProfile(userId);
         assertThat(v.seniority()).isEqualTo(Seniority.JUNIOR);
         assertThat(v.senioritySource()).isEqualTo("INFERRED");
-        assertThat(v.seniorityConfidence()).isEqualTo(0.8);
-    }
-
-    @Test
-    void getProfileInferredIgnoredBelowThreshold() {
-        stubProfile("{\"inferred\":{\"seniority\":\"JUNIOR\",\"confidence\":0.5}}");
-        UserProfileView v = service.getProfile(userId);
-        assertThat(v.seniority()).isNull();
-        assertThat(v.senioritySource()).isNull();
+        assertThat(v.answerLanguage()).isEqualTo(AnswerLanguage.ZH);
+        assertThat(v.answerLanguageSource()).isEqualTo("INFERRED");
     }
 
     @Test
     void declaredWinsOverInferred() {
-        stubProfile("{\"declared\":{\"seniority\":\"SENIOR\"},"
-                + "\"inferred\":{\"seniority\":\"JUNIOR\",\"confidence\":0.95}}");
+        stubProfile("{\"declared\":{\"seniority\":\"SENIOR\"},\"inferred\":{\"seniority\":\"JUNIOR\"}}");
         UserProfileView v = service.getProfile(userId);
         assertThat(v.seniority()).isEqualTo(Seniority.SENIOR);
         assertThat(v.senioritySource()).isEqualTo("EXPLICIT");
     }
+
+    // ---- 写入 ----
 
     @Test
     void updateDeclaredPersistsExplicitFields() {
@@ -126,20 +131,32 @@ class ProfileServiceImplTest {
     }
 
     @Test
-    void recordInferenceWritesInferredAndKeepsDeclared() {
-        stubProfile("{\"declared\":{\"answerLength\":\"CONCISE\"}}");
-        service.recordInference(userId, Seniority.INTERMEDIATE, 0.82, 12);
+    void recordInferenceWritesQualifiedFieldsAndKeepsDeclared() {
+        stubProfile("{\"declared\":{\"answerLength\":\"DETAILED\"}}");
+        // 资历 0.82、语言 0.95 均达阈值；长度/风格无信号
+        service.recordInference(userId,
+                new InferredSignals(Seniority.INTERMEDIATE, 0.82, null, null, AnswerLanguage.ZH, 0.95, null, null), 12);
         UserProfile saved = captureUpsert();
-        // 推断资历写入、显式答案长度保留
-        assertThat(saved.getProfile()).contains("INTERMEDIATE").contains("CONCISE");
+        assertThat(saved.getProfile()).contains("INTERMEDIATE").contains("ZH").contains("DETAILED");
     }
 
     @Test
-    void recordInferenceNullSeniorityOnlyTouchesMeta() {
-        stubProfile("{\"inferred\":{\"seniority\":\"SENIOR\",\"confidence\":0.9}}");
-        service.recordInference(userId, null, null, 20);
+    void recordInferenceGatesLowConfidence() {
+        when(mapper.findByUserId(userId)).thenReturn(Optional.empty());
+        service.recordInference(userId,
+                new InferredSignals(Seniority.SENIOR, 0.5, null, null, null, null, null, null), 20);
         UserProfile saved = captureUpsert();
-        assertThat(saved.getProfile()).contains("SENIOR").contains("processedMsgCount");
+        assertThat(saved.getProfile()).doesNotContain("SENIOR");       // 低置信不写
+        assertThat(saved.getProfile()).contains("processedMsgCount");  // meta 仍刷新
+    }
+
+    @Test
+    void recordInferenceKeepsOldWhenNewLowConfidence() {
+        stubProfile("{\"inferred\":{\"seniority\":\"INTERMEDIATE\"}}");
+        service.recordInference(userId,
+                new InferredSignals(Seniority.JUNIOR, 0.4, null, null, null, null, null, null), 20);
+        UserProfile saved = captureUpsert();
+        assertThat(saved.getProfile()).contains("INTERMEDIATE").doesNotContain("JUNIOR"); // 保留旧、不被低置信覆盖
     }
 
     @Test
@@ -150,15 +167,5 @@ class ProfileServiceImplTest {
         assertThat(s.hasDeclaredSeniority()).isTrue();
         assertThat(s.personalizationEnabled()).isTrue();
         assertThat(s.processedMsgCount()).isEqualTo(7);
-    }
-
-    @Test
-    void mergeDeclaredPreferenceSetsFieldAndKeepsOthers() {
-        // 已有 declared.answerLength=DETAILED + inferred.seniority；对话捕获合并 language=ZH 不应动它们
-        stubProfile("{\"declared\":{\"answerLength\":\"DETAILED\"},"
-                + "\"inferred\":{\"seniority\":\"SENIOR\",\"confidence\":0.9}}");
-        service.mergeDeclaredPreference(userId, AnswerLanguage.ZH, null, null);
-        UserProfile saved = captureUpsert();
-        assertThat(saved.getProfile()).contains("ZH").contains("DETAILED").contains("SENIOR");
     }
 }

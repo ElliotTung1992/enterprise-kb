@@ -9,11 +9,10 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * 用户画像离线推断的 Kafka 消费者（ADR-016，Phase 2）。
+ * 用户画像统一推断的 Kafka 消费者（ADR-016，Phase 2）。
  *
- * <p>消费用户活动事件，解析 userId 后委派给 {@link ProfileInferenceRunner}（去抖+推断+写入逻辑，
- * 与 Kafka 降级路径共用）。仅当 {@code enterprise.kb.profile.inference.enabled=true} 时装配；
- * 关闭时无消费者、不连 Kafka。</p>
+ * <p>消费用户活动事件（消息体为 userId），解析后委派给 {@link ProfileInferenceRunner#run}
+ * （统一推断 4 维，与 Kafka 降级路径共用）。仅当 {@code enterprise.kb.profile.inference.enabled=true} 时装配。</p>
  */
 @Slf4j
 @Component

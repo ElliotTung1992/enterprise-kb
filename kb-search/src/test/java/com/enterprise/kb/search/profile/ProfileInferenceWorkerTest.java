@@ -12,8 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * {@link ProfileInferenceWorker} 单测：聚焦 userId 解析与委派
- * （去抖/推断/置信逻辑已在 {@link ProfileInferenceRunnerTest} 覆盖）。
+ * {@link ProfileInferenceWorker} 单测：聚焦 userId 解析与委派 run
+ * （去抖/推断逻辑已在 {@link ProfileInferenceRunnerTest} 覆盖）。
  */
 @ExtendWith(MockitoExtension.class)
 class ProfileInferenceWorkerTest {

@@ -186,7 +186,7 @@ function createAgentRenderCtx(bubble) {
   bubble.innerHTML = `
     <div class="agent-steps"></div>
     <details class="agent-thinking d-none">
-      <summary class="agent-thinking-summary">💭 思考过程</summary>
+      <summary class="agent-thinking-summary">思考过程</summary>
       <div class="agent-thinking-body"></div>
     </details>
     <div class="agent-answer"></div>`;
@@ -222,6 +222,7 @@ function renderAgentEvent(evt, ctx) {
     }
     case 'thinking':
       ctx.thinking.classList.remove('d-none');
+      ctx.thinking.open = true;
       ctx.thinkingText += evt.delta || '';
       ctx.thinkingBody.textContent = ctx.thinkingText;
       break;
