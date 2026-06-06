@@ -1,6 +1,5 @@
 package com.enterprise.kb.search.service.impl;
 
-import com.enterprise.kb.common.exception.KbException;
 import com.enterprise.kb.common.exception.ResourceNotFoundException;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.QaChatMessageDto;
@@ -14,7 +13,6 @@ import com.enterprise.kb.search.service.QaChatSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -1,6 +1,5 @@
 package com.enterprise.kb.user.controller;
 
-import com.enterprise.kb.common.constants.RoleType;
 import com.enterprise.kb.common.dto.ApiResponse;
 import com.enterprise.kb.user.dto.*;
 import com.enterprise.kb.user.service.SpaceService;

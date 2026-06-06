@@ -7,13 +7,11 @@ import com.enterprise.kb.auth.dto.RegisterRequest;
 import com.enterprise.kb.auth.dto.TokenRefreshRequest;
 import com.enterprise.kb.auth.service.AuthService;
 import com.enterprise.kb.common.dto.ApiResponse;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 /**

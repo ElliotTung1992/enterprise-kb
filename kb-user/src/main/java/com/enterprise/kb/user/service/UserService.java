@@ -1,6 +1,5 @@
 package com.enterprise.kb.user.service;
 
-import com.enterprise.kb.auth.dto.RegisterRequest;
 import com.enterprise.kb.user.dto.CreateUserRequest;
 import com.enterprise.kb.user.dto.UserDto;
 import com.github.pagehelper.PageInfo;

@@ -1,10 +1,8 @@
 package com.enterprise.kb.auth.service.impl;
 
 import com.enterprise.kb.auth.dto.AuthResponse;
-import com.enterprise.kb.auth.dto.ChangePasswordRequest;
 import com.enterprise.kb.auth.dto.LoginRequest;
 import com.enterprise.kb.auth.dto.RegisterRequest;
-import com.enterprise.kb.auth.dto.TokenRefreshRequest;
 import com.enterprise.kb.auth.mapper.RefreshTokenMapper;
 import com.enterprise.kb.auth.model.RefreshToken;
 import com.enterprise.kb.auth.service.AuthService;
