@@ -142,6 +142,7 @@ body { background: var(--kb-bg); font-size: 0.9rem; }
 .md-page-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
 
 /* Citation cards */
+.citation-group { border: 1px solid #e2e8f0; background: #fff; border-radius: 6px; padding: .6rem .75rem; }
 .citation-card { border-left: 3px solid var(--kb-primary); background: #f5f3ff; border-radius: 6px; padding: .5rem .75rem; margin-top: .5rem; font-size: .8rem; }
 
 /* Search button */

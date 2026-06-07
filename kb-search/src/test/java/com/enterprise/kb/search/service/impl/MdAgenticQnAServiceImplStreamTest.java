@@ -6,7 +6,9 @@ import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.enterprise.kb.common.tracing.TracingContextHolder;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.AgentStreamEvent;
+import com.enterprise.kb.search.dto.Citation;
 import com.enterprise.kb.search.dto.QnARequest;
+import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.tracing.AiStreamTracingSupport;
 import com.enterprise.kb.search.service.QaChatSessionService;
 import org.springframework.ai.chat.messages.Message;
@@ -85,6 +87,7 @@ class MdAgenticQnAServiceImplStreamTest {
         assertThat(emitted).containsExactly(
                 AgentStreamEvent.answer("Hello"),
                 AgentStreamEvent.answer(" world"),
+                AgentStreamEvent.citations(List.of()),
                 AgentStreamEvent.done());
     }
 
@@ -131,6 +134,89 @@ class MdAgenticQnAServiceImplStreamTest {
                 AgentStreamEvent.json(toolCall),
                 AgentStreamEvent.json(toolResult),
                 AgentStreamEvent.answer("根据知识库，7天内可退款"),
+                AgentStreamEvent.citations(List.of()),
+                AgentStreamEvent.done());
+    }
+
+    @Test
+    void mapToEventStreamEmitsCitationsBeforeDone() {
+        MdAgenticQnAServiceImpl service = newService(null, null);
+        UUID documentId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        SearchHit parentHit = new SearchHit(parentId.toString(), documentId, "退款政策.md",
+                "7天内可退款", null, 0.82, "text/markdown", "MD_PARENT",
+                null, null, null, "售后/退款", null);
+        MdAgenticQnAServiceImpl.MdAccumulator acc = new MdAgenticQnAServiceImpl.MdAccumulator();
+        acc.parentHitsById.put(parentId, parentHit);
+
+        StreamingOutput<Object> answer = streaming("根据知识库，7天内可退款", OutputType.AGENT_MODEL_STREAMING);
+        @SuppressWarnings("unchecked")
+        Flux<String> events = (Flux<String>) ReflectionTestUtils.invokeMethod(
+                service, "mapToEventStream", Flux.just(answer), acc);
+        List<String> emitted = events.collectList().block(Duration.ofSeconds(1));
+
+        Citation citation = new Citation(1, parentId.toString(), documentId, "退款政策.md",
+                "7天内可退款", null, 0.82, "MD_PARENT",
+                null, null, null, "售后/退款", null);
+        assertThat(emitted).containsExactly(
+                AgentStreamEvent.answer("根据知识库，7天内可退款"),
+                AgentStreamEvent.citations(List.of(citation)),
+                AgentStreamEvent.done());
+    }
+
+    @Test
+    void mapToEventStreamFallsBackToChildHitCitations() {
+        MdAgenticQnAServiceImpl service = newService(null, null);
+        UUID documentId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        SearchHit childHit = new SearchHit("child-1", documentId, "退款政策.md",
+                "退款申请需要订单号", null, 0.77, "text/markdown", "TEXT",
+                null, null, null, "售后/退款", 2);
+        MdAgenticQnAServiceImpl.MdAccumulator acc = new MdAgenticQnAServiceImpl.MdAccumulator();
+        acc.childHitsByParent.put(parentId, childHit);
+
+        @SuppressWarnings("unchecked")
+        Flux<String> events = (Flux<String>) ReflectionTestUtils.invokeMethod(
+                service, "mapToEventStream", Flux.empty(), acc);
+        List<String> emitted = events.collectList().block(Duration.ofSeconds(1));
+
+        Citation citation = new Citation(1, "child-1", documentId, "退款政策.md",
+                "退款申请需要订单号", null, 0.77, "TEXT",
+                null, null, null, "售后/退款", 2);
+        assertThat(emitted).containsExactly(
+                AgentStreamEvent.citations(List.of(citation)),
+                AgentStreamEvent.done());
+    }
+
+    @Test
+    void toolResultEmitsCitationsAsSoonAsHitsAreAvailable() {
+        MdAgenticQnAServiceImpl service = newService(null, null);
+        UUID documentId = UUID.randomUUID();
+        UUID parentId = UUID.randomUUID();
+        SearchHit childHit = new SearchHit("child-early", documentId, "退款政策.md",
+                "退款申请需要订单号", null, 0.88, "text/markdown", "TEXT",
+                null, null, null, "售后/退款", 3);
+        MdAgenticQnAServiceImpl.MdAccumulator acc = new MdAgenticQnAServiceImpl.MdAccumulator();
+        acc.childHitsByParent.put(parentId, childHit);
+        acc.recordSearch("ok", 1);
+        StreamingOutput<Object> toolFinished = streaming(null, OutputType.AGENT_TOOL_FINISHED);
+
+        @SuppressWarnings("unchecked")
+        Flux<String> events = (Flux<String>) ReflectionTestUtils.invokeMethod(
+                service, "mapToEventStream", Flux.just(toolFinished), acc);
+        List<String> emitted = events.collectList().block(Duration.ofSeconds(1));
+
+        Map<String, Object> toolResult = AgentStreamEvent.event("tool_result");
+        toolResult.put("tool", "searchKnowledgeBase");
+        toolResult.put("status", "ok");
+        toolResult.put("hits", 1);
+        Citation citation = new Citation(1, "child-early", documentId, "退款政策.md",
+                "退款申请需要订单号", null, 0.88, "TEXT",
+                null, null, null, "售后/退款", 3);
+        assertThat(emitted).containsExactly(
+                AgentStreamEvent.json(toolResult),
+                AgentStreamEvent.citations(List.of(citation)),
+                AgentStreamEvent.citations(List.of(citation)),
                 AgentStreamEvent.done());
     }
 

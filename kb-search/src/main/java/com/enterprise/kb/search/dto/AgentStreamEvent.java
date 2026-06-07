@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -11,7 +12,7 @@ import java.util.Map;
  *
  * <p>设计见 {@code docs/design-agentic-stream-process-events.md}。业务层 {@code Flux<String>} 的每个元素是
  * 一个 JSON payload 字符串，由 {@code type} 区分：{@code thinking} / {@code tool_call} / {@code tool_result}
- * / {@code answer} / {@code done} / {@code error}。SSE 的 {@code data:} framing 由 Spring 自动完成，
+ * / {@code answer} / {@code citations} / {@code done} / {@code error}。SSE 的 {@code data:} framing 由 Spring 自动完成，
  * 本类只负责把事件序列化为 JSON 字符串，以及从 JSON 事件中抽取「干净答案」供持久化 / tracing 复用。</p>
  */
 public final class AgentStreamEvent {
@@ -39,6 +40,16 @@ public final class AgentStreamEvent {
      */
     public static String answer(String delta) {
         return json(event("answer", "delta", delta));
+    }
+
+    /**
+     * 构造引用来源事件。
+     *
+     * @param citations 引用来源列表
+     * @return JSON 事件字符串
+     */
+    public static String citations(List<Citation> citations) {
+        return json(event("citations", "citations", citations));
     }
 
     /**

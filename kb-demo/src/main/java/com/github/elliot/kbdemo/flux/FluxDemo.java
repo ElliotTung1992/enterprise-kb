@@ -10,7 +10,7 @@ public class FluxDemo {
 
     public static void main(String[] args) throws InterruptedException {
         Flux.just("a", "b", "c", "d", "e")
-                .concatWith(Flux.just("f", "g", "h"))
+                .concatWith(Flux.defer(() -> Flux.just("f", "g", "h")))
                 .subscribe(System.out::println);
     }
 

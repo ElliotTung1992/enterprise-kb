@@ -63,7 +63,7 @@
         <option value="10">Top 10</option>
       </select>
       <div class="form-check form-switch m-0 ms-1" title="开启后展示模型推理旁白（需 14B 思考模型 + llama-server --reasoning-format none）">
-        <input class="form-check-input" type="checkbox" id="deepthink-toggle">
+        <input class="form-check-input" type="checkbox" id="deepthink-toggle" checked>
         <label class="form-check-label small text-muted" for="deepthink-toggle">深度思考</label>
       </div>
     </div>
@@ -76,7 +76,7 @@
         <textarea class="form-control" id="question-input" rows="2" placeholder="问一个需要多跳推理的问题，答案会逐步输出..." style="resize:none"></textarea>
         <button class="btn btn-primary px-3" id="btn-send"><i class="bi bi-send-fill"></i></button>
       </div>
-      <small class="text-muted">Agent 会先搜索片段、按需读取完整 section，最终答复逐 token 流式输出；流式接口只返回正文，不返回引用卡片。</small>
+      <small class="text-muted">Agent 会先搜索片段、按需读取完整 section，最终答复逐 token 流式输出。</small>
     </div>
   </main>
 </div>

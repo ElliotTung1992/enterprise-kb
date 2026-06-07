@@ -150,6 +150,19 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
     const box = bubble.closest('.md-messages');
     box?.scrollTo(0, box.scrollHeight);
   };
+  const handleData = dataText => {
+    if (!dataText || dataText === '[DONE]') return;
+    if (isEventStream) {
+      let evt;
+      try { evt = JSON.parse(dataText); } catch { return; }
+      if (!ctx) ctx = createAgentRenderCtx(bubble); // 首个事件到达才清掉 loading，保留等待提示
+      renderAgentEvent(evt, ctx);
+    } else {
+      answer += dataText;
+      bubble.innerHTML = marked.parse(answer);
+    }
+    scrollDown();
+  };
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -161,22 +174,20 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
         .filter(line => line.startsWith('data:'))
         .map(line => line.slice(5).replace(/^ /, ''))
         .join('\n');
-      if (!dataText || dataText === '[DONE]') continue;
-      if (isEventStream) {
-        let evt;
-        try { evt = JSON.parse(dataText); } catch { continue; }
-        if (!ctx) ctx = createAgentRenderCtx(bubble); // 首个事件到达才清掉 loading，保留等待提示
-        renderAgentEvent(evt, ctx);
-      } else {
-        answer += dataText;
-        bubble.innerHTML = marked.parse(answer);
-      }
-      scrollDown();
+      handleData(dataText);
     }
   }
-  if (!isEventStream && buffer.trim()) {
-    answer += buffer.replace(/^data:\s?/gm, '');
-    bubble.innerHTML = marked.parse(answer);
+  if (buffer.trim()) {
+    const dataText = buffer.split(/\r?\n/)
+      .filter(line => line.startsWith('data:'))
+      .map(line => line.slice(5).replace(/^ /, ''))
+      .join('\n');
+    if (dataText) {
+      handleData(dataText);
+    } else if (!isEventStream) {
+      answer += buffer.replace(/^data:\s?/gm, '');
+      bubble.innerHTML = marked.parse(answer);
+    }
   }
 }
 
@@ -189,12 +200,14 @@ function createAgentRenderCtx(bubble) {
       <summary class="agent-thinking-summary">思考过程</summary>
       <div class="agent-thinking-body"></div>
     </details>
-    <div class="agent-answer"></div>`;
+    <div class="agent-answer"></div>
+    <div class="agent-citations d-none mt-2"></div>`;
   return {
     steps: bubble.querySelector('.agent-steps'),
     thinking: bubble.querySelector('.agent-thinking'),
     thinkingBody: bubble.querySelector('.agent-thinking-body'),
     answerEl: bubble.querySelector('.agent-answer'),
+    citationsEl: bubble.querySelector('.agent-citations'),
     answerText: '',
     thinkingText: '',
     pendingSteps: []
@@ -230,6 +243,9 @@ function renderAgentEvent(evt, ctx) {
       ctx.answerText += evt.delta || '';
       ctx.answerEl.innerHTML = marked.parse(ctx.answerText);
       break;
+    case 'citations':
+      renderAgentInlineCitations(evt.citations || [], ctx);
+      break;
     case 'error': {
       const err = document.createElement('div');
       err.className = 'text-danger small mt-1';
@@ -241,6 +257,27 @@ function renderAgentEvent(evt, ctx) {
     default:
       break;
   }
+}
+
+function renderAgentInlineCitations(citations, ctx) {
+  if (!ctx.citationsEl) return;
+  if (!citations.length) {
+    ctx.citationsEl.classList.add('d-none');
+    ctx.citationsEl.innerHTML = '';
+    return;
+  }
+  ctx.citationsEl.classList.remove('d-none');
+  ctx.citationsEl.innerHTML = `
+    <div class="citation-group">
+      <div class="small fw-semibold text-muted mb-1"><i class="bi bi-link-45deg me-1"></i>引用 section</div>
+      <div class="d-flex gap-2 flex-wrap">
+        ${citations.map(c => `
+          <div class="citation-card" title="${escAttr(c.excerpt || '')}">
+            <div class="fw-semibold">${escHtml(c.documentTitle || 'Markdown 文档')}</div>
+            <div class="text-muted text-truncate" style="max-width:220px">${escHtml(c.section || c.excerpt || '')}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
 }
 
 function formatAgentToolResult(evt) {

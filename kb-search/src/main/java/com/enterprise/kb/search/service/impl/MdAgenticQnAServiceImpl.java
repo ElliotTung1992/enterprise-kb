@@ -252,7 +252,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
      *   <li>{@code AGENT_MODEL_STREAMING} 的 chunk 经 {@link ThinkStreamSplitter} 切成 thinking / answer 事件；</li>
      *   <li>{@code AGENT_MODEL_FINISHED} 的 {@code toolCalls} → tool_call 事件；</li>
      *   <li>{@code AGENT_TOOL_FINISHED} → 按序消费 {@code acc} 的工具调用记录 → tool_result 事件；</li>
-     *   <li>流末尾补 done；异常经 onErrorResume 转成脱敏 error + done（前端结构化展示，不抛 HTTP 错误）。</li>
+     *   <li>流末尾补 citations + done；异常经 onErrorResume 转成脱敏 error 并重抛。</li>
      * </ul>
      */
     private Flux<String> mapToEventStream(Flux<NodeOutput> outputs, MdAccumulator acc) {
@@ -261,6 +261,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         return outputs
                 .concatMap(output -> Flux.fromIterable(toEvents(output, splitter, acc, toolResultCursor)))
                 .concatWith(Flux.defer(() -> Flux.fromIterable(splitter.flush())))
+                .concatWith(Flux.defer(() -> Flux.just(AgentStreamEvent.citations(assembleCitations(acc)))))
                 .concatWith(Flux.just(AgentStreamEvent.done()))
                 // 发完 error 事件后「重抛」原异常：前端拿到结构化错误，同时让上游 doOnComplete 跳过持久化、
                 // tracing doOnError 把根 span 标 ERROR。绝不能 onErrorResume 成正常完成——否则半截答案会被当成功入库。
@@ -328,6 +329,10 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
             events.add(AgentStreamEvent.json(event));
         }
         toolResultCursor.set(snapshot.size());
+        List<Citation> citations = assembleCitations(acc);
+        if (!citations.isEmpty()) {
+            events.add(AgentStreamEvent.citations(citations));
+        }
         return events;
     }
 
@@ -481,11 +486,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                                       AssistantMessage assistantMessage, MdAccumulator acc) {
         String answer = assistantMessage.getText();
         redisChatMemory.add(sessionId.toString(), List.of(new UserMessage(req.question()), assistantMessage));
-        List<SearchHit> orderedHits = new ArrayList<>(acc.parentHitsById.values());
-        if (orderedHits.isEmpty()) {
-            orderedHits = acc.childHitsByParent.values().stream().toList();
-        }
-        List<Citation> citations = CitationAssembler.fromHits(orderedHits);
+        List<Citation> citations = assembleCitations(acc);
         try {
             qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(), req.question(), answer);
         } catch (Exception e) {
@@ -493,6 +494,19 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         }
         return new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
+    }
+
+    private List<Citation> assembleCitations(MdAccumulator acc) {
+        List<SearchHit> orderedHits;
+        synchronized (acc.parentHitsById) {
+            orderedHits = new ArrayList<>(acc.parentHitsById.values());
+        }
+        if (orderedHits.isEmpty()) {
+            synchronized (acc.childHitsByParent) {
+                orderedHits = new ArrayList<>(acc.childHitsByParent.values());
+            }
+        }
+        return CitationAssembler.fromHits(orderedHits);
     }
 
     /** 在 Agent 系统 prompt 前拼接画像软默认块（空则不拼，行为与未引入画像时一致）。 */
@@ -534,9 +548,9 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         /** 本轮已读取过的 parent section ID，防止模型重复调用 readFullSection 展开同一 section。 */
         final Set<UUID> expandedParents = new HashSet<>();
         /** child 检索命中的代表片段，按 parentId 去重保序；同步响应用它兜底组装 citation。 */
-        final Map<UUID, SearchHit> childHitsByParent = new LinkedHashMap<>();
+        final Map<UUID, SearchHit> childHitsByParent = Collections.synchronizedMap(new LinkedHashMap<>());
         /** 已展开 parent section 的完整命中，按读取顺序保序；优先用于组装最终 citation。 */
-        final Map<UUID, SearchHit> parentHitsById = new LinkedHashMap<>();
+        final Map<UUID, SearchHit> parentHitsById = Collections.synchronizedMap(new LinkedHashMap<>());
         /**
          * 工具调用记录（含早退分支），供流映射按序生成 tool_result 事件。
          * 每次工具调用无论成功 / 无命中 / 早退都恰好追加一条，保证与 {@code AGENT_TOOL_FINISHED} 对齐。
