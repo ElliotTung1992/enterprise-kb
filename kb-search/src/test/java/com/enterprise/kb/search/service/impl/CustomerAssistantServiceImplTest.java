@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.alibaba.cloud.ai.graph.checkpoint.savers.redis.RedisSaver;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.CustomerMessageDto;
@@ -39,6 +40,7 @@ class CustomerAssistantServiceImplTest {
     @Mock CustomerSessionMapper customerSessionMapper;
     @Mock CustomerMessageMapper customerMessageMapper;
     @Mock ObjectMapper objectMapper;
+    @Mock PromptProvider promptProvider;
 
     @InjectMocks CustomerAssistantServiceImpl service;
 

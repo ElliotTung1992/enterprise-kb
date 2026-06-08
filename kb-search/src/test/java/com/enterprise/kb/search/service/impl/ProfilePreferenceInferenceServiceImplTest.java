@@ -3,6 +3,7 @@ package com.enterprise.kb.search.service.impl;
 import com.enterprise.kb.common.constants.AnswerLanguage;
 import com.enterprise.kb.common.constants.AnswerStyle;
 import com.enterprise.kb.common.constants.Seniority;
+import com.enterprise.kb.search.TestPromptProviders;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.user.dto.InferredSignals;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,7 @@ class ProfilePreferenceInferenceServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new ProfilePreferenceInferenceServiceImpl(modelProviderResolver);
+        service = new ProfilePreferenceInferenceServiceImpl(modelProviderResolver, TestPromptProviders.local());
         ReflectionTestUtils.setField(service, "provider", "LLAMA_CPP");
     }
 

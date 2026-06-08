@@ -9,7 +9,7 @@
 
 ## 会话创建时机
 
-首次调用 `/md-qa/ask` 或 `/md-qa/ask/agentic` 时，`QaChatSessionService.saveExchange()` 自动：
+首次调用 `/md-qa/ask` 或 `/md-qa/ask/agentic/stream` 时，`QaChatSessionService.saveExchange()` 自动：
 
 1. 生成 `sessionId`（UUID）
 2. 创建 `qa_sessions` 记录，`title` = 首条问题截断至 50 字符

@@ -446,35 +446,20 @@ curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask \
   }'
 ```
 
-### 6.6 流式问答（逐字输出）
+### 6.6 Agentic 流式问答（多跳推理 + 逐步输出）
 
-适合在自定义前端中实现打字机效果：
+LLM 以 Agent 的身份自主决策，手里有两个工具：`searchKnowledgeBase`（搜 child 片段）和
+`readFullSection`（按需展开某个 parent 的整段正文）。接口以 SSE JSON 事件流返回工具过程、思考片段、答案增量和引用：
 
 ```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/stream \
+curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/agentic/stream \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream" \
-  -d '{"question": "请介绍一下系统架构", "topK": 5}'
-```
-
-接口返回 Server-Sent Events 格式，前端使用 `EventSource` 接收。
-
-### 6.7 Agentic 问答（多跳推理）
-
-这种模式下，LLM 以 Agent 的身份自主决策，手里有两个工具：`searchKnowledgeBase`（搜 child 片段）和
-`readFullSection`（按需展开某个 parent 的整段正文）。它适合那些需要多跳检索才能回答的复杂问题：
-
-```bash
-curl -X POST http://localhost:8081/api/v1/spaces/{spaceId}/md-qa/ask/agentic \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
   -d '{"question": "对比安装章节与升级章节对依赖版本的要求", "modelProvider": "LLAMA_CPP"}'
 ```
 
-返回结构与阻塞式问答一致（含 `answer` / `citations` / `sessionId`）。
-
-### 6.8 会话管理
+### 6.7 会话管理
 
 每次问答都会自动创建或续写会话记录（标题取问题前 50 字），无需手动操作。会话统一存放在 `qa_sessions` 表中——这张表历史上由标准 RAG 与 Markdown RAG 两条竖井共用，因此会话管理的接口前缀沿用 `/qa/sessions`，而非 `/md-qa`。
 
@@ -648,8 +633,7 @@ curl http://localhost:8081/actuator/metrics \
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | /api/v1/spaces/{sid}/md-qa/ask | 问答（阻塞式） |
-| POST | /api/v1/spaces/{sid}/md-qa/ask/agentic | Agentic 多跳问答 |
-| POST | /api/v1/spaces/{sid}/md-qa/ask/stream | 问答（流式 SSE） |
+| POST | /api/v1/spaces/{sid}/md-qa/ask/agentic/stream | Agentic 多跳问答（流式 SSE） |
 | GET | /api/v1/spaces/{sid}/qa/sessions | 会话列表（两竖井共享） |
 | GET | /api/v1/spaces/{sid}/qa/sessions/{sessionId}/messages | 会话消息列表 |
 | PATCH | /api/v1/spaces/{sid}/qa/sessions/{sessionId}/title | 重命名会话 |

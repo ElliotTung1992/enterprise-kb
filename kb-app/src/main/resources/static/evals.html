@@ -48,13 +48,6 @@ body { visibility:hidden; }
           <label class="form-label small text-muted">数据集</label>
           <input class="form-control form-control-sm" id="dataset" value="live-smoke">
         </div>
-        <div class="col-md-3">
-          <label class="form-label small text-muted">目标服务</label>
-          <select class="form-select form-select-sm" id="target-service">
-            <option value="MdQnAService">MdQnAService</option>
-            <option value="MdAgenticQnAService">MdAgenticQnAService</option>
-          </select>
-        </div>
         <div class="col-md-2">
           <label class="form-label small text-muted">caseType</label>
           <input class="form-control form-control-sm" id="case-type-filter" placeholder="RAGAS">
@@ -244,7 +237,6 @@ async function runRagas() {
     body: JSON.stringify({
       type: 'RAGAS',
       dataset: getDataset(),
-      targetService: document.getElementById('target-service').value,
       metrics
     })
   });

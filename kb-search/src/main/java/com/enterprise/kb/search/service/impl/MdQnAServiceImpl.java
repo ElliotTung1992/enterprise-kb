@@ -1,11 +1,9 @@
 package com.enterprise.kb.search.service.impl;
 
-import com.enterprise.kb.common.tracing.TracingSupport;
-import com.enterprise.kb.common.constants.ModelProvider;
 import com.enterprise.kb.common.util.SecurityUtils;
+import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.ai.RedisChatMemory;
-import com.enterprise.kb.search.dto.AgentStreamEvent;
 import com.enterprise.kb.search.dto.Citation;
 import com.enterprise.kb.search.dto.QnARequest;
 import com.enterprise.kb.search.dto.QnAResponse;
@@ -28,8 +26,6 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Flux;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.UUID;
@@ -55,9 +51,6 @@ public class MdQnAServiceImpl implements MdQnAService {
 
     @Value("${enterprise.kb.tracing.max-retrieval-chars:4000}")
     private int maxRetrievalChars;
-
-    @Value("${enterprise.kb.ai.default-provider:LLAMA_CPP}")
-    private String defaultChatProvider = ModelProvider.LLAMA_CPP.name();
 
     private final ModelProviderResolver modelProviderResolver;
     private final MdHybridSearchService hybridSearchService;
@@ -108,100 +101,6 @@ public class MdQnAServiceImpl implements MdQnAService {
         }
         return new QnAResponse(answer, sessionId, citations,
                 req.modelProvider() != null ? req.modelProvider() : "DEFAULT", tokensUsed);
-    }
-
-    /**
-     * 基于 Markdown 父子索引进行流式问答。
-     *
-     * @param spaceId 空间 ID
-     * @param req     问答请求
-     * @return 过程事件 JSON 流
-     */
-    @Override
-    public Flux<String> askStream(UUID spaceId, QnARequest req) {
-        // 根 span 由 Controller 方法 AOP（QaObservedAspect）接管流的生命周期，Service 只返回业务事件流。
-        // userId / sessionId 在请求线程提前捕获（订阅时的 reactor 线程可能没有 SecurityContext）。
-        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
-        UUID userId = SecurityUtils.getCurrentUserId();
-        // 画像在请求线程预渲染：订阅时的 reactor 线程可能没有 SecurityContext。
-        String profileBlock = profileService.renderProfileBlock(userId);
-        return doAskStream(spaceId, req, sessionId, userId, profileBlock);
-    }
-
-    private Flux<String> doAskStream(UUID spaceId, QnARequest req, UUID sessionId, UUID userId, String profileBlock) {
-        // Flux.defer：把检索/模型调用推迟到订阅时执行，使其落在根 span scope 内（AOP 边界在订阅时开 scope）。
-        return Flux.defer(() -> streamAnswer(spaceId, req, sessionId, profileBlock))
-                .transform(this::mapStandardStreamToEvents)
-                .transform(events -> persistStreamAnswer(events, sessionId, spaceId, userId, req.question()));
-    }
-
-    private Flux<String> streamAnswer(UUID spaceId, QnARequest req, UUID sessionId, String profileBlock) {
-        List<SearchHit> parentHits = retrieveParentHits(spaceId, req);
-        ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
-        return chatClient.prompt()
-                .advisors(streamMemoryAdvisor(sessionId))
-                .system(buildSystemPrompt(parentHits, profileBlock))
-                .user(streamUserQuestion(req))
-                .stream()
-                .content();
-    }
-
-    /**
-     * 标准流式问答没有工具事件，但本地 Qwen3/llama.cpp 会把原生推理包在 {@code <think>} 中输出。
-     * 这里复用 Agentic 的 splitter，把原始 token 拆成 thinking / answer / done 事件，前端即可逐段展示。
-     */
-    private Flux<String> mapStandardStreamToEvents(Flux<String> tokens) {
-        MdAgenticQnAServiceImpl.ThinkStreamSplitter splitter =
-                new MdAgenticQnAServiceImpl.ThinkStreamSplitter();
-        return tokens
-                .concatMap(token -> Flux.fromIterable(
-                        token == null || token.isEmpty() ? List.of() : splitter.accept(token)))
-                .concatWith(Flux.defer(() -> Flux.fromIterable(splitter.flush())))
-                .concatWith(Flux.just(AgentStreamEvent.done()))
-                .onErrorResume(e -> {
-                    log.error("Markdown 标准流式映射失败", e);
-                    return Flux.<String>just(AgentStreamEvent.error("流式处理失败")).concatWith(Flux.error(e));
-                });
-    }
-
-    /**
-     * 流式标准问答：默认保留模型原生输出；开启 deepThinking 时给 Qwen3 注入 {@code /think} 软开关。
-     * 软开关只发给支持该语法的 llama.cpp(Qwen3)，持久化和会话历史仍保留用户原问题。
-     */
-    private String streamUserQuestion(QnARequest req) {
-        if (!req.deepThinking() || !supportsThinkingSwitch(req.modelProvider())) {
-            return req.question();
-        }
-        return req.question() + " /think";
-    }
-
-    /** 仅 llama.cpp(Qwen3) 识别 /think·/no_think；null/空先解析为配置中的默认 provider。 */
-    private boolean supportsThinkingSwitch(String modelProvider) {
-        String provider = (modelProvider != null && !modelProvider.isBlank()) ? modelProvider : defaultChatProvider;
-        return ModelProvider.LLAMA_CPP.name().equalsIgnoreCase(provider);
-    }
-
-    private Flux<String> persistStreamAnswer(Flux<String> events, UUID sessionId, UUID spaceId,
-                                             UUID userId, String question) {
-        StringBuilder answerBuffer = new StringBuilder();
-        return events.doOnNext(event -> answerBuffer.append(AgentStreamEvent.answerDelta(event)))
-                .doOnComplete(() -> saveStreamExchange(
-                        sessionId, spaceId, userId, question, answerBuffer.toString()));
-    }
-
-    private void saveStreamExchange(UUID sessionId, UUID spaceId, UUID userId, String question, String answer) {
-        try {
-            qaChatSessionService.saveExchange(sessionId, spaceId, userId, question, answer);
-        } catch (Exception e) {
-            log.warn("保存 Markdown 流式问答会话失败：sessionId={}", sessionId, e);
-        }
-    }
-
-    private MessageChatMemoryAdvisor streamMemoryAdvisor(UUID sessionId) {
-        return MessageChatMemoryAdvisor.builder(redisChatMemory)
-                .conversationId(sessionId.toString())
-                .scheduler(Schedulers.immediate())
-                .build();
     }
 
     private List<SearchHit> retrieveParentHits(UUID spaceId, QnARequest req) {

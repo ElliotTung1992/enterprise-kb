@@ -3,6 +3,8 @@ package com.enterprise.kb.search.service.impl;
 import com.alibaba.cloud.ai.graph.NodeOutput;
 import com.alibaba.cloud.ai.graph.streaming.OutputType;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
+import com.enterprise.kb.common.prompt.PromptProvider;
+import com.enterprise.kb.common.prompt.RenderedPrompt;
 import com.enterprise.kb.common.tracing.TracingContextHolder;
 import com.enterprise.kb.search.ai.RedisChatMemory;
 import com.enterprise.kb.search.dto.AgentStreamEvent;
@@ -52,7 +54,22 @@ class MdAgenticQnAServiceImplStreamTest {
 
     private MdAgenticQnAServiceImpl newService(RedisChatMemory memory, QaChatSessionService session) {
         return new MdAgenticQnAServiceImpl(
-                null, null, null, memory, session, null, null, null, null, ObservationRegistry.create(), null);
+                null, null, null, memory, session, null, null, null, null, ObservationRegistry.create(), null,
+                testPromptProvider());
+    }
+
+    private PromptProvider testPromptProvider() {
+        return new PromptProvider() {
+            @Override
+            public String render(String name, Map<String, Object> vars) {
+                return "system:" + vars.get("image_context_rule");
+            }
+
+            @Override
+            public RenderedPrompt get(String name, Map<String, Object> vars) {
+                return new RenderedPrompt(name, 0, render(name, vars));
+            }
+        };
     }
 
     @SuppressWarnings("unchecked")
@@ -266,6 +283,17 @@ class MdAgenticQnAServiceImplStreamTest {
         List<Message> messages = (List<Message>) ReflectionTestUtils.invokeMethod(
                 service, "buildStreamMessages", new java.util.ArrayList<Message>(), req);
         return messages.get(messages.size() - 1).getText();
+    }
+
+    @Test
+    void systemPromptRendersFromPromptProvider() {
+        MdAgenticQnAServiceImpl service = newService(null, null);
+
+        String systemPrompt = ReflectionTestUtils.invokeMethod(service, "systemPrompt");
+
+        assertThat(systemPrompt)
+                .startsWith("system:")
+                .contains("section 中的 [图片说明]");
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.redis.RedisSaver;
+import com.enterprise.kb.search.TestPromptProviders;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.DomainContext;
 import com.enterprise.kb.search.dto.DomainResult;
@@ -39,7 +40,7 @@ class AfterSalesDomainHandlerTest {
 
     private AfterSalesDomainHandler handlerWith(ReactAgent agent) {
         return new AfterSalesDomainHandler(modelProviderResolver, agentCheckpointSaver,
-                reviewRequestService, new ObjectMapper()) {
+                reviewRequestService, new ObjectMapper(), TestPromptProviders.local()) {
             @Override
             ReactAgent buildAgent(String modelProvider) {
                 return agent;

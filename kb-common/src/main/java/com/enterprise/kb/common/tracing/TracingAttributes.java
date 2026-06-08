@@ -50,6 +50,10 @@ public final class TracingAttributes {
     public static final String TRACE_METADATA_PREFIX = "langfuse.trace.metadata.";
     /** observation 级 metadata 前缀。 */
     public static final String OBSERVATION_METADATA_PREFIX = "langfuse.observation.metadata.";
+    /** LangFuse prompt 名称。 */
+    public static final String OBSERVATION_PROMPT_NAME = "langfuse.observation.prompt.name";
+    /** LangFuse prompt 版本。 */
+    public static final String OBSERVATION_PROMPT_VERSION = "langfuse.observation.prompt.version";
 
     private TracingAttributes() {
     }

@@ -35,7 +35,7 @@ public final class AiStreamTracingSupport {
     /**
      * 构建未 start 的流式根 span 状态：写入业务属性与 trace 级 input。
      *
-     * @param observationName    span 名（如 {@code kb.qa.ask.stream}）
+     * @param observationName    span 名（如 {@code kb.qa.ask.agentic.stream}）
      * @param observationRegistry 可观测注册表
      * @param attrs              业务属性（user/session/space/provider）
      * @param input              trace 级 input（如用户问题）

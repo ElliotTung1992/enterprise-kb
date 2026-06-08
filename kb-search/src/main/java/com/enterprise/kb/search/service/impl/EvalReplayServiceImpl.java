@@ -14,7 +14,6 @@ import com.enterprise.kb.search.model.EvalRunResult;
 import com.enterprise.kb.search.service.EvalCaseService;
 import com.enterprise.kb.search.service.EvalReplayService;
 import com.enterprise.kb.search.service.EvalRunService;
-import com.enterprise.kb.search.service.MdAgenticQnAService;
 import com.enterprise.kb.search.service.MdQnAService;
 import com.enterprise.kb.search.service.RagasEvaluationService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -48,7 +47,6 @@ public class EvalReplayServiceImpl implements EvalReplayService {
     private final RagasEvalProperties ragasProperties;
     private final RagasContextCollector ragasContextCollector;
     private final MdQnAService mdQnAService;
-    private final MdAgenticQnAService mdAgenticQnAService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -210,7 +208,6 @@ public class EvalReplayServiceImpl implements EvalReplayService {
         JsonNode expected = readTree(evalCase.getExpectedJson());
         UUID spaceId = UUID.fromString(required(input, "spaceId"));
         String question = required(input, "question");
-        RagasMode mode = RagasMode.from(input.path("mode").asText(null), request.targetService());
         String modelProvider = input.path("modelProvider").asText(null);
         String modelName = input.path("modelName").asText(null);
         int topK = input.path("topK").asInt(5);
@@ -220,9 +217,7 @@ public class EvalReplayServiceImpl implements EvalReplayService {
         QnAResponse response;
         List<String> contexts;
         try (RagasContextCollector.Scope scope = ragasContextCollector.openScope()) {
-            response = mode == RagasMode.AGENTIC
-                    ? mdAgenticQnAService.ask(spaceId, qnARequest)
-                    : mdQnAService.ask(spaceId, qnARequest);
+            response = mdQnAService.ask(spaceId, qnARequest);
             contexts = scope.snapshot();
         }
         long latencyMs = Duration.between(startedAt, Instant.now()).toMillis();
@@ -234,7 +229,7 @@ public class EvalReplayServiceImpl implements EvalReplayService {
         evaluationInput.put("contexts", contexts);
         evaluationInput.put("groundTruth", groundTruth);
         evaluationInput.put("answerLatencyMs", latencyMs);
-        evaluationInput.put("mode", mode.name());
+        evaluationInput.put("mode", "SINGLE");
         evaluationInput.put("modelProvider", response.modelUsed());
         return new RagasPreparedItem(item, evaluationInput);
     }
@@ -274,7 +269,6 @@ public class EvalReplayServiceImpl implements EvalReplayService {
         ragas.put("embeddingProvider", config.embeddingProvider());
         ragas.put("embeddingModel", config.embeddingModel());
         ragas.put("metricsEnabled", config.metrics());
-        ragas.put("targetService", request.targetService());
         ragas.put("gateMode", ragasProperties.getGateMode());
         ragas.put("thresholds", thresholds);
 
@@ -383,20 +377,4 @@ public class EvalReplayServiceImpl implements EvalReplayService {
         }
     }
 
-    private enum RagasMode {
-        SINGLE,
-        AGENTIC;
-
-        private static RagasMode from(String value, String targetService) {
-            if (value == null || value.isBlank()) {
-                return "MdAgenticQnAService".equals(targetService) ? AGENTIC : SINGLE;
-            }
-            for (RagasMode mode : values()) {
-                if (mode.name().equalsIgnoreCase(value)) {
-                    return mode;
-                }
-            }
-            throw new KbException("不支持的 Ragas mode：" + value, HttpStatus.BAD_REQUEST);
-        }
-    }
 }

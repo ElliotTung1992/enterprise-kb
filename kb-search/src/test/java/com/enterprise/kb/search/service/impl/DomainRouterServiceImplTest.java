@@ -1,6 +1,7 @@
 package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.common.constants.Domain;
+import com.enterprise.kb.search.TestPromptProviders;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.ConversationState;
 import com.enterprise.kb.search.dto.RoutingDecision;
@@ -35,7 +36,7 @@ class DomainRouterServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new DomainRouterServiceImpl(modelProviderResolver);
+        service = new DomainRouterServiceImpl(modelProviderResolver, TestPromptProviders.local());
         ReflectionTestUtils.setField(service, "routerProvider", "LLAMA_CPP");
         ReflectionTestUtils.setField(service, "contextTurns", 3);
     }

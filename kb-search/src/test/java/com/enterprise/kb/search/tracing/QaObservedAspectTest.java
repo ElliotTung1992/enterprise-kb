@@ -123,7 +123,7 @@ class QaObservedAspectTest {
         ProceedingJoinPoint pjp = joinPoint(new Object[]{spaceId, req}, Flux.class, captured,
                 Flux.just("Hello", " world"));
 
-        Object result = aspect.observe(pjp, qaObserved("kb.qa.ask.stream"));
+        Object result = aspect.observe(pjp, qaObserved("kb.qa.test.stream"));
 
         assertThat(result).isInstanceOf(Flux.class);
         @SuppressWarnings("unchecked")
@@ -139,7 +139,7 @@ class QaObservedAspectTest {
         AtomicReference<Object[]> captured = new AtomicReference<>();
         ProceedingJoinPoint pjp = joinPoint(new Object[]{spaceId, req}, Flux.class, captured, Flux.just("ok"));
 
-        Object result = aspect.observe(pjp, qaObserved("kb.qa.ask.stream"));
+        Object result = aspect.observe(pjp, qaObserved("kb.qa.test.stream"));
         ((Flux<String>) result).collectList().block(Duration.ofSeconds(1));
 
         QnARequest passed = (QnARequest) captured.get()[1];
@@ -172,7 +172,7 @@ class QaObservedAspectTest {
             return Flux.just("ok");
         });
 
-        Object result = aspect.observe(pjp, qaObserved("kb.qa.ask.stream"));
+        Object result = aspect.observe(pjp, qaObserved("kb.qa.test.stream"));
         ((Flux<String>) result).collectList().block(Duration.ofSeconds(1));
 
         assertThat(holderInProceed.get()).isNotNull();
@@ -209,7 +209,7 @@ class QaObservedAspectTest {
             throw failure;
         });
 
-        assertThatThrownBy(() -> localAspect.observe(pjp, qaObserved("kb.qa.ask.stream")))
+        assertThatThrownBy(() -> localAspect.observe(pjp, qaObserved("kb.qa.test.stream")))
                 .isSameAs(failure);
 
         assertThat(errors).hasValue(1);
@@ -219,8 +219,8 @@ class QaObservedAspectTest {
 
     @Test
     void streamTracePreservesJsonAnswerWhenNotEventStream() throws Throwable {
-        // P3 回归：标准流（eventStream=false）用 identity 抽取器，恰为 JSON 的答案 token 原样进 trace output，不被误删
-        String output = captureStreamTraceOutput("kb.qa.ask.stream", false,
+        // P3 回归：普通字符串流（eventStream=false）用 identity 抽取器，恰为 JSON 的答案 token 原样进 trace output，不被误删
+        String output = captureStreamTraceOutput("kb.qa.test.stream", false,
                 Flux.just("{\"type\":\"invoice\"}"));
         assertThat(output).isEqualTo("{\"type\":\"invoice\"}");
     }

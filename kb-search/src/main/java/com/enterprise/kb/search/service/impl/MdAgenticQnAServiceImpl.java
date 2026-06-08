@@ -9,6 +9,7 @@ import com.alibaba.cloud.ai.graph.streaming.OutputType;
 import com.alibaba.cloud.ai.graph.streaming.StreamingOutput;
 import com.enterprise.kb.common.constants.ModelProvider;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.document.mapper.MdChildChunkMapper;
 import com.enterprise.kb.document.mapper.MdDocumentMapper;
@@ -22,7 +23,6 @@ import com.enterprise.kb.search.dto.AgentStreamEvent;
 import com.enterprise.kb.search.dto.Citation;
 import com.enterprise.kb.search.dto.KnowledgeSearchInput;
 import com.enterprise.kb.search.dto.QnARequest;
-import com.enterprise.kb.search.dto.QnAResponse;
 import com.enterprise.kb.search.dto.ReadFullSectionInput;
 import com.enterprise.kb.search.dto.SearchHit;
 import com.enterprise.kb.search.dto.SearchRequest;
@@ -72,6 +72,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     private static final int TOOL_RERANK_TOP_N = 3;
     private static final int MAX_TOOL_CALLS = 6;
     private static final int MAX_RECURSION_LIMIT = MAX_TOOL_CALLS * 2 + 1;
+    private static final String AGENTIC_SYSTEM_PROMPT = "kb/agentic/system";
     private static final String IMAGE_CONTEXT_RULE =
             "section 中的 [图片说明] 是系统根据图片生成的视觉理解文本，可作为回答依据；如问题要求精确读取图中文字，应优先依据 OCR文字。";
 
@@ -87,6 +88,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     private final ObservationRegistry observationRegistry;
     /** 用户画像：在线读，渲染 <user_profile> 软默认块注入 Agent 系统 prompt（ADR-016）。 */
     private final ProfileService profileService;
+    private final PromptProvider promptProvider;
 
     @Value("${enterprise.kb.search.md-parent-expansion.max-chars-per-parent:2000}")
     private int maxCharsPerParent;
@@ -104,48 +106,12 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 使用 ReAct 两工具模式完成 Markdown 多跳问答。
-     *
-     * @param spaceId 空间 ID
-     * @param req     问答请求
-     * @return 问答响应
-     */
-    @Override
-    public QnAResponse ask(UUID spaceId, QnARequest req) {
-        // 根 span 由 Controller 方法 AOP（QaObservedAspect）在边界统一创建，Service 只负责业务。
-        UUID sessionId = req.sessionId() != null ? req.sessionId() : UUID.randomUUID();
-        return doAsk(spaceId, req, sessionId);
-    }
-
-    private QnAResponse doAsk(UUID spaceId, QnARequest req, UUID sessionId) {
-        List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
-        AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
-        List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
-        MdAccumulator acc = new MdAccumulator();
-
-        String profileBlock = profileService.renderProfileBlock(SecurityUtils.getCurrentUserId());
-        ReactAgent reactAgent = buildReactAgent(spaceId, req, budget, acc, profileBlock);
-        List<Message> messages = buildMessages(trimmedHistory, req);
-        RunnableConfig runnableConfig = RunnableConfig.builder().threadId(sessionId.toString()).build();
-
-        AssistantMessage assistantMessage;
-        try {
-            assistantMessage = reactAgent.call(messages, runnableConfig);
-        } catch (GraphRunnerException e) {
-            log.error("Markdown Agentic RAG 执行失败：sessionId={}", sessionId, e);
-            throw new KbException("Markdown Agent 执行失败：" + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-
-        return buildResponse(req, sessionId, spaceId, assistantMessage, acc);
-    }
-
-    /**
      * 构建 ReAct 双工具 Agent（同步/流式共用）。
      * tracing 开启时给 CompileConfig 注入 registry（graph/node span，ADR-015 C2），
      * 并挂原生 ToolInterceptor 产 per-tool-call tool span（业务工具体零侵入）。
      */
     private ReactAgent buildReactAgent(UUID spaceId, QnARequest req,
-                                       AgenticTokenBudgetService.Budget budget, MdAccumulator acc, String profileBlock) {
+                                       AgenticTokenBudgetService.Budget budget, MdAccumulator acc, String systemPrompt) {
         ChatClient chatClient = modelProviderResolver.resolveChatClient(req.modelProvider());
         CompileConfig.Builder compileConfigBuilder = CompileConfig.builder().recursionLimit(MAX_RECURSION_LIMIT);
         if (tracingEnabled) {
@@ -156,7 +122,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
         var agentBuilder = ReactAgent.builder()
                 .name("md-kb-search-agent")
                 .chatClient(chatClient)
-                .systemPrompt(composeSystemPrompt(profileBlock))
+                .systemPrompt(systemPrompt)
                 .tools(searchTool, readTool)
                 .compileConfig(compileConfigBuilder.build());
         if (tracingEnabled) {
@@ -165,11 +131,6 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                     observationRegistry, List.<ToolCallback>of(searchTool, readTool)));
         }
         return agentBuilder.build();
-    }
-
-    /** 同步 agentic：不注入软开关，保持原有行为。 */
-    private List<Message> buildMessages(List<Message> trimmedHistory, QnARequest req) {
-        return appendUserMessage(trimmedHistory, req.question());
     }
 
     /**
@@ -229,10 +190,11 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
      */
     private Flux<String> agentTokenStream(UUID spaceId, QnARequest req, UUID sessionId, String profileBlock) {
         List<Message> rawHistory = redisChatMemory.get(sessionId.toString());
-        AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory);
+        String systemPrompt = composeSystemPrompt(profileBlock);
+        AgenticTokenBudgetService.Budget budget = tokenBudget.compute(req.question(), rawHistory, systemPrompt);
         List<Message> trimmedHistory = tokenBudget.compressHistory(rawHistory, budget.historyTokensMax());
         MdAccumulator acc = new MdAccumulator();
-        ReactAgent reactAgent = buildReactAgent(spaceId, req, budget, acc, profileBlock);
+        ReactAgent reactAgent = buildReactAgent(spaceId, req, budget, acc, systemPrompt);
         List<Message> messages = buildStreamMessages(trimmedHistory, req);
         RunnableConfig runnableConfig = RunnableConfig.builder().threadId(sessionId.toString()).build();
         try {
@@ -482,20 +444,6 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
                 "MD_PARENT", null, null, null, parent.getSection(), null);
     }
 
-    private QnAResponse buildResponse(QnARequest req, UUID sessionId, UUID spaceId,
-                                      AssistantMessage assistantMessage, MdAccumulator acc) {
-        String answer = assistantMessage.getText();
-        redisChatMemory.add(sessionId.toString(), List.of(new UserMessage(req.question()), assistantMessage));
-        List<Citation> citations = assembleCitations(acc);
-        try {
-            qaChatSessionService.saveExchange(sessionId, spaceId, SecurityUtils.getCurrentUserId(), req.question(), answer);
-        } catch (Exception e) {
-            log.warn("保存 Markdown Agentic 会话失败：sessionId={}", sessionId, e);
-        }
-        return new QnAResponse(answer, sessionId, citations,
-                req.modelProvider() != null ? req.modelProvider() : "DEFAULT", 0);
-    }
-
     private List<Citation> assembleCitations(MdAccumulator acc) {
         List<SearchHit> orderedHits;
         synchronized (acc.parentHitsById) {
@@ -516,21 +464,7 @@ public class MdAgenticQnAServiceImpl implements MdAgenticQnAService {
     }
 
     private String systemPrompt() {
-        return """
-                你是 Markdown 知识库 Agent。
-                你有两个工具：
-                1. searchKnowledgeBase(query)：先检索小粒度 child 片段，返回 parentId 和 section。
-                2. readFullSection(parentId)：当 child 片段相关但信息不完整时，读取完整 section。
-
-                工作规则：
-                - 每一轮用户新问题都必须先调用 searchKnowledgeBase 搜索精准关键词，不能直接基于历史对话作答。
-                - 历史对话只用于理解上下文和省略指代，不能作为知识库内容或回答依据。
-                - 如果 child 片段足够回答，直接作答。
-                - 如果 child 片段只说明某个 section 相关但细节不足，读取该 parentId 的完整 section 后再答。
-                - 不要重复读取同一个 parentId。
-                - 只能依据工具返回的知识库内容回答，不要编造。
-                - %s
-                """.formatted(IMAGE_CONTEXT_RULE);
+        return promptProvider.renderForTrace(AGENTIC_SYSTEM_PROMPT, Map.of("image_context_rule", IMAGE_CONTEXT_RULE));
     }
 
     private String truncate(String text, int maxLen) {

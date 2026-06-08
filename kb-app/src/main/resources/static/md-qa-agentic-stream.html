@@ -26,8 +26,6 @@
     <li><a class="nav-link" href="/dashboard.html"><i class="bi bi-grid-1x2"></i>仪表盘</a></li>
     <li><a class="nav-link" href="/md-upload.html"><i class="bi bi-cloud-upload"></i>Markdown 上传</a></li>
     <li><a class="nav-link" href="/md-qa-standard.html"><i class="bi bi-chat-square-text"></i>标准问答</a></li>
-    <li><a class="nav-link" href="/md-qa-agentic.html"><i class="bi bi-diagram-3"></i>Agentic 问答</a></li>
-    <li><a class="nav-link" href="/md-qa-stream.html"><i class="bi bi-broadcast"></i>流式问答</a></li>
     <li><a class="nav-link active" href="/md-qa-agentic-stream.html"><i class="bi bi-stars"></i>Agentic 流式</a></li>
   </ul>
   <div class="p-3 border-top" style="border-color:#312e81!important">
@@ -88,7 +86,6 @@
 <script>
 initMdQaPage({
   stream: true,
-  eventStream: true,
   streamEndpoint: 'ask/agentic/stream',
   loading: 'Agent 正在规划检索并读取 section...',
   welcome: 'Agentic 流式问答兼顾多跳检索与逐步输出，适合较长且需要追问式检索的答案。'

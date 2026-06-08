@@ -48,38 +48,6 @@ public class MdQnAController {
     }
 
     /**
-     * Markdown Agentic 两工具问答。
-     *
-     * @param spaceId 空间 ID
-     * @param req     问答请求
-     * @return 问答响应
-     */
-    @PostMapping("/ask/agentic")
-    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
-    @QaObserved(name = "kb.qa.ask.agentic")
-    public ResponseEntity<ApiResponse<QnAResponse>> askAgentic(
-            @PathVariable UUID spaceId,
-            @Valid @RequestBody QnARequest req) {
-        return ResponseEntity.ok(ApiResponse.ok(mdAgenticQnAService.ask(spaceId, req)));
-    }
-
-    /**
-     * Markdown 结构感知流式问答。
-     *
-     * @param spaceId 空间 ID
-     * @param req     问答请求
-     * @return 过程事件 JSON 流
-     */
-    @PostMapping(value = "/ask/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @PreAuthorize("hasPermission(#spaceId, 'SPACE', 'VIEWER')")
-    @QaObserved(name = "kb.qa.ask.stream", eventStream = true)
-    public Flux<String> askStream(
-            @PathVariable UUID spaceId,
-            @Valid @RequestBody QnARequest req) {
-        return mdQnAService.askStream(spaceId, req);
-    }
-
-    /**
      * Markdown Agentic 两工具流式问答。
      *
      * @param spaceId 空间 ID

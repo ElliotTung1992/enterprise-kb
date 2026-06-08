@@ -126,10 +126,7 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   const topK = parseInt(document.getElementById('topk-select').value);
   const modelProvider = selectedModelProvider();
   const deepThinking = !!document.getElementById('deepthink-toggle')?.checked;
-  // 流式端点可配置：标准流式 ask/stream、Agentic 流式 ask/agentic/stream
-  const streamEndpoint = mdCurrentConfig?.streamEndpoint || 'ask/stream';
-  // 仅 Agentic 流式（eventStream:true）走「过程事件 JSON」协议；标准流式仍按裸文本 token 拼接。
-  const isEventStream = !!mdCurrentConfig?.eventStream;
+  const streamEndpoint = mdCurrentConfig?.streamEndpoint || 'ask/agentic/stream';
   const res = await fetch(`/api/v1/spaces/${spaceId}/md-qa/${streamEndpoint}`, {
     method: 'POST',
     headers: {
@@ -144,7 +141,6 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let answer = '';
   let ctx = null;
   const scrollDown = () => {
     const box = bubble.closest('.md-messages');
@@ -152,15 +148,10 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
   };
   const handleData = dataText => {
     if (!dataText || dataText === '[DONE]') return;
-    if (isEventStream) {
-      let evt;
-      try { evt = JSON.parse(dataText); } catch { return; }
-      if (!ctx) ctx = createAgentRenderCtx(bubble); // 首个事件到达才清掉 loading，保留等待提示
-      renderAgentEvent(evt, ctx);
-    } else {
-      answer += dataText;
-      bubble.innerHTML = marked.parse(answer);
-    }
+    let evt;
+    try { evt = JSON.parse(dataText); } catch { return; }
+    if (!ctx) ctx = createAgentRenderCtx(bubble); // 首个事件到达才清掉 loading，保留等待提示
+    renderAgentEvent(evt, ctx);
     scrollDown();
   };
   while (true) {
@@ -184,9 +175,6 @@ async function sendMdStreamQuestion(spaceId, question, bubble, sessionId) {
       .join('\n');
     if (dataText) {
       handleData(dataText);
-    } else if (!isEventStream) {
-      answer += buffer.replace(/^data:\s?/gm, '');
-      bubble.innerHTML = marked.parse(answer);
     }
   }
 }

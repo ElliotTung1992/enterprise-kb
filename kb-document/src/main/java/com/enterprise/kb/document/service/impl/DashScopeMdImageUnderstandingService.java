@@ -1,6 +1,7 @@
 package com.enterprise.kb.document.service.impl;
 
 import com.enterprise.kb.common.exception.InvalidRequestException;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.common.tracing.TracingSupport;
 import com.enterprise.kb.document.service.MdImageInput;
 import com.enterprise.kb.document.service.MdImageUnderstandingResult;
@@ -28,8 +29,11 @@ import java.util.Map;
 @ConditionalOnProperty(name = "enterprise.kb.md.image.vision-provider", havingValue = "DASHSCOPE", matchIfMissing = true)
 public class DashScopeMdImageUnderstandingService implements MdImageUnderstandingService {
 
+    private static final String IMAGE_UNDERSTANDING_PROMPT = "kb/image/understanding";
+
     private final ObjectMapper objectMapper;
     private final ObservationRegistry observationRegistry;
+    private final PromptProvider promptProvider;
 
     @Value("${enterprise.kb.tracing.enabled:false}")
     private boolean tracingEnabled;
@@ -88,26 +92,12 @@ public class DashScopeMdImageUnderstandingService implements MdImageUnderstandin
     }
 
     private String prompt(MdImageInput image) {
-        return """
-                请理解这张 Markdown 文档中的图片，并只返回 JSON，不要返回 Markdown 代码块。
-                JSON 字段固定为：
-                {
-                  "ocrText": "图中可读文字，没有则为空字符串",
-                  "caption": "对图片内容的客观描述",
-                  "summary": "适合知识库检索的简洁摘要",
-                  "entities": "关键实体，逗号分隔，没有则为空字符串"
-                }
-
-                图片上下文：
-                所在章节：%s
-                图片标题：%s
-                替代文本：%s
-                对象路径：%s
-                """.formatted(
-                firstText(image.section(), "未命名章节"),
-                firstText(image.title(), image.altText(), image.objectKey()),
-                firstText(image.altText(), ""),
-                image.objectKey());
+        return promptProvider.render(IMAGE_UNDERSTANDING_PROMPT, Map.of(
+                "section", firstText(image.section(), "未命名章节"),
+                "title", firstText(image.title(), image.altText(), image.objectKey()),
+                "alt_text", firstText(image.altText(), ""),
+                "object_key", firstText(image.objectKey(), "")
+        ));
     }
 
     private MdImageUnderstandingResult parseResult(String content) {
@@ -157,4 +147,3 @@ public class DashScopeMdImageUnderstandingService implements MdImageUnderstandin
         return result;
     }
 }
-

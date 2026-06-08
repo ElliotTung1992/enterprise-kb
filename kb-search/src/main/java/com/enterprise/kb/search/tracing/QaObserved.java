@@ -21,8 +21,7 @@ import java.lang.annotation.Target;
 public @interface QaObserved {
 
     /**
-     * 根 span 名称，如 {@code kb.qa.ask} / {@code kb.qa.ask.agentic} /
-     * {@code kb.qa.ask.stream} / {@code kb.qa.ask.agentic.stream}。
+     * 根 span 名称，如 {@code kb.qa.ask} / {@code kb.qa.ask.agentic.stream}。
      *
      * @return span 名称
      */

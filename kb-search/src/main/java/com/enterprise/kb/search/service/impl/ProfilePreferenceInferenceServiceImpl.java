@@ -4,6 +4,7 @@ import com.enterprise.kb.common.constants.AnswerLanguage;
 import com.enterprise.kb.common.constants.AnswerLength;
 import com.enterprise.kb.common.constants.AnswerStyle;
 import com.enterprise.kb.common.constants.Seniority;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.service.ProfilePreferenceInferenceService;
 import com.enterprise.kb.user.dto.InferredSignals;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 用户画像统一推断实现。
@@ -28,11 +30,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProfilePreferenceInferenceServiceImpl implements ProfilePreferenceInferenceService {
 
+    private static final String PROFILE_PROMPT = "kb/profile/preference-inference";
+
     /** 推断使用的模型提供商（轻量任务，用便宜快模型）。 */
     @Value("${enterprise.kb.profile.inference.provider:LLAMA_CPP}")
     private String provider;
 
     private final ModelProviderResolver modelProviderResolver;
+    private final PromptProvider promptProvider;
 
     @Override
     public InferredSignals infer(List<String> recentMessages) {
@@ -42,7 +47,7 @@ public class ProfilePreferenceInferenceServiceImpl implements ProfilePreferenceI
         try {
             ChatClient chatClient = modelProviderResolver.resolveChatClient(provider);
             String raw = chatClient.prompt()
-                    .system(SYSTEM_PROMPT)
+                    .system(promptProvider.render(PROFILE_PROMPT, Map.of()))
                     .user(buildUserPrompt(recentMessages))
                     .call()
                     .content();
@@ -153,26 +158,4 @@ public class ProfilePreferenceInferenceServiceImpl implements ProfilePreferenceI
         }
     }
 
-    private static final String SYSTEM_PROMPT = """
-            你从用户向知识库提出的近期消息，推断该用户的回答偏好画像，共四维。你只输出推断结果，绝不回答问题本身。
-            用户若在消息里**明说**偏好（如"以后用中文""以后简洁点""以后多举例"），按高置信抽取；
-            其余维从提问内容/术语谨慎推断，证据不足就给低置信或 NONE。
-
-            四个维度与取值：
-            - SENIORITY 资历：JUNIOR / INTERMEDIATE / SENIOR
-            - LENGTH 答案长度：CONCISE / MEDIUM / DETAILED
-            - LANGUAGE 回答语言：ZH / EN
-            - STYLE 答案风格：DIRECT / EXPLAINED / WITH_EXAMPLES
-
-            输出恰好四行，每行三段以竖线分隔：FIELD|VALUE|CONFIDENCE
-            - FIELD：SENIORITY / LENGTH / LANGUAGE / STYLE 各一行
-            - VALUE：对应取值；该维无可靠信号则填 NONE
-            - CONFIDENCE：0~1 小数
-
-            示例（用户近期说过"以后都用中文回复"，问题偏进阶）：
-            SENIORITY|INTERMEDIATE|0.7
-            LENGTH|NONE|0
-            LANGUAGE|ZH|0.95
-            STYLE|NONE|0
-            """;
 }

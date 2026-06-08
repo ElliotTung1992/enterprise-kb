@@ -1,6 +1,7 @@
 package com.enterprise.kb.search.service.impl;
 
 import com.enterprise.kb.common.constants.ResponsibleParty;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.ComplaintPlanningContext;
 import com.enterprise.kb.search.dto.ComplaintResponsibilityDecision;
@@ -19,7 +20,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ComplaintResponsibilityInferenceServiceImpl implements ComplaintResponsibilityInferenceService {
 
+    private static final String RESPONSIBILITY_PROMPT = "kb/complaint/responsibility";
+
     private final ModelProviderResolver modelProviderResolver;
+    private final PromptProvider promptProvider;
 
     /**
      * {@inheritDoc}
@@ -29,12 +33,7 @@ public class ComplaintResponsibilityInferenceServiceImpl implements ComplaintRes
         try {
             ChatClient chatClient = modelProviderResolver.resolveChatClient(null);
             String content = chatClient.prompt()
-                    .system("""
-                            你是商城升级投诉责任认定助手。
-                            只能输出以下责任方之一：MERCHANT、LOGISTICS、PLATFORM、DISPUTED。
-                            输出格式必须是：责任方|一句中文理由。
-                            如果证据不足或责任存在争议，输出 DISPUTED。
-                            """)
+                    .system(promptProvider.render(RESPONSIBILITY_PROMPT, java.util.Map.of()))
                     .user(buildUserPrompt(complaint, context))
                     .call()
                     .content();

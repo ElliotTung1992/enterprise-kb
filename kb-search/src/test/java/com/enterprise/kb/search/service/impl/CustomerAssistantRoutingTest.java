@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.alibaba.cloud.ai.graph.checkpoint.savers.redis.RedisSaver;
 import com.enterprise.kb.common.constants.Domain;
+import com.enterprise.kb.search.TestPromptProviders;
 import com.enterprise.kb.common.util.SecurityUtils;
 import com.enterprise.kb.search.ai.ConversationStateStore;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
@@ -79,7 +80,8 @@ class CustomerAssistantRoutingTest {
                 complaintEscalationService, complaintWorkflowService, customerSessionMapper,
                 customerMessageMapper, objectMapper, transactionTemplate, domainRouterService,
                 conversationStateStore, attackGuardService,
-                List.of(afterSalesDomainHandler, complaintHandler), afterSalesDomainHandler);
+                List.of(afterSalesDomainHandler, complaintHandler), afterSalesDomainHandler,
+                TestPromptProviders.local());
         ReflectionTestUtils.setField(service, "routingEnabled", true);
 
         lenient().when(afterSalesDomainHandler.domain()).thenReturn(Domain.AFTER_SALES);

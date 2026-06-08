@@ -4,6 +4,7 @@ import com.enterprise.kb.common.constants.CompensationType;
 import com.enterprise.kb.common.constants.ComplaintPlanStatus;
 import com.enterprise.kb.common.constants.ResponsibleParty;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.model.ComplaintPlan;
 import com.enterprise.kb.search.service.ComplaintEscalationService;
@@ -29,6 +30,7 @@ class ComplaintExecutorServiceImplTest {
 
     @Mock ComplaintEscalationService complaintEscalationService;
     @Mock ModelProviderResolver modelProviderResolver;
+    @Mock PromptProvider promptProvider;
     @InjectMocks ComplaintExecutorServiceImpl service;
 
     // ---- Slice 1: guard ----

@@ -1,5 +1,6 @@
 package com.enterprise.kb.tracing;
 
+import com.enterprise.kb.common.tracing.TracingAttributes;
 import com.enterprise.kb.common.tracing.TracingContextHolder;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.sdk.common.CompletableResultCode;
@@ -29,7 +30,17 @@ public class LangfuseChildAttributeSpanProcessor implements SpanProcessor {
         if (attributes.isEmpty()) {
             return;
         }
-        attributes.forEach(span::setAttribute);
+        attributes.forEach((key, value) -> {
+            if (TracingAttributes.OBSERVATION_PROMPT_VERSION.equals(key)) {
+                try {
+                    span.setAttribute(key, Long.parseLong(value));
+                    return;
+                } catch (NumberFormatException ignored) {
+                    // 版本异常时降级按字符串写入，避免影响 span 创建。
+                }
+            }
+            span.setAttribute(key, value);
+        });
     }
 
     @Override

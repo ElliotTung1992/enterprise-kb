@@ -2,6 +2,7 @@ package com.enterprise.kb.search.service.impl;
 
 import com.alibaba.cloud.ai.graph.agent.ReactAgent;
 import com.alibaba.cloud.ai.graph.checkpoint.savers.redis.RedisSaver;
+import com.enterprise.kb.search.TestPromptProviders;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.DomainContext;
 import com.enterprise.kb.search.dto.DomainResult;
@@ -48,7 +49,7 @@ class ComplaintDomainHandlerTest {
     @BeforeEach
     void setUp() {
         handler = new ComplaintDomainHandler(modelProviderResolver, agentCheckpointSaver,
-                complaintEscalationService, complaintWorkflowService);
+                complaintEscalationService, complaintWorkflowService, TestPromptProviders.local());
     }
 
     private DomainContext ctx() {
@@ -104,7 +105,7 @@ class ComplaintDomainHandlerTest {
     void handlePassesThroughWhenToolActuallyInvoked() throws Exception {
         ComplaintDomainHandler seamHandler = new ComplaintDomainHandler(
                 modelProviderResolver, agentCheckpointSaver,
-                complaintEscalationService, complaintWorkflowService) {
+                complaintEscalationService, complaintWorkflowService, TestPromptProviders.local()) {
             @Override
             ReactAgent buildAgent(DomainContext c, AtomicBoolean toolInvoked) {
                 // 模拟 Agent 在 call() 期间真正调过工具
@@ -129,7 +130,7 @@ class ComplaintDomainHandlerTest {
     void handleInterceptsFabricatedCaseId() throws Exception {
         ComplaintDomainHandler seamHandler = new ComplaintDomainHandler(
                 modelProviderResolver, agentCheckpointSaver,
-                complaintEscalationService, complaintWorkflowService) {
+                complaintEscalationService, complaintWorkflowService, TestPromptProviders.local()) {
             @Override
             ReactAgent buildAgent(DomainContext c, AtomicBoolean toolInvoked) {
                 // 故意不动 toolInvoked → 模拟 LLM 跳过工具直接输出
@@ -155,7 +156,7 @@ class ComplaintDomainHandlerTest {
     void handlePassesThroughVagueClaimWithoutFabricatedId() throws Exception {
         ComplaintDomainHandler seamHandler = new ComplaintDomainHandler(
                 modelProviderResolver, agentCheckpointSaver,
-                complaintEscalationService, complaintWorkflowService) {
+                complaintEscalationService, complaintWorkflowService, TestPromptProviders.local()) {
             @Override
             ReactAgent buildAgent(DomainContext c, AtomicBoolean toolInvoked) {
                 return mockAgent;
@@ -176,7 +177,7 @@ class ComplaintDomainHandlerTest {
     void handleDoesNotInterceptInformationGatheringReply() throws Exception {
         ComplaintDomainHandler seamHandler = new ComplaintDomainHandler(
                 modelProviderResolver, agentCheckpointSaver,
-                complaintEscalationService, complaintWorkflowService) {
+                complaintEscalationService, complaintWorkflowService, TestPromptProviders.local()) {
             @Override
             ReactAgent buildAgent(DomainContext c, AtomicBoolean toolInvoked) {
                 return mockAgent;
@@ -199,7 +200,7 @@ class ComplaintDomainHandlerTest {
     void handleDoesNotInterceptComplaintDetailGathering() throws Exception {
         ComplaintDomainHandler seamHandler = new ComplaintDomainHandler(
                 modelProviderResolver, agentCheckpointSaver,
-                complaintEscalationService, complaintWorkflowService) {
+                complaintEscalationService, complaintWorkflowService, TestPromptProviders.local()) {
             @Override
             ReactAgent buildAgent(DomainContext c, AtomicBoolean toolInvoked) {
                 return mockAgent;

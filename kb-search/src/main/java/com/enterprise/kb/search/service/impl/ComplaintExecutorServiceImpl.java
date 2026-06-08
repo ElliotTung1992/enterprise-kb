@@ -9,6 +9,7 @@ import com.enterprise.kb.common.constants.ComplaintPlanStatus;
 import com.enterprise.kb.common.constants.ComplaintStatus;
 import com.enterprise.kb.common.constants.ResponsibleParty;
 import com.enterprise.kb.common.exception.KbException;
+import com.enterprise.kb.common.prompt.PromptProvider;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
 import com.enterprise.kb.search.dto.ComplaintExecutionResult;
 import com.enterprise.kb.search.model.ComplaintPlan;
@@ -25,6 +26,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -38,10 +40,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
 
+    private static final String COMPLAINT_EXECUTOR_PROMPT = "kb/complaint/executor";
     private static final int MAX_RECURSION_LIMIT = 15;
 
     private final ComplaintEscalationService complaintEscalationService;
     private final ModelProviderResolver modelProviderResolver;
+    private final PromptProvider promptProvider;
 
     /**
      * {@inheritDoc}
@@ -202,11 +206,7 @@ public class ComplaintExecutorServiceImpl implements ComplaintExecutorService {
     }
 
     private String buildSystemPrompt() {
-        return """
-                你是投诉处理执行专员，负责严格按照审批通过的处理计划执行，不做任何额外判断。
-                使用提供的工具完成所有执行步骤，每一步执行完后记录结果。
-                所有步骤完成后，生成一句话的执行摘要。
-                """;
+        return promptProvider.render(COMPLAINT_EXECUTOR_PROMPT, Map.of());
     }
 
     // ---- 工具输入 DTO（内部使用） ----

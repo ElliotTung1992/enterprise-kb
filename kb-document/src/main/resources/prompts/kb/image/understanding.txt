@@ -1,0 +1,14 @@
+请理解这张 Markdown 文档中的图片，并只返回 JSON，不要返回 Markdown 代码块。
+JSON 字段固定为：
+{
+  "ocrText": "图中可读文字，没有则为空字符串",
+  "caption": "对图片内容的客观描述",
+  "summary": "适合知识库检索的简洁摘要",
+  "entities": "关键实体，逗号分隔，没有则为空字符串"
+}
+
+图片上下文：
+所在章节：{{section}}
+图片标题：{{title}}
+替代文本：{{alt_text}}
+对象路径：{{object_key}}

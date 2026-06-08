@@ -45,13 +45,9 @@ QA 接口分两组路径，**问答** 在 `/md-qa` 下，**会话管理** 在 `/
 }
 ```
 
-### POST `/ask/agentic` — Agentic md QA（ReactAgent 多轮）
+### POST `/ask/agentic/stream` — Agentic 流式 md QA（ReactAgent 多轮）
 
-`MdAgenticQnAServiceImpl`：`ReactAgent` 暴露双工具 `searchKnowledgeBase`（搜 child）+ `readFullSection`（按 parentId 回查整段）。请求 / 响应结构同 `/ask`。
-
-### POST `/ask/stream` — 流式问答（SSE）
-
-`Content-Type: text/event-stream`，逐 token 推送。
+`Content-Type: text/event-stream`。`MdAgenticQnAServiceImpl` 暴露双工具 `searchKnowledgeBase`（搜 child）+ `readFullSection`（按 parentId 回查整段），以 JSON 事件流返回 thinking / tool_call / tool_result / answer / citations / done。
 
 ## 会话管理接口 — `/api/v1/spaces/{spaceId}/qa/sessions`
 

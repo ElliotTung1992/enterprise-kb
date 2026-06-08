@@ -2,6 +2,7 @@ package com.enterprise.kb.search.eval;
 
 import com.enterprise.kb.common.constants.Domain;
 import com.enterprise.kb.search.ai.ModelProviderResolver;
+import com.enterprise.kb.search.TestPromptProviders;
 import com.enterprise.kb.search.dto.ConversationState;
 import com.enterprise.kb.search.dto.RoutingDecision;
 import com.enterprise.kb.search.service.impl.DomainRouterServiceImpl;
@@ -198,7 +199,7 @@ class DomainRouterEvalTest {
         ChatClient llamaCpp = ChatClient.builder(chatModel).build();
 
         ModelProviderResolver resolver = new ModelProviderResolver(null, null, llamaCpp);
-        DomainRouterServiceImpl router = new DomainRouterServiceImpl(resolver);
+        DomainRouterServiceImpl router = new DomainRouterServiceImpl(resolver, TestPromptProviders.local());
         ReflectionTestUtils.setField(router, "routerProvider", "LLAMA_CPP");
         ReflectionTestUtils.setField(router, "contextTurns", 3);
         return router;

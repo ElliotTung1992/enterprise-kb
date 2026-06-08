@@ -49,9 +49,6 @@ public class AgenticTokenBudgetServiceImpl implements AgenticTokenBudgetService 
     /** 压缩时原样保留的最新消息条数 */
     private static final int MIN_RECENT_MESSAGES = 4;
 
-    /** Agentic System Prompt 的 token 数（启动时测一次） */
-    private int systemPromptTokens;
-
     /** Tool schema 的 token 数（启动时测一次） */
     private int toolSchemaTokens;
 
@@ -66,14 +63,14 @@ public class AgenticTokenBudgetServiceImpl implements AgenticTokenBudgetService 
 
     @PostConstruct
     public void init() {
-        systemPromptTokens = count(AgenticTokenBudgetService.AGENT_SYSTEM_PROMPT);
         toolSchemaTokens = count(AgenticTokenBudgetService.TOOL_SCHEMA);
-        log.info("Agentic token budget initialized: contextLimit={}, systemPromptTokens={}, toolSchemaTokens={}, maxHistoryRatio={}",
-                contextLimit, systemPromptTokens, toolSchemaTokens, MAX_HISTORY_RATIO);
+        log.info("Agentic token budget initialized: contextLimit={}, toolSchemaTokens={}, maxHistoryRatio={}",
+                contextLimit, toolSchemaTokens, MAX_HISTORY_RATIO);
     }
 
     @Override
-    public Budget compute(String question, List<Message> history) {
+    public Budget compute(String question, List<Message> history, String systemPrompt) {
+        int systemPromptTokens = count(systemPrompt);
         int questionTokens = count(question);
         int available = Math.max(0, contextLimit - systemPromptTokens - toolSchemaTokens
                 - questionTokens - SAFETY_BUFFER);
@@ -83,8 +80,8 @@ public class AgenticTokenBudgetServiceImpl implements AgenticTokenBudgetService 
         int historyBudget = Math.min(actualHistoryTokens, historyCap);
         int retrievalSpace = available - historyBudget;
 
-        log.debug("Token budget: questionTokens={}, available={}, actualHistory={}, historyBudget={}, retrievalSpace={}",
-                questionTokens, available, actualHistoryTokens, historyBudget, retrievalSpace);
+        log.debug("Token budget: systemPromptTokens={}, questionTokens={}, available={}, actualHistory={}, historyBudget={}, retrievalSpace={}",
+                systemPromptTokens, questionTokens, available, actualHistoryTokens, historyBudget, retrievalSpace);
 
         return new Budget(historyBudget, retrievalSpace);
     }

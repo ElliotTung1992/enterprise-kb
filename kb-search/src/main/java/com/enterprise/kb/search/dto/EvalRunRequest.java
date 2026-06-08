@@ -8,7 +8,6 @@ import java.util.Map;
  *
  * @param type              评估类型，RAGAS 表示运行 Ragas 语义评测
  * @param dataset           数据集名称
- * @param targetService     目标服务：MdQnAService / MdAgenticQnAService
  * @param judgeProvider     judge 模型提供商
  * @param judgeModel        judge 模型名称
  * @param embeddingProvider embedding 模型提供商
@@ -19,7 +18,6 @@ import java.util.Map;
 public record EvalRunRequest(
         String type,
         String dataset,
-        String targetService,
         String judgeProvider,
         String judgeModel,
         String embeddingProvider,
