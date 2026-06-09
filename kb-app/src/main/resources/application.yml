@@ -178,7 +178,7 @@ enterprise:
     prompt:
       enabled: ${KB_PROMPT_ENABLED:false}
       label: ${KB_PROMPT_LABEL:production}
-      base-url: ${LANGFUSE_BASE_URL:http://langfuse-web:3001}
+      base-url: ${LANGFUSE_BASE_URL:http://localhost:3001}
       public-key: ${LANGFUSE_PUBLIC_KEY:}
       secret-key: ${LANGFUSE_SECRET_KEY:}
       cache:
